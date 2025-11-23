@@ -3,17 +3,16 @@ class Members {
     constructor() {
         this.currentData = [];
         this.table = null;
+        this.currentMemberId = null;
         this.outlets = [];
     }
 
     // Initialize module
     async init() {
-        console.log('Initializing Members module');
         await this.loadOutlets();
         await this.loadData();
         this.initTable();
         this.bindEvents();
-        console.log('Members module initialized');
     }
 
     // Load outlets from app
@@ -39,54 +38,80 @@ class Members {
         console.log('Members outlets:', this.outlets);
     }
 
-    // Load data from Supabase dengan filter
-   async loadData(filters = {}) {
-    try {
-        Helpers.showLoading();
-        
-        const allData = [];
-        let page = 1;
-        const pageSize = 1000; // Max per request
-        let hasMore = true;
-
-        console.log('🔄 Loading member data with pagination...');
-
-        while (hasMore) {
-            const from = (page - 1) * pageSize;
-            const to = from + pageSize - 1;
+    // Load data from Supabase dengan pagination lengkap
+    async loadData(filters = {}) {
+        try {
+            Helpers.showLoading();
             
-            let query = supabase
-                .from('membercard')
-                .select('*')
-                .range(from, to);
+            const allData = [];
+            let page = 1;
+            const pageSize = 1000; // Max per request
+            let hasMore = true;
 
-            // Apply filters
-            if (filters.outlet) {
-                query = query.eq('outlet', filters.outlet);
-            }
-            if (filters.status) {
-                query = query.eq('status', filters.status);
-            }
+            console.log('🔄 Loading member data with pagination...', filters);
 
-            const { data, error } = await query.order('id', { ascending: true });
-
-            if (error) throw error;
-
-            if (data && data.length > 0) {
-                allData.push(...data);
-                console.log(`📥 Page ${page}: Loaded ${data.length} records (total: ${allData.length})`);
+            while (hasMore) {
+                const from = (page - 1) * pageSize;
+                const to = from + pageSize - 1;
                 
-                // Jika dapat kurang dari pageSize, berarti sudah last page
-                if (data.length < pageSize) {
-                    hasMore = false;
-                } else {
-                    page++;
+                let query = supabase
+                    .from('membercard')
+                    .select('*')
+                    .range(from, to);
+
+                // Apply filters
+                if (filters.outlet) {
+                    query = query.eq('outlet', filters.outlet);
                 }
-            } else {
-                hasMore = false;
+                if (filters.status) {
+                    query = query.eq('status', filters.status);
+                }
+
+                const { data, error } = await query.order('id', { ascending: true });
+
+                if (error) throw error;
+
+                if (data && data.length > 0) {
+                    allData.push(...data);
+                    console.log(`📥 Page ${page}: Loaded ${data.length} records (total: ${allData.length})`);
+                    
+                    // Jika dapat kurang dari pageSize, berarti sudah last page
+                    if (data.length < pageSize) {
+                        hasMore = false;
+                    } else {
+                        page++;
+                    }
+                } else {
+                    hasMore = false;
+                }
             }
-        },
-        
+
+            console.log('✅ Finished loading:', {
+                totalLoaded: allData.length,
+                pages: page,
+                firstRecord: allData[0] ? { id: allData[0].id, nama: allData[0].nama } : null,
+                lastRecord: allData[allData.length - 1] ? { id: allData[allData.length - 1].id, nama: allData[allData.length - 1].nama } : null
+            });
+
+            // Cek apakah Hari Suryono ada
+            const hariRecord = allData.find(item => item.id === 243);
+            console.log('🔍 Hari Suryono in loaded data:', !!hariRecord);
+
+            this.currentData = allData;
+            if (this.table) {
+                this.table.updateData(this.currentData);
+            }
+
+            Helpers.hideLoading();
+            return this.currentData;
+        } catch (error) {
+            Helpers.hideLoading();
+            console.error('Error loading members:', error);
+            Notifications.error('Gagal memuat data member: ' + error.message);
+            return [];
+        }
+    }
+
     // Initialize table
     initTable() {
         this.table = new DataTable('members-table', {
@@ -143,8 +168,9 @@ class Members {
         this.table.updateData(this.currentData);
     }
 
-    // Bind events dengan filter
+    // Bind events
     bindEvents() {
+        // Add button event
         const addBtn = document.getElementById('add-member');
         if (addBtn) {
             addBtn.addEventListener('click', () => this.showForm());
@@ -153,7 +179,7 @@ class Members {
         // Filter events
         const outletFilter = document.getElementById('outlet-filter');
         const statusFilter = document.getElementById('status-filter');
-        const clearFiltersBtn = document.getElementById('clear-filters');
+        const clearFilters = document.getElementById('clear-filters');
 
         if (outletFilter) {
             outletFilter.addEventListener('change', () => this.applyFilters());
@@ -161,8 +187,8 @@ class Members {
         if (statusFilter) {
             statusFilter.addEventListener('change', () => this.applyFilters());
         }
-        if (clearFiltersBtn) {
-            clearFiltersBtn.addEventListener('click', () => this.clearFilters());
+        if (clearFilters) {
+            clearFilters.addEventListener('click', () => this.clearFilters());
         }
     }
 
@@ -187,13 +213,42 @@ class Members {
         if (outletFilter) outletFilter.value = '';
         if (statusFilter) statusFilter.value = '';
 
-        this.loadData();
+        this.loadData({ outlet: '', status: '' });
+    }
+
+    // Validate form
+    validateForm() {
+        const form = document.getElementById('member-form');
+        const formData = new FormData(form);
+        
+        const nama = formData.get('nama');
+        const nomorWA = formData.get('nomorWA');
+        const outlet = formData.get('outlet');
+
+        if (!nama || nama.trim() === '') {
+            Notifications.error('Nama member harus diisi');
+            return false;
+        }
+
+        if (!nomorWA || nomorWA.trim() === '') {
+            Notifications.error('Nomor WA harus diisi');
+            return false;
+        }
+
+        if (!outlet) {
+            Notifications.error('Outlet harus dipilih');
+            return false;
+        }
+
+        return true;
     }
 
     // Show form for add/edit
     showForm(item = null) {
         const isEdit = !!item;
         const title = isEdit ? 'Edit Member' : 'Tambah Member';
+        
+        this.currentMemberId = item ? item.id : null;
 
         const outletOptions = this.outlets.map(outlet => 
             `<option value="${outlet.outlet}" ${item && item.outlet === outlet.outlet ? 'selected' : ''}>${outlet.outlet}</option>`
@@ -203,42 +258,54 @@ class Members {
             <form id="member-form" class="space-y-4">
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Nama</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                            Nama Member <span class="text-red-500">*</span>
+                        </label>
                         <input 
                             type="text" 
                             name="nama" 
                             value="${item ? item.nama : ''}"
                             class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             required
+                            placeholder="Masukkan nama member"
                         >
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Nomor WA</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                            Nomor WA <span class="text-red-500">*</span>
+                        </label>
                         <input 
                             type="text" 
                             name="nomorWA" 
                             value="${item ? item.nomorWA : ''}"
                             class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             required
+                            placeholder="Contoh: 081234567890"
                         >
                     </div>
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">ID Member</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                            ID Member
+                        </label>
                         <input 
                             type="text" 
                             name="id_member" 
                             value="${item ? item.id_member : ''}"
                             class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="Auto generate"
                         >
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Outlet</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                            Outlet <span class="text-red-500">*</span>
+                        </label>
                         <select 
                             name="outlet" 
                             class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            required
                         >
                             <option value="">Pilih Outlet</option>
                             ${outletOptions}
@@ -248,20 +315,24 @@ class Members {
 
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Point</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                            Tanggal Lahir
+                        </label>
                         <input 
-                            type="number" 
-                            name="point" 
-                            value="${item ? item.point : 0}"
+                            type="date" 
+                            name="tanggal_lahir" 
+                            value="${item && item.tanggal_lahir ? item.tanggal_lahir.split('T')[0] : ''}"
                             class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         >
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Tanggal Lahir</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                            Berlaku Sampai
+                        </label>
                         <input 
                             type="date" 
-                            name="tanggal_lahir" 
-                            value="${item ? item.tanggal_lahir : ''}"
+                            name="berlaku" 
+                            value="${item && item.berlaku ? item.berlaku.split('T')[0] : ''}"
                             class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         >
                     </div>
@@ -273,17 +344,20 @@ class Members {
                         name="alamat" 
                         class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         rows="3"
+                        placeholder="Masukkan alamat member"
                     >${item ? item.alamat : ''}</textarea>
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Berlaku Sampai</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Point</label>
                         <input 
-                            type="date" 
-                            name="berlaku" 
-                            value="${item ? item.berlaku : ''}"
+                            type="number" 
+                            name="point" 
+                            value="${item ? item.point : 0}"
                             class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            min="0"
+                            placeholder="0"
                         >
                     </div>
                     <div>
@@ -297,6 +371,12 @@ class Members {
                         </select>
                     </div>
                 </div>
+
+                <div class="pt-4 border-t border-gray-200">
+                    <p class="text-xs text-gray-500">
+                        <span class="text-red-500">*</span> Menandakan field yang wajib diisi
+                    </p>
+                </div>
             </form>
         `;
 
@@ -308,7 +388,7 @@ class Members {
             },
             {
                 text: isEdit ? 'Update' : 'Simpan',
-                onclick: `members.${isEdit ? 'update' : 'save'}('${item ? item.id : ''}')`,
+                onclick: `members.${isEdit ? 'validateAndUpdate' : 'validateAndSave'}('${item ? item.id : ''}')`,
                 primary: true
             }
         ];
@@ -316,12 +396,41 @@ class Members {
         modal.createModal(title, content, buttons);
     }
 
+    // Validate and save new member
+    async validateAndSave() {
+        if (!this.validateForm()) {
+            return;
+        }
+        await this.save();
+    }
+
+    // Validate and update member
+    async validateAndUpdate(id) {
+        if (!this.validateForm()) {
+            return;
+        }
+        await this.update(id);
+    }
+
     // Save new member
     async save() {
         try {
             const form = document.getElementById('member-form');
             const formData = new FormData(form);
-            const data = Object.fromEntries(formData);
+            
+            const data = {
+                nama: formData.get('nama'),
+                nomorWA: formData.get('nomorWA'),
+                id_member: formData.get('id_member') || null,
+                outlet: formData.get('outlet'),
+                tanggal_lahir: formData.get('tanggal_lahir') || null,
+                alamat: formData.get('alamat') || null,
+                berlaku: formData.get('berlaku') || null,
+                point: parseInt(formData.get('point')) || 0,
+                status: formData.get('status')
+            };
+
+            console.log('Saving member data:', data);
 
             Helpers.showLoading();
 
@@ -329,7 +438,10 @@ class Members {
                 .from('membercard')
                 .insert([data]);
 
-            if (error) throw error;
+            if (error) {
+                console.error('Supabase insert error:', error);
+                throw error;
+            }
 
             modal.close();
             await this.loadData();
@@ -337,28 +449,16 @@ class Members {
 
         } catch (error) {
             Helpers.hideLoading();
+            console.error('Save member error:', error);
             Notifications.error('Gagal menambah member: ' + error.message);
         }
     }
 
     // Edit member
     edit(id) {
-        console.log('=== EDIT DEBUG ===');
-        console.log('ID received:', id, 'Type:', typeof id);
-        
-        // Convert ID ke number
-        const numericId = parseInt(id);
-        console.log('Numeric ID:', numericId);
-        
-        const item = this.currentData.find(d => d.id === numericId);
-        console.log('Find result:', item);
-        
+        const item = this.currentData.find(d => d.id === id);
         if (item) {
             this.showForm(item);
-        } else {
-            console.error('Item not found with ID:', numericId);
-            console.log('Available IDs:', this.currentData.map(d => ({id: d.id, type: typeof d.id})));
-            Notifications.error('Data member tidak ditemukan');
         }
     }
 
@@ -367,7 +467,20 @@ class Members {
         try {
             const form = document.getElementById('member-form');
             const formData = new FormData(form);
-            const data = Object.fromEntries(formData);
+            
+            const data = {
+                nama: formData.get('nama'),
+                nomorWA: formData.get('nomorWA'),
+                id_member: formData.get('id_member') || null,
+                outlet: formData.get('outlet'),
+                tanggal_lahir: formData.get('tanggal_lahir') || null,
+                alamat: formData.get('alamat') || null,
+                berlaku: formData.get('berlaku') || null,
+                point: parseInt(formData.get('point')) || 0,
+                status: formData.get('status')
+            };
+
+            console.log('Updating member data:', data);
 
             Helpers.showLoading();
 
@@ -376,7 +489,10 @@ class Members {
                 .update(data)
                 .eq('id', id);
 
-            if (error) throw error;
+            if (error) {
+                console.error('Supabase update error:', error);
+                throw error;
+            }
 
             modal.close();
             await this.loadData();
@@ -384,16 +500,20 @@ class Members {
 
         } catch (error) {
             Helpers.hideLoading();
+            console.error('Update member error:', error);
             Notifications.error('Gagal mengupdate member: ' + error.message);
         }
     }
 
     // Delete member
     async delete(id) {
-        modal.showConfirm(
-            'Apakah Anda yakin ingin menghapus member ini?',
-            `members.confirmDelete('${id}')`
-        );
+        const item = this.currentData.find(d => d.id === id);
+        if (item) {
+            modal.showConfirm(
+                `Apakah Anda yakin ingin menghapus member "${item.nama}"?`,
+                `members.confirmDelete('${id}')`
+            );
+        }
     }
 
     async confirmDelete(id) {
@@ -413,6 +533,59 @@ class Members {
         } catch (error) {
             Helpers.hideLoading();
             Notifications.error('Gagal menghapus member: ' + error.message);
+        }
+    }
+
+    // Export members to CSV
+    async exportToCSV() {
+        try {
+            Helpers.showLoading();
+            
+            const { data, error } = await supabase
+                .from('membercard')
+                .select('*')
+                .order('nama', { ascending: true });
+
+            if (error) throw error;
+
+            if (!data || data.length === 0) {
+                Notifications.error('Tidak ada data member untuk diexport');
+                return;
+            }
+
+            const headers = ['Nama', 'Nomor WA', 'ID Member', 'Outlet', 'Point', 'Status', 'Berlaku', 'Alamat'];
+            const csvData = data.map(member => [
+                `"${member.nama || ''}"`,
+                `"${member.nomorWA || ''}"`,
+                `"${member.id_member || ''}"`,
+                `"${member.outlet || ''}"`,
+                `"${member.point || 0}"`,
+                `"${member.status || ''}"`,
+                `"${member.berlaku || ''}"`,
+                `"${member.alamat || ''}"`
+            ]);
+
+            const csvContent = [headers.join(','), ...csvData.map(row => row.join(','))].join('\n');
+            
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            
+            link.setAttribute('href', url);
+            link.setAttribute('download', `members_${new Date().toISOString().split('T')[0]}.csv`);
+            link.style.visibility = 'hidden';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            Helpers.hideLoading();
+            Notifications.success('Data member berhasil diexport');
+
+        } catch (error) {
+            Helpers.hideLoading();
+            console.error('Export error:', error);
+            Notifications.error('Gagal mengexport data: ' + error.message);
         }
     }
 }
