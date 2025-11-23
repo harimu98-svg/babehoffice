@@ -1,8 +1,8 @@
-// Reports Module dengan 8 Tab Laporan - FIXED DATA TABLE VERSION
+// Reports Module dengan 8 Tab Laporan - FIXED VERSION
 class Reports {
     constructor() {
         this.currentData = [];
-        this.currentTab = 'detail-transaksi';
+        this.currentTab = 'detail-transaksi'; // Tab default
         this.table = null;
         this.filters = {
             startDate: '',
@@ -10,132 +10,86 @@ class Reports {
             outlet: ''
         };
         this.isInitialized = false;
-        this.isLoading = false;
         
-        // Auto-bind methods
+        // Bind methods to maintain 'this' context
         this.init = this.init.bind(this);
         this.initTabs = this.initTabs.bind(this);
         this.switchTab = this.switchTab.bind(this);
         this.loadData = this.loadData.bind(this);
         this.initFilters = this.initFilters.bind(this);
         this.initTable = this.initTable.bind(this);
-        this.destroyTable = this.destroyTable.bind(this);
         this.applyFilters = this.applyFilters.bind(this);
         this.exportReport = this.exportReport.bind(this);
         this.updateSummary = this.updateSummary.bind(this);
         this.updateReportTitle = this.updateReportTitle.bind(this);
-        this.checkDataTableDependency = this.checkDataTableDependency.bind(this);
-    }
-
-    // Check if DataTable class is available
-    checkDataTableDependency() {
-        if (typeof DataTable === 'undefined') {
-            console.error('❌ DataTable class is not defined');
-            this.showError('DataTable library tidak ditemukan. Pastikan script DataTable sudah di-load.');
-            return false;
-        }
-        return true;
+        this.updateTableForCurrentTab = this.updateTableForCurrentTab.bind(this);
     }
 
     // Initialize module
     async init() {
         if (this.isInitialized) {
-            console.log('📊 Reports module already initialized');
+            console.log('Reports module already initialized');
             return;
         }
 
-        console.log('🚀 Initializing Reports module...');
+        console.log('Initializing Reports module');
         
         try {
-            // Check dependency first
-            if (!this.checkDataTableDependency()) {
-                return;
-            }
-
-            // Initialize dalam urutan yang benar
-            this.initFilters();
             this.initTabs();
+            this.initFilters();
             this.bindEvents();
             
-            // Set UI state pertama kali
+            // Set active tab UI pertama kali
             this.setActiveTabUI(this.currentTab);
             this.updateReportTitle();
             
-            // Load data initial
             await this.loadData();
             
             this.isInitialized = true;
-            console.log('✅ Reports module initialized successfully');
-            
+            console.log('Reports module initialized successfully');
         } catch (error) {
-            console.error('❌ Failed to initialize Reports module:', error);
-            this.showError('Gagal menginisialisasi modul laporan: ' + error.message);
+            console.error('Failed to initialize Reports module:', error);
+            Notifications.error('Gagal menginisialisasi modul laporan: ' + error.message);
         }
     }
 
-    // Initialize tabs dengan event delegation
+    // Initialize tabs
     initTabs() {
-        const tabsContainer = document.querySelector('.flex.overflow-x-auto');
-        if (!tabsContainer) {
-            console.warn('Tabs container not found');
-            return;
-        }
-
-        // Gunakan event delegation untuk menghindari multiple event listeners
-        tabsContainer.addEventListener('click', (e) => {
-            const tab = e.target.closest('.report-tab');
-            if (tab) {
+        const tabs = document.querySelectorAll('.report-tab');
+        console.log('Found tabs:', tabs.length);
+        
+        tabs.forEach(tab => {
+            tab.addEventListener('click', (e) => {
                 e.preventDefault();
                 const tabId = tab.getAttribute('data-tab');
-                console.log('🔄 Tab clicked:', tabId);
+                console.log('Tab clicked:', tabId);
                 this.switchTab(tabId);
-            }
+            });
         });
-
-        console.log('✅ Tabs initialized with event delegation');
     }
 
     // Set active tab UI
     setActiveTabUI(tabId) {
-        console.log('🎨 Setting active tab UI for:', tabId);
+        console.log('Setting active tab UI for:', tabId);
         
-        // Remove active class dari semua tabs
+        // Remove all active classes from all tabs
         document.querySelectorAll('.report-tab').forEach(tab => {
-            tab.classList.remove(
-                'active', 
-                'border-blue-500', 
-                'text-blue-600',
-                'bg-blue-50'
-            );
-            tab.classList.add(
-                'border-transparent', 
-                'text-gray-500',
-                'hover:text-gray-700',
-                'hover:border-gray-300'
-            );
+            tab.classList.remove('active', 'border-blue-500', 'text-blue-600', 'bg-blue-50');
+            tab.classList.add('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
         });
         
-        // Add active class ke tab yang dipilih
-        const activeTab = document.querySelector(`.report-tab[data-tab="${tabId}"]`);
+        // Add active classes to current tab
+        const activeTab = document.querySelector(`[data-tab="${tabId}"]`);
         if (activeTab) {
-            activeTab.classList.add(
-                'active', 
-                'border-blue-500', 
-                'text-blue-600'
-            );
-            activeTab.classList.remove(
-                'border-transparent', 
-                'text-gray-500',
-                'hover:text-gray-700',
-                'hover:border-gray-300'
-            );
+            activeTab.classList.add('active', 'border-blue-500', 'text-blue-600');
+            activeTab.classList.remove('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
             console.log('✅ Active tab UI updated:', tabId);
         } else {
-            console.warn('⚠️ Tab element not found for:', tabId);
+            console.warn('Tab element not found for:', tabId);
         }
     }
 
-    // Update report title
+    // Update report title based on current tab
     updateReportTitle() {
         const titleMap = {
             'detail-transaksi': 'Laporan Detail Transaksi',
@@ -152,101 +106,61 @@ class Reports {
         if (titleElement) {
             const newTitle = titleMap[this.currentTab] || 'Laporan';
             titleElement.textContent = newTitle;
-            console.log('📝 Report title updated to:', newTitle);
+            console.log('Report title updated to:', newTitle);
+        } else {
+            console.warn('Report title element not found');
         }
     }
 
-    // Switch between tabs
+    // Switch between tabs - FIXED VERSION
     async switchTab(tabId) {
-        if (this.isLoading) {
-            console.log('⏳ Tab switch in progress, skipping...');
-            return;
-        }
-
         if (this.currentTab === tabId) {
-            console.log('🔁 Tab already active:', tabId);
+            console.log('Tab already active:', tabId);
             return;
         }
 
-        console.log('🔄 Switching to tab:', tabId);
-        
-        this.isLoading = true;
+        console.log('Switching to tab:', tabId);
         
         try {
-            this.showLoadingState();
+            Helpers.showLoading();
             
-            // Update UI state FIRST
+            // 1. Update UI first
             this.setActiveTabUI(tabId);
+            
+            // 2. Update current tab
             this.currentTab = tabId;
+            
+            // 3. Update report title
             this.updateReportTitle();
             
-            console.log('📊 Current tab set to:', this.currentTab);
+            console.log('Current tab set to:', this.currentTab);
             
-            // Clear previous table properly
-            this.destroyTable();
-            
-            // Load data for new tab
+            // 4. Load data for new tab
             await this.loadData();
             
-            console.log('✅ Tab switch completed successfully:', tabId);
+            Helpers.hideLoading();
+            console.log('✅ Tab switched successfully:', tabId);
             
         } catch (error) {
-            console.error('❌ Error switching tab:', error);
-            this.showError('Gagal memuat data laporan: ' + error.message);
-        } finally {
-            this.isLoading = false;
-            this.hideLoadingState();
+            console.error('Error switching tab:', error);
+            Helpers.hideLoading();
+            Notifications.error('Gagal memuat laporan: ' + error.message);
         }
-    }
-
-    // Show loading state
-    showLoadingState() {
-        const tableContainer = document.getElementById('reports-table');
-        if (tableContainer) {
-            tableContainer.innerHTML = `
-                <div class="flex justify-center items-center py-20">
-                    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-                    <span class="ml-3 text-gray-600">Memuat data...</span>
-                </div>
-            `;
-        }
-        
-        // Disable buttons selama loading
-        this.setButtonsState(true);
-    }
-
-    // Hide loading state
-    hideLoadingState() {
-        this.setButtonsState(false);
-    }
-
-    // Set buttons state
-    setButtonsState(disabled) {
-        const filterBtn = document.getElementById('apply-filters');
-        const exportBtn = document.getElementById('export-report');
-        
-        if (filterBtn) {
-            filterBtn.disabled = disabled;
-            filterBtn.innerHTML = disabled ? 
-                '<i class="fas fa-spinner fa-spin mr-2"></i>Loading...' : 
-                '<i class="fas fa-filter mr-2"></i>Terapkan Filter';
-        }
-        if (exportBtn) exportBtn.disabled = disabled;
     }
 
     // Initialize filters
     initFilters() {
-        console.log('🔧 Initializing filters...');
+        console.log('Initializing filters');
         
-        // Set default dates
+        // Set default dates (last 30 days)
         const endDate = new Date();
         const startDate = new Date();
-        startDate.setDate(startDate.getDate() - 7);
+        startDate.setDate(startDate.getDate() - 30);
 
         this.filters.startDate = startDate.toISOString().split('T')[0];
         this.filters.endDate = endDate.toISOString().split('T')[0];
         
-        // Update DOM elements
+        // Set filter values in DOM jika elemen ada
         const startDateEl = document.getElementById('start-date');
         const endDateEl = document.getElementById('end-date');
         const outletEl = document.getElementById('outlet-filter');
@@ -255,144 +169,121 @@ class Reports {
         if (endDateEl) endDateEl.value = this.filters.endDate;
         if (outletEl) this.filters.outlet = outletEl.value;
 
-        console.log('✅ Filters initialized:', this.filters);
+        console.log('Filters initialized:', this.filters);
     }
 
-    // Load data dengan error handling
+    // Load data based on current tab
     async loadData() {
-        if (this.isLoading) {
-            console.log('⏳ Data load in progress, skipping...');
-            return;
-        }
-
-        this.isLoading = true;
-        
         try {
-            console.log('📥 Loading data for tab:', this.currentTab);
+            console.log('Loading data for tab:', this.currentTab);
 
             let data = [];
-            const dataLoaders = {
-                'detail-transaksi': () => this.loadDetailTransaksi(),
-                'pembayaran': () => this.loadLaporanPembayaran(),
-                'komisi': () => this.loadLaporanKomisi(),
-                'membercard': () => this.loadLaporanMembercard(),
-                'absen': () => this.loadLaporanAbsen(),
-                'omset': () => this.loadLaporanOmset(),
-                'pemasukan-pengeluaran': () => this.loadLaporanPemasukanPengeluaran(),
-                'transaksi-cancel': () => this.loadLaporanTransaksiCancel()
-            };
-
-            const loader = dataLoaders[this.currentTab] || dataLoaders['detail-transaksi'];
-            data = await loader();
+            
+            switch(this.currentTab) {
+                case 'detail-transaksi':
+                    data = await this.loadDetailTransaksi();
+                    break;
+                case 'pembayaran':
+                    data = await this.loadLaporanPembayaran();
+                    break;
+                case 'komisi':
+                    data = await this.loadLaporanKomisi();
+                    break;
+                case 'membercard':
+                    data = await this.loadLaporanMembercard();
+                    break;
+                case 'absen':
+                    data = await this.loadLaporanAbsen();
+                    break;
+                case 'omset':
+                    data = await this.loadLaporanOmset();
+                    break;
+                case 'pemasukan-pengeluaran':
+                    data = await this.loadLaporanPemasukanPengeluaran();
+                    break;
+                case 'transaksi-cancel':
+                    data = await this.loadLaporanTransaksiCancel();
+                    break;
+                default:
+                    console.warn('Unknown tab, loading detail transaksi');
+                    data = await this.loadDetailTransaksi();
+            }
 
             this.currentData = Array.isArray(data) ? data : [];
-            console.log('✅ Data loaded:', this.currentData.length, 'records');
+            console.log('Data loaded:', this.currentData.length, 'records');
+            
+            // Initialize or update table
+            if (!this.table) {
+                this.initTable();
+            } else {
+                this.updateTableForCurrentTab();
+            }
 
-            // Initialize table setelah data loaded
-            this.initTable();
-
-            // Update summary
             this.updateSummary();
-
             return this.currentData;
 
         } catch (error) {
-            console.error('❌ Error loading data:', error);
+            console.error('Error loading data:', error);
+            Notifications.error('Gagal memuat data laporan: ' + error.message);
             this.currentData = [];
-            this.showError('Gagal memuat data: ' + error.message);
+            this.updateSummary();
             return [];
-        } finally {
-            this.isLoading = false;
         }
     }
 
     // ==================== DATA LOADING METHODS ====================
 
     async loadDetailTransaksi() {
-        try {
-            let query = supabase
-                .from('transaksi_detail')
-                .select('*')
-                .order('order_date', { ascending: false })
-                .limit(500);
+        console.log('Loading detail transaksi');
+        let query = supabase
+            .from('transaksi_detail')
+            .select('*')
+            .order('order_date', { ascending: false });
 
-            if (this.filters.startDate) {
-                query = query.gte('order_date', this.filters.startDate);
-            }
-            if (this.filters.endDate) {
-                query = query.lte('order_date', this.filters.endDate);
-            }
-            if (this.filters.outlet) {
-                query = query.eq('outlet', this.filters.outlet);
-            }
-
-            const { data, error } = await query;
-            if (error) throw error;
-            
-            return data || this.generateFallbackData('transaksi');
-        } catch (error) {
-            console.error('Error loading detail transaksi:', error);
-            return this.generateFallbackData('transaksi');
+        // Apply filters
+        if (this.filters.startDate) {
+            query = query.gte('order_date', this.filters.startDate);
         }
+        if (this.filters.endDate) {
+            query = query.lte('order_date', this.filters.endDate);
+        }
+        if (this.filters.outlet) {
+            query = query.eq('outlet', this.filters.outlet);
+        }
+
+        const { data, error } = await query;
+        if (error) {
+            console.error('Supabase error:', error);
+            throw error;
+        }
+        return data || [];
     }
 
     async loadLaporanPembayaran() {
-        try {
-            let query = supabase
-                .from('transaksi_detail')
-                .select('*')
-                .order('order_date', { ascending: false })
-                .limit(500);
+        console.log('Loading laporan pembayaran');
+        
+        let query = supabase
+            .from('transaksi_detail')
+            .select('*')
+            .order('order_date', { ascending: false });
 
-            if (this.filters.startDate) {
-                query = query.gte('order_date', this.filters.startDate);
-            }
-            if (this.filters.endDate) {
-                query = query.lte('order_date', this.filters.endDate);
-            }
-            if (this.filters.outlet) {
-                query = query.eq('outlet', this.filters.outlet);
-            }
-
-            const { data, error } = await query;
-            if (error) throw error;
-
-            return this.processPembayaranData(data || []);
-        } catch (error) {
-            console.error('Error loading pembayaran:', error);
-            return this.generateFallbackData('pembayaran');
+        // Apply filters
+        if (this.filters.startDate) {
+            query = query.gte('order_date', this.filters.startDate);
         }
+        if (this.filters.endDate) {
+            query = query.lte('order_date', this.filters.endDate);
+        }
+        if (this.filters.outlet) {
+            query = query.eq('outlet', this.filters.outlet);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        return this.processPembayaranData(data || []);
     }
 
-    async loadLaporanKomisi() {
-        try {
-            let query = supabase
-                .from('transaksi_detail')
-                .select('*')
-                .order('order_date', { ascending: false })
-                .limit(500);
-
-            if (this.filters.startDate) {
-                query = query.gte('order_date', this.filters.startDate);
-            }
-            if (this.filters.endDate) {
-                query = query.lte('order_date', this.filters.endDate);
-            }
-            if (this.filters.outlet) {
-                query = query.eq('outlet', this.filters.outlet);
-            }
-
-            const { data, error } = await query;
-            if (error) throw error;
-
-            return this.processKomisiData(data || []);
-        } catch (error) {
-            console.error('Error loading komisi:', error);
-            return this.generateFallbackData('komisi');
-        }
-    }
-
-    // Process methods
     processPembayaranData(data) {
         const result = {};
         
@@ -402,9 +293,15 @@ class Reports {
             const amount = parseFloat(item.amount) || 0;
             const isCancel = item.status === 'canceled' || item.status === 'cancelled';
             
-            if (!result[outlet]) result[outlet] = {};
+            if (!result[outlet]) {
+                result[outlet] = {};
+            }
+            
             if (!result[outlet][paymentType]) {
-                result[outlet][paymentType] = { totalAmount: 0, totalAmountCancel: 0 };
+                result[outlet][paymentType] = {
+                    totalAmount: 0,
+                    totalAmountCancel: 0
+                };
             }
             
             if (isCancel) {
@@ -414,6 +311,7 @@ class Reports {
             }
         });
         
+        // Convert to array format for table
         const tableData = [];
         Object.keys(result).forEach(outlet => {
             Object.keys(result[outlet]).forEach(paymentType => {
@@ -427,6 +325,31 @@ class Reports {
         });
         
         return tableData;
+    }
+
+    async loadLaporanKomisi() {
+        console.log('Loading laporan komisi');
+        
+        let query = supabase
+            .from('transaksi_detail')
+            .select('*')
+            .order('order_date', { ascending: false });
+
+        // Apply filters
+        if (this.filters.startDate) {
+            query = query.gte('order_date', this.filters.startDate);
+        }
+        if (this.filters.endDate) {
+            query = query.lte('order_date', this.filters.endDate);
+        }
+        if (this.filters.outlet) {
+            query = query.eq('outlet', this.filters.outlet);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        return this.processKomisiData(data || []);
     }
 
     processKomisiData(data) {
@@ -452,390 +375,717 @@ class Reports {
             }
             
             result[key].total_amount += amount;
-            result[key].total_komisi += amount * 0.1;
+            
+            // Hitung komisi (contoh: 10% dari total amount)
+            const komisi = amount * 0.1;
+            result[key].total_komisi += komisi;
         });
         
         return Object.values(result);
     }
 
-    // Generate fallback data untuk semua tipe
-    generateFallbackData(type) {
-        console.log(`🔄 Generating fallback data for: ${type}`);
+    async loadLaporanMembercard() {
+        console.log('Loading laporan membercard');
         
-        const baseData = this.generateBaseData();
-        
-        switch(type) {
-            case 'pembayaran':
-                return this.processPembayaranData(baseData);
-            case 'komisi':
-                return this.processKomisiData(baseData);
-            case 'transaksi':
-            default:
-                return baseData;
+        try {
+            let query = supabase
+                .from('membercard')
+                .select('*');
+
+            if (this.filters.outlet) {
+                query = query.eq('outlet', this.filters.outlet);
+            }
+
+            const { data, error } = await query;
+            if (error) throw error;
+
+            return this.processMembercardData(data || []);
+        } catch (error) {
+            console.warn('Membercard table not found, using fallback data');
+            return this.generateFallbackMembercardData();
         }
     }
 
-    generateBaseData() {
+    processMembercardData(data) {
+        const result = {};
+        
+        data.forEach(item => {
+            const outlet = item.outlet || 'Unknown';
+            const kasir = item.created_by || item.kasir || 'Unknown';
+            
+            const key = `${outlet}-${kasir}`;
+            
+            if (!result[key]) {
+                result[key] = {
+                    outlet: outlet,
+                    kasir: kasir,
+                    jumlah_membercard: 0
+                };
+            }
+            
+            result[key].jumlah_membercard += 1;
+        });
+        
+        return Object.values(result);
+    }
+
+    generateFallbackMembercardData() {
         const outlets = ['Rempoa', 'Ciputat', 'Pondok Cabe'];
         const kasirs = ['Hari Suryono', 'Echwan Abdillah', 'Ahmad Fauzi'];
-        const customers = ['Customer A', 'Customer B', 'Customer C'];
-        const items = ['Item 1', 'Item 2', 'Item 3'];
+        
+        return outlets.map(outlet => {
+            const kasir = kasirs[Math.floor(Math.random() * kasirs.length)];
+            const jumlah = Math.floor(Math.random() * 20) + 10;
+            
+            return {
+                outlet: outlet,
+                kasir: kasir,
+                jumlah_membercard: jumlah
+            };
+        });
+    }
+
+    async loadLaporanAbsen() {
+        console.log('Loading laporan absen');
+        
+        try {
+            let query = supabase
+                .from('absen')
+                .select('*')
+                .order('clockin', { ascending: false });
+
+            if (this.filters.startDate) {
+                query = query.gte('clockin', this.filters.startDate);
+            }
+            if (this.filters.endDate) {
+                query = query.lte('clockin', this.filters.endDate);
+            }
+            if (this.filters.outlet) {
+                query = query.eq('outlet', this.filters.outlet);
+            }
+
+            const { data, error } = await query;
+            if (error) throw error;
+
+            return this.processAbsenData(data || []);
+        } catch (error) {
+            console.warn('Absen table not found, using fallback data');
+            return this.generateFallbackAbsenData();
+        }
+    }
+
+    processAbsenData(data) {
+        return data.map(item => {
+            const clockin = new Date(item.clockin);
+            const clockout = item.clockout ? new Date(item.clockout) : new Date();
+            
+            const diffMs = clockout - clockin;
+            const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+            const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+            const jamKerja = `${diffHours} jam ${diffMinutes} menit`;
+            
+            return {
+                outlet: item.outlet || 'Unknown',
+                karyawan: item.karyawan || item.nama_karyawan || 'Unknown',
+                clockin: item.clockin,
+                clockout: item.clockout,
+                jam_kerja: jamKerja
+            };
+        });
+    }
+
+    generateFallbackAbsenData() {
+        const outlets = ['Rempoa', 'Ciputat', 'Pondok Cabe'];
+        const karyawans = ['Echwan Abdillah', 'Hari Suryono', 'Ahmad Fauzi', 'Siti Rahma', 'Budi Santoso'];
         
         const data = [];
         const today = new Date();
         
-        for (let i = 0; i < 30; i++) {
+        for (let i = 0; i < 15; i++) {
             const date = new Date();
-            date.setDate(today.getDate() - Math.floor(i / 5));
+            date.setDate(today.getDate() - i);
+            
+            const outlet = outlets[Math.floor(Math.random() * outlets.length)];
+            const karyawan = karyawans[Math.floor(Math.random() * karyawans.length)];
+            
+            const clockinHour = 7 + Math.floor(Math.random() * 3);
+            const clockinMinute = Math.floor(Math.random() * 60);
+            const clockin = new Date(date);
+            clockin.setHours(clockinHour, clockinMinute, 0);
+            
+            const clockoutHour = 16 + Math.floor(Math.random() * 4);
+            const clockoutMinute = Math.floor(Math.random() * 60);
+            const clockout = new Date(date);
+            clockout.setHours(clockoutHour, clockoutMinute, 0);
+            
+            const diffMs = clockout - clockin;
+            const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+            const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+            const jamKerja = `${diffHours} jam ${diffMinutes} menit`;
             
             data.push({
-                order_date: date.toISOString(),
-                order_no: `ORD${1000 + i}`,
-                outlet: outlets[Math.floor(Math.random() * outlets.length)],
-                kasir: kasirs[Math.floor(Math.random() * kasirs.length)],
-                customer_name: customers[Math.floor(Math.random() * customers.length)],
-                item_name: items[Math.floor(Math.random() * items.length)],
-                qty: Math.floor(Math.random() * 3) + 1,
-                harga_jual: Math.floor(Math.random() * 50000) + 25000,
-                amount: Math.floor(Math.random() * 150000) + 50000,
-                payment_type: ['cash', 'transfer'][Math.floor(Math.random() * 2)],
-                status: ['completed', 'pending'][Math.floor(Math.random() * 2)]
+                outlet: outlet,
+                karyawan: karyawan,
+                clockin: clockin.toISOString(),
+                clockout: clockout.toISOString(),
+                jam_kerja: jamKerja
             });
         }
         
         return data;
     }
 
-    // ==================== TABLE MANAGEMENT ====================
+    async loadLaporanOmset() {
+        console.log('Loading laporan omset');
+        
+        let query = supabase
+            .from('transaksi_detail')
+            .select('*')
+            .order('order_date', { ascending: false });
 
-    // Destroy table properly
-    destroyTable() {
-        if (this.table) {
-            console.log('🗑️ Destroying existing table...');
-            try {
-                // Cek method destroy tersedia
-                if (typeof this.table.destroy === 'function') {
-                    this.table.destroy();
-                } else if (typeof this.table.destroyTable === 'function') {
-                    this.table.destroyTable();
-                }
-                this.table = null;
-            } catch (error) {
-                console.warn('Error destroying table:', error);
+        if (this.filters.startDate) {
+            query = query.gte('order_date', this.filters.startDate);
+        }
+        if (this.filters.endDate) {
+            query = query.lte('order_date', this.filters.endDate);
+        }
+        if (this.filters.outlet) {
+            query = query.eq('outlet', this.filters.outlet);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        return this.processOmsetData(data || []);
+    }
+
+    processOmsetData(data) {
+        const result = {};
+        
+        data.forEach(item => {
+            const outlet = item.outlet || 'Unknown';
+            const orderDate = item.order_date ? item.order_date.split('T')[0] : 'Unknown';
+            const amount = parseFloat(item.amount) || 0;
+            const isCompleted = item.status === 'completed';
+            
+            if (!isCompleted) return;
+            
+            const key = `${outlet}-${orderDate}`;
+            
+            if (!result[key]) {
+                result[key] = {
+                    outlet: outlet,
+                    tanggal: orderDate,
+                    total_omset: 0,
+                    jumlah_transaksi: 0
+                };
             }
+            
+            result[key].total_omset += amount;
+            result[key].jumlah_transaksi += 1;
+        });
+        
+        const tableData = Object.values(result).map(item => {
+            return {
+                ...item,
+                rata_rata_transaksi: item.jumlah_transaksi > 0 ? item.total_omset / item.jumlah_transaksi : 0
+            };
+        });
+        
+        return tableData;
+    }
+
+    async loadLaporanPemasukanPengeluaran() {
+        console.log('Loading laporan pemasukan pengeluaran');
+        
+        try {
+            let query = supabase
+                .from('arus_kas')
+                .select('*')
+                .order('tanggal', { ascending: false });
+
+            if (this.filters.startDate) {
+                query = query.gte('tanggal', this.filters.startDate);
+            }
+            if (this.filters.endDate) {
+                query = query.lte('tanggal', this.filters.endDate);
+            }
+            if (this.filters.outlet) {
+                query = query.eq('outlet', this.filters.outlet);
+            }
+
+            const { data, error } = await query;
+            if (error) throw error;
+
+            return data || [];
+        } catch (error) {
+            console.warn('Arus kas table not found, using fallback data');
+            return this.generateFallbackPemasukanPengeluaranData();
         }
     }
 
-    // Initialize table dengan safety checks
+    generateFallbackPemasukanPengeluaranData() {
+        const outlets = ['Rempoa', 'Ciputat', 'Pondok Cabe'];
+        const jenisList = ['pemasukan', 'pengeluaran'];
+        const kategoriPemasukan = ['Penjualan', 'Top Up Member', 'Lainnya'];
+        const kategoriPengeluaran = ['Gaji Karyawan', 'Bahan Baku', 'Operasional', 'Listrik', 'Air'];
+        
+        const data = [];
+        const today = new Date();
+        
+        for (let i = 0; i < 30; i++) {
+            const date = new Date();
+            date.setDate(today.getDate() - i);
+            
+            const outlet = outlets[Math.floor(Math.random() * outlets.length)];
+            const jenis = jenisList[Math.floor(Math.random() * jenisList.length)];
+            const kategori = jenis === 'pemasukan' 
+                ? kategoriPemasukan[Math.floor(Math.random() * kategoriPemasukan.length)]
+                : kategoriPengeluaran[Math.floor(Math.random() * kategoriPengeluaran.length)];
+            
+            const nominal = jenis === 'pemasukan' 
+                ? Math.floor(Math.random() * 5000000) + 1000000
+                : Math.floor(Math.random() * 2000000) + 500000;
+            
+            data.push({
+                outlet: outlet,
+                tanggal: date.toISOString().split('T')[0],
+                jenis: jenis,
+                kategori: kategori,
+                keterangan: `${jenis === 'pemasukan' ? 'Penerimaan' : 'Pengeluaran'} ${kategori}`,
+                nominal: nominal,
+                created_by: ['Hari Suryono', 'Echwan Abdillah', 'Ahmad Fauzi'][Math.floor(Math.random() * 3)]
+            });
+        }
+        
+        return data;
+    }
+
+    async loadLaporanTransaksiCancel() {
+        console.log('Loading laporan transaksi cancel');
+        
+        let query = supabase
+            .from('transaksi_detail')
+            .select('*')
+            .order('order_date', { ascending: false });
+
+        if (this.filters.startDate) {
+            query = query.gte('order_date', this.filters.startDate);
+        }
+        if (this.filters.endDate) {
+            query = query.lte('order_date', this.filters.endDate);
+        }
+        if (this.filters.outlet) {
+            query = query.eq('outlet', this.filters.outlet);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        const canceledData = data.filter(item => 
+            item.status === 'canceled' || item.status === 'cancelled'
+        );
+        
+        return canceledData;
+    }
+
+    // ==================== TABLE MANAGEMENT ====================
+
     initTable() {
-        console.log('🔄 Initializing table for tab:', this.currentTab);
+        console.log('Initializing table for tab:', this.currentTab);
         
         const tableContainer = document.getElementById('reports-table');
         if (!tableContainer) {
-            console.error('❌ Table container #reports-table not found');
-            return;
-        }
-
-        // Check DataTable dependency
-        if (!this.checkDataTableDependency()) {
-            this.showSimpleTable();
-            return;
-        }
-
-        try {
-            const columns = this.getTableColumns();
-            
-            // Pastikan DataTable constructor ada
-            if (typeof DataTable !== 'function') {
-                throw new Error('DataTable is not a constructor');
-            }
-
-            // Initialize table
-            this.table = new DataTable('reports-table', {
-                columns: columns,
-                searchable: true,
-                pagination: true,
-                pageSize: 10,
-                emptyMessage: 'Tidak ada data yang ditemukan'
-            });
-
-            // Pastikan method init ada
-            if (typeof this.table.init === 'function') {
-                this.table.init();
-            } else {
-                console.warn('Table init method not found, calling directly');
-            }
-
-            // Update data
-            if (this.currentData.length > 0) {
-                if (typeof this.table.updateData === 'function') {
-                    this.table.updateData(this.currentData);
-                }
-            } else {
-                this.showNoDataMessage();
-            }
-
-            console.log('✅ Table initialized successfully');
-
-        } catch (error) {
-            console.error('❌ Error initializing DataTable:', error);
-            this.showSimpleTable();
-        }
-    }
-
-    // Fallback simple table jika DataTable gagal
-    showSimpleTable() {
-        const tableContainer = document.getElementById('reports-table');
-        if (!tableContainer) return;
-
-        if (this.currentData.length === 0) {
-            this.showNoDataMessage();
+            console.error('Table container #reports-table not found');
             return;
         }
 
         const columns = this.getTableColumns();
-        let html = `
-            <div class="overflow-x-auto">
-                <table class="min-w-full bg-white border border-gray-200">
-                    <thead>
-                        <tr class="bg-gray-50">
-        `;
-
-        // Header
-        columns.forEach(col => {
-            html += `<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">${col.title}</th>`;
+        
+        this.table = new DataTable('reports-table', {
+            columns: columns,
+            searchable: true,
+            pagination: true,
+            pageSize: 15
         });
 
-        html += `</tr></thead><tbody>`;
-
-        // Rows
-        this.currentData.forEach((row, index) => {
-            html += `<tr class="${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}">`;
-            columns.forEach(col => {
-                let value = row[col.key] || '';
-                
-                // Format values
-                if (col.type === 'currency' && typeof value === 'number') {
-                    value = Helpers.formatCurrency(value);
-                } else if (col.type === 'date' && value) {
-                    value = Helpers.formatDateWIB(value);
-                } else if (col.formatter && typeof col.formatter === 'function') {
-                    value = col.formatter(value);
-                }
-                
-                html += `<td class="px-4 py-2 text-sm text-gray-900 border-b">${value}</td>`;
-            });
-            html += `</tr>`;
-        });
-
-        html += `</tbody></table></div>`;
-
-        tableContainer.innerHTML = html;
-        console.log('✅ Simple table rendered as fallback');
+        this.table.init();
+        this.table.updateData(this.currentData);
     }
 
-    // Show no data message
-    showNoDataMessage() {
-        const tableContainer = document.getElementById('reports-table');
-        if (tableContainer) {
-            tableContainer.innerHTML = `
-                <div class="flex justify-center items-center py-12">
-                    <div class="text-center">
-                        <div class="text-gray-400 text-6xl mb-4">📊</div>
-                        <p class="text-gray-500 text-lg">Tidak ada data yang ditemukan</p>
-                        <p class="text-gray-400 text-sm">Coba ubah filter atau periode waktu</p>
-                    </div>
-                </div>
-            `;
-        }
-    }
-
-    // Show error message
-    showError(message) {
-        const tableContainer = document.getElementById('reports-table');
-        if (tableContainer) {
-            tableContainer.innerHTML = `
-                <div class="flex justify-center items-center py-12">
-                    <div class="text-center">
-                        <div class="text-red-400 text-6xl mb-4">❌</div>
-                        <p class="text-red-500 text-lg">Terjadi Kesalahan</p>
-                        <p class="text-gray-600 text-sm">${message}</p>
-                        <button onclick="reports.loadData()" class="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
-                            Coba Lagi
-                        </button>
-                    </div>
-                </div>
-            `;
+    updateTableForCurrentTab() {
+        console.log('Updating table for tab:', this.currentTab);
+        
+        if (this.table && typeof this.table.destroy === 'function') {
+            this.table.destroy();
         }
         
-        // Show notification jika available
-        if (window.Notifications) {
-            Notifications.error(message);
-        } else {
-            console.error('Error:', message);
-        }
+        this.initTable();
     }
 
-    // Get table columns
     getTableColumns() {
         const columnDefinitions = {
-            'detail-transaksi': [
-                { title: 'Tanggal', key: 'order_date', type: 'date' },
-                { title: 'Order No', key: 'order_no' },
-                { title: 'Outlet', key: 'outlet' },
-                { title: 'Kasir', key: 'kasir' },
-                { title: 'Customer', key: 'customer_name' },
-                { title: 'Item', key: 'item_name' },
-                { title: 'Qty', key: 'qty' },
-                { title: 'Harga Jual', key: 'harga_jual', type: 'currency' },
-                { title: 'Amount', key: 'amount', type: 'currency' },
-                { 
-                    title: 'Payment', 
-                    key: 'payment_type',
-                    formatter: (value) => {
-                        const types = { 'cash': 'Cash', 'transfer': 'Transfer' };
-                        return types[value] || value;
-                    }
-                },
-                { 
-                    title: 'Status', 
-                    key: 'status',
-                    formatter: (value) => {
-                        const isCompleted = value === 'completed';
-                        const isCanceled = value === 'canceled' || value === 'cancelled';
-                        let bgColor = 'bg-yellow-100 text-yellow-800';
-                        let text = 'Pending';
-                        
-                        if (isCompleted) {
-                            bgColor = 'bg-green-100 text-green-800';
-                            text = 'Selesai';
-                        } else if (isCanceled) {
-                            bgColor = 'bg-red-100 text-red-800';
-                            text = 'Cancel';
-                        }
-                        
-                        return `<span class="px-2 py-1 text-xs rounded-full ${bgColor}">${text}</span>`;
-                    }
-                }
-            ],
-            'pembayaran': [
-                { title: 'Outlet', key: 'outlet' },
-                { 
-                    title: 'Type Pembayaran', 
-                    key: 'payment_type',
-                    formatter: (value) => {
-                        const types = { 'cash': 'Cash', 'transfer': 'Transfer' };
-                        return types[value] || value;
-                    }
-                },
-                { title: 'Total Amount Cancel', key: 'total_amount_cancel', type: 'currency' },
-                { title: 'Total Amount', key: 'total_amount', type: 'currency' }
-            ],
-            'komisi': [
-                { title: 'Outlet', key: 'outlet' },
-                { title: 'Served By', key: 'kasir' },
-                { title: 'Total Amount', key: 'total_amount', type: 'currency' },
-                { title: 'Total Komisi', key: 'total_komisi', type: 'currency' }
-            ]
+            'detail-transaksi': this.getDetailTransaksiColumns(),
+            'pembayaran': this.getPembayaranColumns(),
+            'komisi': this.getKomisiColumns(),
+            'membercard': this.getMembercardColumns(),
+            'absen': this.getAbsenColumns(),
+            'omset': this.getOmsetColumns(),
+            'pemasukan-pengeluaran': this.getPemasukanPengeluaranColumns(),
+            'transaksi-cancel': this.getTransaksiCancelColumns()
         };
 
-        return columnDefinitions[this.currentTab] || columnDefinitions['detail-transaksi'];
+        return columnDefinitions[this.currentTab] || this.getDetailTransaksiColumns();
+    }
+
+    // Column definitions
+    getDetailTransaksiColumns() {
+        return [
+            { 
+                title: 'Tanggal', 
+                key: 'order_date',
+                type: 'date'
+            },
+            { title: 'Order No', key: 'order_no' },
+            { title: 'Outlet', key: 'outlet' },
+            { title: 'Kasir', key: 'kasir' },
+            { title: 'Customer', key: 'customer_name' },
+            { title: 'Item', key: 'item_name' },
+            { title: 'Qty', key: 'qty' },
+            { 
+                title: 'Harga Jual', 
+                key: 'harga_jual',
+                type: 'currency'
+            },
+            { 
+                title: 'Amount', 
+                key: 'amount',
+                type: 'currency'
+            },
+            { 
+                title: 'Payment', 
+                key: 'payment_type',
+                formatter: (value) => {
+                    const types = {
+                        'cash': 'Cash',
+                        'transfer': 'Transfer',
+                        'debit_card': 'Debit Card',
+                        'credit_card': 'Credit Card'
+                    };
+                    return types[value] || value;
+                }
+            },
+            { 
+                title: 'Status', 
+                key: 'status',
+                formatter: (value) => {
+                    const isCompleted = value === 'completed';
+                    const isCanceled = value === 'canceled' || value === 'cancelled';
+                    let bgColor = 'bg-yellow-100 text-yellow-800';
+                    let text = 'Pending';
+                    
+                    if (isCompleted) {
+                        bgColor = 'bg-green-100 text-green-800';
+                        text = 'Selesai';
+                    } else if (isCanceled) {
+                        bgColor = 'bg-red-100 text-red-800';
+                        text = 'Cancel';
+                    }
+                    
+                    return `
+                        <span class="px-2 py-1 text-xs rounded-full ${bgColor}">
+                            ${text}
+                        </span>
+                    `;
+                }
+            }
+        ];
+    }
+
+    getPembayaranColumns() {
+        return [
+            { title: 'Outlet', key: 'outlet' },
+            { 
+                title: 'Type Pembayaran', 
+                key: 'payment_type',
+                formatter: (value) => {
+                    const types = {
+                        'cash': 'Cash',
+                        'transfer': 'Transfer',
+                        'debit_card': 'Debit Card',
+                        'credit_card': 'Credit Card'
+                    };
+                    return types[value] || value;
+                }
+            },
+            { 
+                title: 'Total Amount Cancel', 
+                key: 'total_amount_cancel',
+                type: 'currency'
+            },
+            { 
+                title: 'Total Amount', 
+                key: 'total_amount',
+                type: 'currency'
+            }
+        ];
+    }
+
+    getKomisiColumns() {
+        return [
+            { title: 'Outlet', key: 'outlet' },
+            { title: 'Served By', key: 'kasir' },
+            { 
+                title: 'Total Amount', 
+                key: 'total_amount',
+                type: 'currency'
+            },
+            { 
+                title: 'Total Komisi', 
+                key: 'total_komisi',
+                type: 'currency'
+            }
+        ];
+    }
+
+    getMembercardColumns() {
+        return [
+            { title: 'Outlet', key: 'outlet' },
+            { title: 'Kasir', key: 'kasir' },
+            { title: 'Jumlah Membercard', key: 'jumlah_membercard' }
+        ];
+    }
+
+    getAbsenColumns() {
+        return [
+            { title: 'Outlet', key: 'outlet' },
+            { title: 'Karyawan', key: 'karyawan' },
+            { 
+                title: 'Clock In', 
+                key: 'clockin',
+                type: 'datetime'
+            },
+            { 
+                title: 'Clock Out', 
+                key: 'clockout',
+                type: 'datetime'
+            },
+            { title: 'Jam Kerja', key: 'jam_kerja' }
+        ];
+    }
+
+    getOmsetColumns() {
+        return [
+            { title: 'Outlet', key: 'outlet' },
+            { 
+                title: 'Tanggal', 
+                key: 'tanggal',
+                type: 'date'
+            },
+            { 
+                title: 'Total Omset', 
+                key: 'total_omset',
+                type: 'currency'
+            },
+            { title: 'Jumlah Transaksi', key: 'jumlah_transaksi' },
+            { 
+                title: 'Rata-rata Transaksi', 
+                key: 'rata_rata_transaksi',
+                type: 'currency'
+            }
+        ];
+    }
+
+    getPemasukanPengeluaranColumns() {
+        return [
+            { title: 'Outlet', key: 'outlet' },
+            { 
+                title: 'Tanggal', 
+                key: 'tanggal',
+                type: 'date'
+            },
+            { 
+                title: 'Jenis', 
+                key: 'jenis',
+                formatter: (value) => {
+                    const isPemasukan = value === 'pemasukan';
+                    return `
+                        <span class="px-2 py-1 text-xs rounded-full ${
+                            isPemasukan 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-red-100 text-red-800'
+                        }">
+                            ${isPemasukan ? 'Pemasukan' : 'Pengeluaran'}
+                        </span>
+                    `;
+                }
+            },
+            { title: 'Kategori', key: 'kategori' },
+            { title: 'Keterangan', key: 'keterangan' },
+            { 
+                title: 'Nominal', 
+                key: 'nominal',
+                type: 'currency'
+            },
+            { title: 'Dibuat Oleh', key: 'created_by' }
+        ];
+    }
+
+    getTransaksiCancelColumns() {
+        return [
+            { 
+                title: 'Tanggal', 
+                key: 'order_date',
+                type: 'date'
+            },
+            { title: 'Order No', key: 'order_no' },
+            { title: 'Outlet', key: 'outlet' },
+            { title: 'Kasir', key: 'kasir' },
+            { title: 'Customer', key: 'customer_name' },
+            { 
+                title: 'Amount', 
+                key: 'amount',
+                type: 'currency'
+            },
+            { 
+                title: 'Alasan Cancel', 
+                key: 'cancel_reason',
+                formatter: (value) => value || 'Tidak ada alasan'
+            }
+        ];
     }
 
     // ==================== EVENT HANDLERS ====================
 
     bindEvents() {
-        console.log('🔗 Binding events...');
+        console.log('Binding events');
         
         // Filter button
         const filterBtn = document.getElementById('apply-filters');
         if (filterBtn) {
             filterBtn.addEventListener('click', () => this.applyFilters());
+        } else {
+            console.warn('Filter button not found');
         }
         
         // Export button
         const exportBtn = document.getElementById('export-report');
         if (exportBtn) {
             exportBtn.addEventListener('click', () => this.exportReport());
+        } else {
+            console.warn('Export button not found');
         }
 
-        console.log('✅ Events bound successfully');
+        // Enter key untuk filters
+        const filterInputs = document.querySelectorAll('#start-date, #end-date, #outlet-filter');
+        filterInputs.forEach(input => {
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    this.applyFilters();
+                }
+            });
+        });
     }
 
     async applyFilters() {
-        if (this.isLoading) return;
-
-        console.log('🔍 Applying filters...');
+        console.log('Applying filters');
         
-        try {
-            this.showLoadingState();
-            
-            const startDate = document.getElementById('start-date');
-            const endDate = document.getElementById('end-date');
-            const outlet = document.getElementById('outlet-filter');
+        const startDate = document.getElementById('start-date');
+        const endDate = document.getElementById('end-date');
+        const outlet = document.getElementById('outlet-filter');
 
-            if (startDate) this.filters.startDate = startDate.value;
-            if (endDate) this.filters.endDate = endDate.value;
-            if (outlet) this.filters.outlet = outlet.value;
+        if (startDate) this.filters.startDate = startDate.value;
+        if (endDate) this.filters.endDate = endDate.value;
+        if (outlet) this.filters.outlet = outlet.value;
 
-            console.log('✅ Filters applied:', this.filters);
-            
-            await this.loadData();
-            
-        } catch (error) {
-            console.error('❌ Error applying filters:', error);
-            this.showError('Gagal menerapkan filter');
-        } finally {
-            this.hideLoadingState();
-        }
+        console.log('Filters applied:', this.filters);
+        
+        await this.loadData();
+        Notifications.success('Filter diterapkan');
     }
 
     // ==================== SUMMARY & EXPORT ====================
 
     updateSummary() {
-        try {
-            let totalSales = 0;
-            let totalTransactions = 0;
-            let totalItems = 0;
-            let totalProfit = 0;
+        let totalSales = 0;
+        let totalTransactions = 0;
+        let totalItems = 0;
+        let totalProfit = 0;
 
-            switch(this.currentTab) {
-                case 'detail-transaksi':
-                    totalSales = this.currentData.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-                    totalTransactions = new Set(this.currentData.map(item => item.order_no)).size;
-                    totalItems = this.currentData.reduce((sum, item) => sum + (parseInt(item.qty) || 0), 0);
-                    totalProfit = totalSales * 0.15;
-                    break;
-                
-                case 'pembayaran':
-                    totalSales = this.currentData.reduce((sum, item) => sum + (parseFloat(item.total_amount) || 0), 0);
-                    totalTransactions = this.currentData.length;
-                    totalItems = this.currentData.reduce((sum, item) => sum + (parseFloat(item.total_amount_cancel) || 0), 0);
-                    totalProfit = totalSales - totalItems;
-                    break;
-                
-                case 'komisi':
-                    totalSales = this.currentData.reduce((sum, item) => sum + (parseFloat(item.total_amount) || 0), 0);
-                    totalTransactions = this.currentData.length;
-                    totalItems = this.currentData.reduce((sum, item) => sum + (parseFloat(item.total_komisi) || 0), 0);
-                    totalProfit = totalItems;
-                    break;
-                
-                default:
-                    totalSales = this.currentData.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-                    totalTransactions = this.currentData.length;
-                    totalItems = this.currentData.reduce((sum, item) => sum + (parseInt(item.qty) || 0), 0);
-                    totalProfit = totalSales * 0.15;
-            }
-
-            this.updateSummaryCard('total-sales', Helpers.formatCurrency(totalSales));
-            this.updateSummaryCard('total-transactions', totalTransactions.toLocaleString());
-            this.updateSummaryCard('total-items', totalItems.toLocaleString());
-            this.updateSummaryCard('total-profit', Helpers.formatCurrency(totalProfit));
-
-        } catch (error) {
-            console.error('Error updating summary:', error);
+        switch(this.currentTab) {
+            case 'detail-transaksi':
+                totalSales = this.currentData.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+                totalTransactions = new Set(this.currentData.map(item => item.order_no)).size;
+                totalItems = this.currentData.reduce((sum, item) => sum + (parseInt(item.qty) || 0), 0);
+                totalProfit = this.currentData.reduce((sum, item) => sum + (parseFloat(item.profit) || 0), 0);
+                break;
+            
+            case 'pembayaran':
+                totalSales = this.currentData.reduce((sum, item) => sum + (parseFloat(item.total_amount) || 0), 0);
+                totalTransactions = this.currentData.length;
+                totalItems = this.currentData.reduce((sum, item) => sum + (parseFloat(item.total_amount_cancel) || 0), 0);
+                totalProfit = totalSales - totalItems;
+                break;
+            
+            case 'komisi':
+                totalSales = this.currentData.reduce((sum, item) => sum + (parseFloat(item.total_amount) || 0), 0);
+                totalTransactions = this.currentData.length;
+                totalItems = this.currentData.reduce((sum, item) => sum + (parseFloat(item.total_komisi) || 0), 0);
+                totalProfit = totalItems;
+                break;
+            
+            case 'membercard':
+                totalSales = this.currentData.reduce((sum, item) => sum + (parseInt(item.jumlah_membercard) || 0), 0);
+                totalTransactions = this.currentData.length;
+                totalItems = 0;
+                totalProfit = totalSales * 100000;
+                break;
+            
+            case 'absen':
+                totalSales = this.currentData.length;
+                totalTransactions = new Set(this.currentData.map(item => item.karyawan)).size;
+                totalItems = 0;
+                totalProfit = totalSales * 50000;
+                break;
+            
+            case 'omset':
+                totalSales = this.currentData.reduce((sum, item) => sum + (parseFloat(item.total_omset) || 0), 0);
+                totalTransactions = this.currentData.reduce((sum, item) => sum + (parseInt(item.jumlah_transaksi) || 0), 0);
+                totalItems = this.currentData.length;
+                totalProfit = totalSales * 0.2;
+                break;
+            
+            case 'pemasukan-pengeluaran':
+                const pemasukan = this.currentData
+                    .filter(item => item.jenis === 'pemasukan')
+                    .reduce((sum, item) => sum + (parseFloat(item.nominal) || 0), 0);
+                const pengeluaran = this.currentData
+                    .filter(item => item.jenis === 'pengeluaran')
+                    .reduce((sum, item) => sum + (parseFloat(item.nominal) || 0), 0);
+                totalSales = pemasukan;
+                totalTransactions = this.currentData.length;
+                totalItems = pengeluaran;
+                totalProfit = pemasukan - pengeluaran;
+                break;
+            
+            case 'transaksi-cancel':
+                totalSales = this.currentData.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+                totalTransactions = this.currentData.length;
+                totalItems = new Set(this.currentData.map(item => item.order_no)).size;
+                totalProfit = -totalSales;
+                break;
+            
+            default:
+                totalSales = this.currentData.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+                totalTransactions = new Set(this.currentData.map(item => item.order_no)).size;
+                totalItems = this.currentData.reduce((sum, item) => sum + (parseInt(item.qty) || 0), 0);
+                totalProfit = totalSales * 0.15;
         }
+
+        this.updateSummaryCard('total-sales', Helpers.formatCurrency(totalSales));
+        this.updateSummaryCard('total-transactions', totalTransactions);
+        this.updateSummaryCard('total-items', totalItems);
+        this.updateSummaryCard('total-profit', Helpers.formatCurrency(totalProfit));
     }
 
     updateSummaryCard(elementId, value) {
@@ -847,91 +1097,247 @@ class Reports {
 
     async exportReport() {
         try {
-            if (this.currentData.length === 0) {
-                this.showError('Tidak ada data untuk diexport');
-                return;
-            }
+            Helpers.showLoading();
 
-            this.showLoadingState();
-
-            // Simple export logic
             let csvContent = "";
-            const columns = this.getTableColumns();
-            
-            // Header
-            csvContent += columns.map(col => `"${col.title}"`).join(',') + '\n';
-            
-            // Data
-            this.currentData.forEach(item => {
-                const row = columns.map(col => {
-                    let value = item[col.key] || '';
-                    return `"${value}"`;
-                }).join(',');
-                csvContent += row + '\n';
-            });
+            let filename = "";
 
-            // Download
+            const exportMethods = {
+                'detail-transaksi': () => {
+                    csvContent = this.generateDetailTransaksiCSV();
+                    filename = `laporan-detail-transaksi-${new Date().toISOString().split('T')[0]}.csv`;
+                },
+                'pembayaran': () => {
+                    csvContent = this.generatePembayaranCSV();
+                    filename = `laporan-pembayaran-${new Date().toISOString().split('T')[0]}.csv`;
+                },
+                'komisi': () => {
+                    csvContent = this.generateKomisiCSV();
+                    filename = `laporan-komisi-${new Date().toISOString().split('T')[0]}.csv`;
+                },
+                'membercard': () => {
+                    csvContent = this.generateMembercardCSV();
+                    filename = `laporan-membercard-${new Date().toISOString().split('T')[0]}.csv`;
+                },
+                'absen': () => {
+                    csvContent = this.generateAbsenCSV();
+                    filename = `laporan-absen-${new Date().toISOString().split('T')[0]}.csv`;
+                },
+                'omset': () => {
+                    csvContent = this.generateOmsetCSV();
+                    filename = `laporan-omset-${new Date().toISOString().split('T')[0]}.csv`;
+                },
+                'pemasukan-pengeluaran': () => {
+                    csvContent = this.generatePemasukanPengeluaranCSV();
+                    filename = `laporan-pemasukan-pengeluaran-${new Date().toISOString().split('T')[0]}.csv`;
+                },
+                'transaksi-cancel': () => {
+                    csvContent = this.generateTransaksiCancelCSV();
+                    filename = `laporan-transaksi-cancel-${new Date().toISOString().split('T')[0]}.csv`;
+                }
+            };
+
+            const exportMethod = exportMethods[this.currentTab] || exportMethods['detail-transaksi'];
+            exportMethod();
+
+            // Create and download file
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             const url = URL.createObjectURL(blob);
             
             link.setAttribute('href', url);
-            link.setAttribute('download', `laporan-${this.currentTab}-${new Date().toISOString().split('T')[0]}.csv`);
+            link.setAttribute('download', filename);
             link.style.visibility = 'hidden';
             
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
 
-            this.hideLoadingState();
-            
-            if (window.Notifications) {
-                Notifications.success('Laporan berhasil diexport');
-            }
+            Helpers.hideLoading();
+            Notifications.success('Laporan berhasil diexport');
 
         } catch (error) {
-            this.hideLoadingState();
-            this.showError('Gagal mengexport laporan: ' + error.message);
+            Helpers.hideLoading();
+            Notifications.error('Gagal mengexport laporan: ' + error.message);
         }
     }
 
-    // Cleanup
+    // CSV generation methods
+    generateDetailTransaksiCSV() {
+        let csvContent = "Tanggal,Order No,Outlet,Kasir,Customer,Item,Qty,Harga Jual,Amount,Payment Type,Status\n";
+        
+        this.currentData.forEach(item => {
+            const row = [
+                Helpers.formatDateWIB(item.order_date),
+                item.order_no,
+                item.outlet,
+                item.kasir,
+                item.customer_name,
+                item.item_name,
+                item.qty,
+                item.harga_jual,
+                item.amount,
+                item.payment_type,
+                item.status
+            ].map(field => `"${field}"`).join(',');
+            
+            csvContent += row + '\n';
+        });
+
+        return csvContent;
+    }
+
+    generatePembayaranCSV() {
+        let csvContent = "Outlet,Type Pembayaran,Total Amount Cancel,Total Amount\n";
+        
+        this.currentData.forEach(item => {
+            const row = [
+                item.outlet,
+                item.payment_type,
+                item.total_amount_cancel,
+                item.total_amount
+            ].map(field => `"${field}"`).join(',');
+            
+            csvContent += row + '\n';
+        });
+
+        return csvContent;
+    }
+
+    generateKomisiCSV() {
+        let csvContent = "Outlet,Served By,Total Amount,Total Komisi\n";
+        
+        this.currentData.forEach(item => {
+            const row = [
+                item.outlet,
+                item.kasir,
+                item.total_amount,
+                item.total_komisi
+            ].map(field => `"${field}"`).join(',');
+            
+            csvContent += row + '\n';
+        });
+
+        return csvContent;
+    }
+
+    generateMembercardCSV() {
+        let csvContent = "Outlet,Kasir,Jumlah Membercard\n";
+        
+        this.currentData.forEach(item => {
+            const row = [
+                item.outlet,
+                item.kasir,
+                item.jumlah_membercard
+            ].map(field => `"${field}"`).join(',');
+            
+            csvContent += row + '\n';
+        });
+
+        return csvContent;
+    }
+
+    generateAbsenCSV() {
+        let csvContent = "Outlet,Karyawan,Clock In,Clock Out,Jam Kerja\n";
+        
+        this.currentData.forEach(item => {
+            const row = [
+                item.outlet,
+                item.karyawan,
+                Helpers.formatDateWIB(item.clockin),
+                Helpers.formatDateWIB(item.clockout),
+                item.jam_kerja
+            ].map(field => `"${field}"`).join(',');
+            
+            csvContent += row + '\n';
+        });
+
+        return csvContent;
+    }
+
+    generateOmsetCSV() {
+        let csvContent = "Outlet,Tanggal,Total Omset,Jumlah Transaksi,Rata-rata Transaksi\n";
+        
+        this.currentData.forEach(item => {
+            const row = [
+                item.outlet,
+                item.tanggal,
+                item.total_omset,
+                item.jumlah_transaksi,
+                item.rata_rata_transaksi
+            ].map(field => `"${field}"`).join(',');
+            
+            csvContent += row + '\n';
+        });
+
+        return csvContent;
+    }
+
+    generatePemasukanPengeluaranCSV() {
+        let csvContent = "Outlet,Tanggal,Jenis,Kategori,Keterangan,Nominal,Dibuat Oleh\n";
+        
+        this.currentData.forEach(item => {
+            const row = [
+                item.outlet,
+                item.tanggal,
+                item.jenis,
+                item.kategori,
+                item.keterangan,
+                item.nominal,
+                item.created_by
+            ].map(field => `"${field}"`).join(',');
+            
+            csvContent += row + '\n';
+        });
+
+        return csvContent;
+    }
+
+    generateTransaksiCancelCSV() {
+        let csvContent = "Tanggal,Order No,Outlet,Kasir,Customer,Amount,Alasan Cancel\n";
+        
+        this.currentData.forEach(item => {
+            const row = [
+                Helpers.formatDateWIB(item.order_date),
+                item.order_no,
+                item.outlet,
+                item.kasir,
+                item.customer_name,
+                item.amount,
+                item.cancel_reason || 'Tidak ada alasan'
+            ].map(field => `"${field}"`).join(',');
+            
+            csvContent += row + '\n';
+        });
+
+        return csvContent;
+    }
+
+    // Cleanup method
     destroy() {
-        console.log('🧹 Cleaning up Reports module...');
-        this.destroyTable();
+        if (this.table && typeof this.table.destroy === 'function') {
+            this.table.destroy();
+        }
+        
+        // Remove event listeners
+        const tabs = document.querySelectorAll('.report-tab');
+        tabs.forEach(tab => {
+            tab.replaceWith(tab.cloneNode(true));
+        });
+        
         this.isInitialized = false;
-        this.isLoading = false;
+        console.log('Reports module destroyed');
     }
 }
 
-// Safe initialization
+// Initialize reports globally
 let reports = null;
-
 document.addEventListener('DOMContentLoaded', () => {
-    try {
-        // Tunggu sampai semua resources loaded
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initializeReports);
-        } else {
-            setTimeout(initializeReports, 100);
-        }
-        
-        function initializeReports() {
-            if (!document.getElementById('reports-table')) {
-                console.log('⏳ Reports table not found, retrying...');
-                setTimeout(initializeReports, 500);
-                return;
-            }
-            
-            reports = new Reports();
-            window.reportsModule = reports;
-            
-            reports.init().catch(error => {
-                console.error('❌ Failed to initialize reports:', error);
-            });
-        }
-        
-    } catch (error) {
-        console.error('❌ Error initializing Reports module:', error);
+    reports = new Reports();
+    window.reportsModule = reports; // Expose for debugging
+    
+    // Auto-initialize if element exists
+    if (document.getElementById('reports-table')) {
+        reports.init();
     }
 });
