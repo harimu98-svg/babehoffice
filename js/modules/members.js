@@ -46,7 +46,8 @@ class Members {
             
             let query = supabase
                 .from('membercard')
-                .select('*');
+                .select('*')
+            .limit(10000);
 
             // Apply filters
             if (filters.outlet) {
