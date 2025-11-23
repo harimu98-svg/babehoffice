@@ -233,6 +233,11 @@ const profileHTML = `
     async loadModule(moduleName) {
         console.log('Loading module:', moduleName);
         this.currentModule = moduleName;
+		
+		// Cleanup module sebelumnya jika perlu
+    if (moduleName !== 'reports' && window.reportsModule) {
+        window.reportsModule.cleanup();
+    }
         
         // Update active state in sidebar
         document.querySelectorAll('.sidebar-item').forEach(item => {
