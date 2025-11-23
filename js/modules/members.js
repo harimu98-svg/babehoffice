@@ -85,7 +85,7 @@ class Members {
             } else {
                 hasMore = false;
             }
-        }
+        },
         
     // Initialize table
     initTable() {
