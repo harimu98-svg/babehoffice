@@ -313,7 +313,13 @@ const profileHTML = `
             if (pageDescEl) pageDescEl.textContent = pageDescription;
 
             content.innerHTML = moduleHTML;
+// Beri sedikit delay untuk memastikan DOM ter-render
+    setTimeout(() => {
+        this.initModule(moduleName);
+    }, 50);
 
+    console.log('Module loaded successfully:', moduleName);
+			
             // Initialize module-specific JavaScript
             this.initModule(moduleName);
 
