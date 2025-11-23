@@ -40,14 +40,25 @@ class Members {
     }
 
     // Load data from Supabase dengan filter
-    async loadData(filters = {}) {
-        try {
-            Helpers.showLoading();
+   async loadData(filters = {}) {
+    try {
+        Helpers.showLoading();
+        
+        const allData = [];
+        let page = 1;
+        const pageSize = 1000; // Max per request
+        let hasMore = true;
+
+        console.log('🔄 Loading member data with pagination...');
+
+        while (hasMore) {
+            const from = (page - 1) * pageSize;
+            const to = from + pageSize - 1;
             
             let query = supabase
                 .from('membercard')
                 .select('*')
-                .limit(5000);
+                .range(from, to);
 
             // Apply filters
             if (filters.outlet) {
@@ -57,24 +68,25 @@ class Members {
                 query = query.eq('status', filters.status);
             }
 
-            const { data, error } = await query.order('nama', { ascending: true });
+            const { data, error } = await query.order('id', { ascending: true });
 
             if (error) throw error;
 
-            this.currentData = data || [];
-            if (this.table) {
-                this.table.updateData(this.currentData);
+            if (data && data.length > 0) {
+                allData.push(...data);
+                console.log(`📥 Page ${page}: Loaded ${data.length} records (total: ${allData.length})`);
+                
+                // Jika dapat kurang dari pageSize, berarti sudah last page
+                if (data.length < pageSize) {
+                    hasMore = false;
+                } else {
+                    page++;
+                }
+            } else {
+                hasMore = false;
             }
-
-            Helpers.hideLoading();
-            return this.currentData;
-        } catch (error) {
-            Helpers.hideLoading();
-            Notifications.error('Gagal memuat data member: ' + error.message);
-            return [];
         }
-    }
-
+        
     // Initialize table
     initTable() {
         this.table = new DataTable('members-table', {
