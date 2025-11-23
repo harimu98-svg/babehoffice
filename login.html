@@ -1,0 +1,377 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Babeh Barbershop Office</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#1a365d',
+                        secondary: '#2d3748', 
+                        accent: '#ed8936'
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <style>
+        body {
+            background: linear-gradient(135deg, #1a365d 0%, #2d3748 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .logo-login {
+            width: 80px;
+            height: 80px;
+            border-radius: 1rem;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: white;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .logo-img-login {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            padding: 8px;
+        }
+
+        .logo-fallback-login {
+            color: #1a365d;
+            font-weight: bold;
+            font-size: 32px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <!-- Loading Overlay -->
+    <div id="loading" class="fixed inset-0 bg-white bg-opacity-75 flex items-center justify-center z-50 hidden">
+        <div class="flex flex-col items-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <p class="mt-4 text-gray-600">Memuat...</p>
+        </div>
+    </div>
+
+    <div class="max-w-md w-full space-y-8">
+        <div>
+            <div class="flex justify-center">
+                <div class="logo-login">
+                    <img src="assets/logo.png" alt="Babeh Barbershop Logo" class="logo-img-login" 
+                         onerror="this.style.display='none'; this.parentElement.innerHTML='<span class=\\'logo-fallback-login\\'>B</span>';">
+                </div>
+            </div>
+            <h2 class="mt-6 text-center text-3xl font-extrabold text-white">
+                Babeh Barbershop
+            </h2>
+            <p class="mt-2 text-center text-sm text-gray-300">
+                Office Management System
+            </p>
+            <p class="mt-1 text-center text-xs text-yellow-300">
+                Hanya untuk Owner
+            </p>
+        </div>
+        
+        <form class="mt-8 space-y-6 bg-white p-8 rounded-2xl shadow-xl" onsubmit="return handleLogin(event)">
+            <div id="login-message" class="hidden p-3 rounded-md bg-red-100 text-red-700 text-sm"></div>
+            
+            <div class="rounded-md shadow-sm -space-y-px">
+                <div>
+                    <label for="email" class="sr-only">Email</label>
+                    <input 
+                        id="email" 
+                        name="email" 
+                        type="email" 
+                        required 
+                        class="relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                        placeholder="Email Owner"
+                        autocomplete="email"
+                    >
+                </div>
+                <div>
+                    <label for="password" class="sr-only">Password</label>
+                    <input 
+                        id="password" 
+                        name="password" 
+                        type="password" 
+                        required 
+                        class="relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                        placeholder="Password"
+                        autocomplete="current-password"
+                    >
+                </div>
+            </div>
+
+            <div>
+                <button 
+                    type="submit" 
+                    id="login-button"
+                    class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                >
+                    <span id="login-text">Masuk ke Sistem</span>
+                    <span id="login-loading" class="hidden">
+                        <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Memproses...
+                    </span>
+                </button>
+            </div>
+
+            <div class="text-center">
+                <p class="text-xs text-gray-500">
+                    Waktu Server: <span id="server-time"></span> WIB
+                </p>
+            </div>
+        </form>
+
+        <div class="text-center">
+            <p class="text-sm text-gray-300">
+                &copy; 2024 Babeh Barbershop. All rights reserved.
+            </p>
+        </div>
+    </div>
+
+    <!-- JavaScript Files -->
+    <script src="js/supabase.js"></script>
+    <script src="js/globals.js"></script>
+    <script src="js/utils/helpers.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/components/notifications.js"></script>
+
+    <script>
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Login page loaded');
+            
+            if (typeof Notifications !== 'undefined') {
+                window.notifications = new Notifications();
+                console.log('Notifications initialized');
+            }
+            
+            updateServerTime();
+            setInterval(updateServerTime, 1000);
+            
+            // Pengecekan user yang sudah login
+            setTimeout(() => {
+                if (typeof Auth !== 'undefined') {
+                    const user = Auth.getCurrentUser();
+                    console.log('Login page - Current user:', user);
+                    
+                    if (user && user.id && user.role === 'owner') {
+                        console.log('Owner already logged in, redirecting to index...');
+                        setTimeout(() => {
+                            window.location.href = 'index.html';
+                        }, 100);
+                    } else if (user && user.id && user.role !== 'owner') {
+                        console.log('Non-owner user logged in, logging out...');
+                        logoutNonOwner();
+                    } else {
+                        console.log('No user logged in, staying on login page');
+                    }
+                } else {
+                    console.log('Auth module not available yet');
+                }
+            }, 200);
+        });
+
+        // Update server time
+        function updateServerTime() {
+            const now = new Date();
+            const timeEl = document.getElementById('server-time');
+            if (timeEl) {
+                timeEl.textContent = now.toLocaleString('id-ID', {
+                    timeZone: 'Asia/Jakarta',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+            }
+        }
+
+        // Show message
+        function showMessage(message, type = 'info') {
+            const messageEl = document.getElementById('login-message');
+            if (messageEl) {
+                messageEl.textContent = message;
+                messageEl.className = 'p-3 rounded-md text-sm ' + 
+                    (type === 'error' ? 'bg-red-100 text-red-700' : 
+                     type === 'success' ? 'bg-green-100 text-green-700' : 
+                     'bg-blue-100 text-blue-700');
+                messageEl.classList.remove('hidden');
+                
+                // Auto hide after 5 seconds
+                setTimeout(() => {
+                    messageEl.classList.add('hidden');
+                }, 5000);
+            }
+        }
+
+        // Handle login form submission - HANYA UNTUK OWNER
+        async function handleLogin(event) {
+            event.preventDefault();
+            console.log('Login form submitted');
+            
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const loginText = document.getElementById('login-text');
+            const loginLoading = document.getElementById('login-loading');
+            const loginButton = document.getElementById('login-button');
+
+            if (!email || !password) {
+                showMessage('Email dan password harus diisi', 'error');
+                return false;
+            }
+
+            // Validate email format
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                showMessage('Format email tidak valid', 'error');
+                return false;
+            }
+
+            // Show loading state
+            loginText.classList.add('hidden');
+            loginLoading.classList.remove('hidden');
+            loginButton.disabled = true;
+
+            try {
+                console.log('Attempting Supabase login with:', email);
+                
+                // Sign in with Supabase Auth
+                const { data, error } = await supabase.auth.signInWithPassword({
+                    email: email,
+                    password: password
+                });
+
+                if (error) {
+                    console.error('Supabase login error:', error);
+                    showMessage('Login gagal: ' + error.message, 'error');
+                    
+                    // Reset loading state
+                    loginText.classList.remove('hidden');
+                    loginLoading.classList.add('hidden');
+                    loginButton.disabled = false;
+                    return false;
+                }
+
+                if (data.user && data.session) {
+                    console.log('Supabase login successful:', data.user);
+                    
+                    // Cek apakah user memiliki role owner
+                    const userRole = data.user.user_metadata?.role;
+                    console.log('User role from metadata:', userRole);
+                    
+                    if (userRole !== 'owner') {
+                        showMessage('Akses ditolak. Hanya owner yang dapat login.', 'error');
+                        await supabase.auth.signOut();
+                        
+                        // Reset loading state
+                        loginText.classList.remove('hidden');
+                        loginLoading.classList.add('hidden');
+                        loginButton.disabled = false;
+                        return false;
+                    }
+                    
+                    // Simpan user data ke localStorage untuk konsistensi dengan sistem yang ada
+                    const userData = {
+                        id: data.user.id,
+                        email: data.user.email,
+                        user_login: data.user.email.split('@')[0],
+                        nama_karyawan: data.user.user_metadata?.full_name || data.user.email.split('@')[0],
+                        role: userRole,
+                        last_login: new Date().toISOString()
+                    };
+                    
+                    localStorage.setItem('currentUser', JSON.stringify(userData));
+                    localStorage.setItem('supabase_session', JSON.stringify(data.session));
+                    
+                    showMessage('Login berhasil! Mengalihkan...', 'success');
+                    
+                    // Redirect setelah delay singkat
+                    setTimeout(() => {
+                        window.location.href = 'index.html';
+                    }, 1500);
+                } else {
+                    showMessage('Login gagal: Tidak ada data user yang diterima', 'error');
+                    loginText.classList.remove('hidden');
+                    loginLoading.classList.add('hidden');
+                    loginButton.disabled = false;
+                }
+                
+            } catch (error) {
+                console.error('Login error:', error);
+                showMessage('Terjadi kesalahan saat login: ' + error.message, 'error');
+                
+                // Reset loading state
+                loginText.classList.remove('hidden');
+                loginLoading.classList.add('hidden');
+                loginButton.disabled = false;
+            }
+            
+            return false;
+        }
+
+        // Logout untuk non-owner user
+        async function logoutNonOwner() {
+            try {
+                await supabase.auth.signOut();
+                localStorage.removeItem('currentUser');
+                localStorage.removeItem('supabase_session');
+                showMessage('Hanya owner yang dapat mengakses sistem ini', 'error');
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+        }
+
+        // Function untuk logout (bisa digunakan di halaman lain)
+        async function logout() {
+            try {
+                const { error } = await supabase.auth.signOut();
+                if (error) {
+                    console.error('Logout error:', error);
+                }
+                
+                // Clear local storage
+                localStorage.removeItem('currentUser');
+                localStorage.removeItem('supabase_session');
+                
+                // Redirect to login page
+                window.location.href = 'login.html';
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+        }
+    </script>
+</body>
+</html>

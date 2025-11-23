@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Babeh Barbershop Office</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#1a365d',
+                        secondary: '#2d3748',
+                        accent: '#ed8936'
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- Custom CSS -->
+    <style>
+        .sidebar-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.5rem 0.75rem;
+            color: #374151;
+            border-radius: 0.5rem;
+            transition: all 0.2s;
+        }
+        .sidebar-item:hover {
+            background-color: #dbeafe;
+        }
+        .sidebar-item.active {
+            background-color: #D9BCF2;
+            color: #1d4ed8;
+        }
+    
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Custom logo styling */
+        .logo-container {
+            width: 60px;
+            height: 60px;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #ffffff;
+        }
+
+        .logo-img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            padding: 2px;
+        }
+
+        .logo-fallback {
+            color: white;
+            font-weight: bold;
+            font-size: 18px;
+        }
+/* ===== GLOBAL FIX FOR MODAL & SEARCH ===== */
+.modal-backdrop {
+    pointer-events: none !important;
+    z-index: 50 !important;
+}
+
+.modal-content {
+    pointer-events: auto !important;
+    z-index: 51 !important;
+}
+
+/* Pastikan semua search input tetap accessible */
+[id*="-search"],
+.data-table-search input,
+input[type="search"],
+input[type="text"] {
+    position: relative !important;
+    z-index: 40 !important;
+    pointer-events: auto !important;
+    background: white !important;
+}
+
+/* Table container harus di bawah modal */
+.data-table-container {
+    position: relative;
+    z-index: 1;
+}
+
+/* Force enable semua input kecuali yang disabled */
+input:not([disabled]):not([type="hidden"]):not([type="checkbox"]):not([type="radio"]) {
+    pointer-events: auto !important;
+}
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+    <!-- Loading Overlay -->
+    <div id="loading" class="fixed inset-0 bg-white bg-opacity-75 flex items-center justify-center z-50 hidden">
+        <div class="flex flex-col items-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <p class="mt-4 text-gray-600">Memuat...</p>
+        </div>
+    </div>
+
+    <div class="flex h-screen">
+        <!-- Sidebar -->
+        <div id="sidebar" class="w-64 bg-blue shadow-lg flex flex-col">
+            <!-- Sidebar content will be loaded by JavaScript -->
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <!-- Header -->
+            <header id="header" class="bg-white shadow-sm z-10 px-6 py-4">
+                <!-- Header content will be loaded by JavaScript -->
+            </header>
+
+            <!-- Content -->
+            <main id="content" class="flex-1 overflow-y-auto p-6">
+                <!-- Content will be loaded by JavaScript -->
+            </main>
+        </div>
+    </div>
+
+    <!-- JavaScript Files -->
+    <script src="js/supabase.js"></script>
+    <script src="js/globals.js"></script>
+    <script src="js/utils/helpers.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/components/modal.js"></script>
+    <script src="js/components/table.js"></script>
+    <script src="js/components/notifications.js"></script>
+	<script src="js/modules/dashboard.js"></script>
+   	<script src="js/modules/group_products.js"></script>
+   	<script src="js/modules/products.js"></script>
+	<script src="js/modules/employees.js"></script>
+	<script src="js/modules/members.js"></script>
+	<script src="js/modules/outlets.js"></script>
+	<script src="js/modules/reports.js"></script>
+    	<script src="js/app.js"></script>
+	<script src="js/modules/stock-management.js"></script>
+    <script>
+        // Auth check yang proper
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Index.html loaded - starting auth check');
+            
+            function initializeAfterAuth() {
+                console.log('Auth valid, initializing app...');
+                if (typeof Notifications !== 'undefined') {
+                    window.notifications = new Notifications();
+                    console.log('Notifications initialized');
+                }
+                if (typeof App !== 'undefined') {
+                    window.app = new App();
+                    console.log('App initialized successfully');
+                } else {
+                    console.error('App module not found');
+                // Fallback - load basic content
+                    document.getElementById('content').innerHTML = `
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h1 class="text-2xl font-bold text-gray-800">Babeh Barbershop Office</h1>
+                        <p class="text-gray-600 mt-2">Selamat datang di sistem management</p>
+                    </div>
+                `;
+                }
+            }
+
+            // Tunggu sampai Auth module tersedia
+            const checkAuth = setInterval(() => {
+                if (typeof Auth !== 'undefined') {
+                    clearInterval(checkAuth);
+                    console.log('Auth module loaded, checking user...');
+                    
+                    const user = Auth.getCurrentUser();
+                    console.log('Current user in index:', user);
+                    
+                    if (user && user.id) {
+                        console.log('User authenticated, proceeding...');
+                        initializeAfterAuth();
+                    } else {
+                        console.log('No valid user, redirecting to login...');
+                        window.location.href = 'login.html';
+                    }
+                }
+            }, 50);
+        });
+    </script>
+</body>
+</html>
