@@ -1,4 +1,4 @@
-// Reports Module dengan 8 Tab Laporan
+// Reports Module dengan 8 Tab Laporan - FIXED VERSION
 class Reports {
     constructor() {
         this.currentData = [];
@@ -9,6 +9,7 @@ class Reports {
             endDate: '',
             outlet: ''
         };
+        this.isInitialized = false;
         
         // Bind methods to maintain 'this' context
         this.init = this.init.bind(this);
@@ -20,40 +21,78 @@ class Reports {
         this.applyFilters = this.applyFilters.bind(this);
         this.exportReport = this.exportReport.bind(this);
         this.updateSummary = this.updateSummary.bind(this);
+        this.updateReportTitle = this.updateReportTitle.bind(this);
+        this.updateTableForCurrentTab = this.updateTableForCurrentTab.bind(this);
     }
 
     // Initialize module
     async init() {
+        if (this.isInitialized) {
+            console.log('Reports module already initialized');
+            return;
+        }
+
         console.log('Initializing Reports module');
-        this.initFilters(); // Pindahkan ini ke atas
-        this.initTabs();
-        await this.loadData();
-        this.initTable();
-        this.bindEvents();
-        console.log('Reports module initialized');
+        
+        try {
+            this.initTabs();
+            this.initFilters();
+            this.bindEvents();
+            
+            // Set active tab UI pertama kali
+            this.setActiveTabUI(this.currentTab);
+            this.updateReportTitle();
+            
+            await this.loadData();
+            
+            this.isInitialized = true;
+            console.log('Reports module initialized successfully');
+        } catch (error) {
+            console.error('Failed to initialize Reports module:', error);
+            Notifications.error('Gagal menginisialisasi modul laporan: ' + error.message);
+        }
     }
 
     // Initialize tabs
     initTabs() {
         const tabs = document.querySelectorAll('.report-tab');
+        console.log('Found tabs:', tabs.length);
+        
         tabs.forEach(tab => {
             tab.addEventListener('click', (e) => {
                 e.preventDefault();
                 const tabId = tab.getAttribute('data-tab');
+                console.log('Tab clicked:', tabId);
                 this.switchTab(tabId);
             });
         });
+    }
+
+    // Set active tab UI
+    setActiveTabUI(tabId) {
+        console.log('Setting active tab UI for:', tabId);
         
-        // Set active tab pertama kali
-        const defaultTab = document.querySelector('.report-tab[data-tab="detail-transaksi"]');
-        if (defaultTab) {
-            defaultTab.classList.add('active');
+        // Remove all active classes from all tabs
+        document.querySelectorAll('.report-tab').forEach(tab => {
+            tab.classList.remove('active', 'border-blue-500', 'text-blue-600', 'bg-blue-50');
+            tab.classList.add('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+        });
+        
+        // Add active classes to current tab
+        const activeTab = document.querySelector(`[data-tab="${tabId}"]`);
+        if (activeTab) {
+            activeTab.classList.add('active', 'border-blue-500', 'text-blue-600');
+            activeTab.classList.remove('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+            console.log('✅ Active tab UI updated:', tabId);
+        } else {
+            console.warn('Tab element not found for:', tabId);
         }
     }
-// Update report title based on current tab
+
+    // Update report title based on current tab
     updateReportTitle() {
         const titleMap = {
-            'detail-transaksi': 'Detail Transaksi',
+            'detail-transaksi': 'Laporan Detail Transaksi',
             'pembayaran': 'Laporan Pembayaran',
             'komisi': 'Laporan Komisi', 
             'membercard': 'Laporan Membercard',
@@ -72,50 +111,47 @@ class Reports {
             console.warn('Report title element not found');
         }
     }
+
     // Switch between tabs - FIXED VERSION
-async switchTab(tabId) {
-    console.log('Switching to tab:', tabId);
-    
-    try {
-        // Update active tab UI - PASTIKAN CONSISTENT
-        document.querySelectorAll('.report-tab').forEach(tab => {
-            // Remove ALL active classes
-            tab.classList.remove('active', 'border-blue-500', 'text-blue-600');
-            // Add ALL inactive classes  
-            tab.classList.add('border-transparent', 'text-gray-500');
-        });
-        
-        const activeTab = document.querySelector(`[data-tab="${tabId}"]`);
-        if (activeTab) {
-            // Add ALL active classes
-            activeTab.classList.add('active', 'border-blue-500', 'text-blue-600');
-            // Remove ALL inactive classes
-            activeTab.classList.remove('border-transparent', 'text-gray-500');
-            console.log('✅ Tab UI updated successfully');
+    async switchTab(tabId) {
+        if (this.currentTab === tabId) {
+            console.log('Tab already active:', tabId);
+            return;
         }
 
-        // Update current tab
-        this.currentTab = tabId;
+        console.log('Switching to tab:', tabId);
         
-        // Update report title
-        this.updateReportTitle();
-        
-        console.log('Current tab set to:', this.currentTab);
-        
-        // Update table for new tab
-        await this.updateTableForCurrentTab();
-        
-        // Reload data for the selected tab
-        await this.loadData();
-        
-    } catch (error) {
-        console.error('Error switching tab:', error);
-        Notifications.error('Gagal memuat laporan: ' + error.message);
+        try {
+            Helpers.showLoading();
+            
+            // 1. Update UI first
+            this.setActiveTabUI(tabId);
+            
+            // 2. Update current tab
+            this.currentTab = tabId;
+            
+            // 3. Update report title
+            this.updateReportTitle();
+            
+            console.log('Current tab set to:', this.currentTab);
+            
+            // 4. Load data for new tab
+            await this.loadData();
+            
+            Helpers.hideLoading();
+            console.log('✅ Tab switched successfully:', tabId);
+            
+        } catch (error) {
+            console.error('Error switching tab:', error);
+            Helpers.hideLoading();
+            Notifications.error('Gagal memuat laporan: ' + error.message);
+        }
     }
-}
+
     // Initialize filters
     initFilters() {
         console.log('Initializing filters');
+        
         // Set default dates (last 30 days)
         const endDate = new Date();
         const startDate = new Date();
@@ -127,15 +163,18 @@ async switchTab(tabId) {
         // Set filter values in DOM jika elemen ada
         const startDateEl = document.getElementById('start-date');
         const endDateEl = document.getElementById('end-date');
+        const outletEl = document.getElementById('outlet-filter');
         
         if (startDateEl) startDateEl.value = this.filters.startDate;
         if (endDateEl) endDateEl.value = this.filters.endDate;
+        if (outletEl) this.filters.outlet = outletEl.value;
+
+        console.log('Filters initialized:', this.filters);
     }
 
     // Load data based on current tab
     async loadData() {
         try {
-            Helpers.showLoading();
             console.log('Loading data for tab:', this.currentTab);
 
             let data = [];
@@ -166,29 +205,34 @@ async switchTab(tabId) {
                     data = await this.loadLaporanTransaksiCancel();
                     break;
                 default:
+                    console.warn('Unknown tab, loading detail transaksi');
                     data = await this.loadDetailTransaksi();
             }
 
-            this.currentData = data || [];
+            this.currentData = Array.isArray(data) ? data : [];
             console.log('Data loaded:', this.currentData.length, 'records');
             
-            if (this.table) {
-                this.table.updateData(this.currentData);
+            // Initialize or update table
+            if (!this.table) {
+                this.initTable();
+            } else {
+                this.updateTableForCurrentTab();
             }
 
             this.updateSummary();
-
-            Helpers.hideLoading();
             return this.currentData;
+
         } catch (error) {
             console.error('Error loading data:', error);
-            Helpers.hideLoading();
             Notifications.error('Gagal memuat data laporan: ' + error.message);
+            this.currentData = [];
+            this.updateSummary();
             return [];
         }
     }
 
-    // ==================== DETAIL TRANSAKSI ====================
+    // ==================== DATA LOADING METHODS ====================
+
     async loadDetailTransaksi() {
         console.log('Loading detail transaksi');
         let query = supabase
@@ -212,10 +256,9 @@ async switchTab(tabId) {
             console.error('Supabase error:', error);
             throw error;
         }
-        return data;
+        return data || [];
     }
 
-    // ==================== LAPORAN PEMBAYARAN ====================
     async loadLaporanPembayaran() {
         console.log('Loading laporan pembayaran');
         
@@ -238,9 +281,7 @@ async switchTab(tabId) {
         const { data, error } = await query;
         if (error) throw error;
 
-        // Process data untuk laporan pembayaran
-        const processedData = this.processPembayaranData(data || []);
-        return processedData;
+        return this.processPembayaranData(data || []);
     }
 
     processPembayaranData(data) {
@@ -286,7 +327,6 @@ async switchTab(tabId) {
         return tableData;
     }
 
-    // ==================== LAPORAN KOMISI ====================
     async loadLaporanKomisi() {
         console.log('Loading laporan komisi');
         
@@ -309,9 +349,7 @@ async switchTab(tabId) {
         const { data, error } = await query;
         if (error) throw error;
 
-        // Process data untuk laporan komisi
-        const processedData = this.processKomisiData(data || []);
-        return processedData;
+        return this.processKomisiData(data || []);
     }
 
     processKomisiData(data) {
@@ -323,7 +361,7 @@ async switchTab(tabId) {
             const amount = parseFloat(item.amount) || 0;
             const isCompleted = item.status === 'completed';
             
-            if (!isCompleted) return; // Hitung hanya transaksi completed
+            if (!isCompleted) return;
             
             const key = `${outlet}-${kasir}`;
             
@@ -343,11 +381,9 @@ async switchTab(tabId) {
             result[key].total_komisi += komisi;
         });
         
-        // Convert to array
         return Object.values(result);
     }
 
-    // ==================== LAPORAN MEMBERCARD ====================
     async loadLaporanMembercard() {
         console.log('Loading laporan membercard');
         
@@ -356,7 +392,6 @@ async switchTab(tabId) {
                 .from('membercard')
                 .select('*');
 
-            // Apply filters
             if (this.filters.outlet) {
                 query = query.eq('outlet', this.filters.outlet);
             }
@@ -364,9 +399,7 @@ async switchTab(tabId) {
             const { data, error } = await query;
             if (error) throw error;
 
-            // Process data untuk laporan membercard
-            const processedData = this.processMembercardData(data || []);
-            return processedData;
+            return this.processMembercardData(data || []);
         } catch (error) {
             console.warn('Membercard table not found, using fallback data');
             return this.generateFallbackMembercardData();
@@ -393,12 +426,10 @@ async switchTab(tabId) {
             result[key].jumlah_membercard += 1;
         });
         
-        // Convert to array
         return Object.values(result);
     }
 
     generateFallbackMembercardData() {
-        // Generate sample data based on transaction data
         const outlets = ['Rempoa', 'Ciputat', 'Pondok Cabe'];
         const kasirs = ['Hari Suryono', 'Echwan Abdillah', 'Ahmad Fauzi'];
         
@@ -414,7 +445,6 @@ async switchTab(tabId) {
         });
     }
 
-    // ==================== LAPORAN ABSEN ====================
     async loadLaporanAbsen() {
         console.log('Loading laporan absen');
         
@@ -424,7 +454,6 @@ async switchTab(tabId) {
                 .select('*')
                 .order('clockin', { ascending: false });
 
-            // Apply filters
             if (this.filters.startDate) {
                 query = query.gte('clockin', this.filters.startDate);
             }
@@ -438,9 +467,7 @@ async switchTab(tabId) {
             const { data, error } = await query;
             if (error) throw error;
 
-            // Process data untuk format yang konsisten
-            const processedData = this.processAbsenData(data || []);
-            return processedData;
+            return this.processAbsenData(data || []);
         } catch (error) {
             console.warn('Absen table not found, using fallback data');
             return this.generateFallbackAbsenData();
@@ -452,7 +479,6 @@ async switchTab(tabId) {
             const clockin = new Date(item.clockin);
             const clockout = item.clockout ? new Date(item.clockout) : new Date();
             
-            // Calculate working hours
             const diffMs = clockout - clockin;
             const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
             const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
@@ -482,19 +508,16 @@ async switchTab(tabId) {
             const outlet = outlets[Math.floor(Math.random() * outlets.length)];
             const karyawan = karyawans[Math.floor(Math.random() * karyawans.length)];
             
-            // Generate random clockin time (7-9 AM)
             const clockinHour = 7 + Math.floor(Math.random() * 3);
             const clockinMinute = Math.floor(Math.random() * 60);
             const clockin = new Date(date);
             clockin.setHours(clockinHour, clockinMinute, 0);
             
-            // Generate random clockout time (4-7 PM)
             const clockoutHour = 16 + Math.floor(Math.random() * 4);
             const clockoutMinute = Math.floor(Math.random() * 60);
             const clockout = new Date(date);
             clockout.setHours(clockoutHour, clockoutMinute, 0);
             
-            // Calculate working hours
             const diffMs = clockout - clockin;
             const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
             const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
@@ -512,7 +535,6 @@ async switchTab(tabId) {
         return data;
     }
 
-    // ==================== LAPORAN OMSET ====================
     async loadLaporanOmset() {
         console.log('Loading laporan omset');
         
@@ -521,7 +543,6 @@ async switchTab(tabId) {
             .select('*')
             .order('order_date', { ascending: false });
 
-        // Apply filters
         if (this.filters.startDate) {
             query = query.gte('order_date', this.filters.startDate);
         }
@@ -535,9 +556,7 @@ async switchTab(tabId) {
         const { data, error } = await query;
         if (error) throw error;
 
-        // Process data untuk laporan omset
-        const processedData = this.processOmsetData(data || []);
-        return processedData;
+        return this.processOmsetData(data || []);
     }
 
     processOmsetData(data) {
@@ -566,7 +585,6 @@ async switchTab(tabId) {
             result[key].jumlah_transaksi += 1;
         });
         
-        // Convert to array dan hitung rata-rata
         const tableData = Object.values(result).map(item => {
             return {
                 ...item,
@@ -577,7 +595,6 @@ async switchTab(tabId) {
         return tableData;
     }
 
-    // ==================== LAPORAN PEMASUKAN & PENGELUARAN ====================
     async loadLaporanPemasukanPengeluaran() {
         console.log('Loading laporan pemasukan pengeluaran');
         
@@ -587,7 +604,6 @@ async switchTab(tabId) {
                 .select('*')
                 .order('tanggal', { ascending: false });
 
-            // Apply filters
             if (this.filters.startDate) {
                 query = query.gte('tanggal', this.filters.startDate);
             }
@@ -645,7 +661,6 @@ async switchTab(tabId) {
         return data;
     }
 
-    // ==================== LAPORAN TRANSAKSI CANCEL ====================
     async loadLaporanTransaksiCancel() {
         console.log('Loading laporan transaksi cancel');
         
@@ -654,7 +669,6 @@ async switchTab(tabId) {
             .select('*')
             .order('order_date', { ascending: false });
 
-        // Apply filters
         if (this.filters.startDate) {
             query = query.gte('order_date', this.filters.startDate);
         }
@@ -668,7 +682,6 @@ async switchTab(tabId) {
         const { data, error } = await query;
         if (error) throw error;
 
-        // Filter hanya transaksi cancel
         const canceledData = data.filter(item => 
             item.status === 'canceled' || item.status === 'cancelled'
         );
@@ -676,50 +689,19 @@ async switchTab(tabId) {
         return canceledData;
     }
 
-    // ==================== TABLE COLUMNS DEFINITIONS ====================
-    
-    // Initialize table based on current tab
+    // ==================== TABLE MANAGEMENT ====================
+
     initTable() {
         console.log('Initializing table for tab:', this.currentTab);
         
-        let columns = [];
-        
-        switch(this.currentTab) {
-            case 'detail-transaksi':
-                columns = this.getDetailTransaksiColumns();
-                break;
-            case 'pembayaran':
-                columns = this.getPembayaranColumns();
-                break;
-            case 'komisi':
-                columns = this.getKomisiColumns();
-                break;
-            case 'membercard':
-                columns = this.getMembercardColumns();
-                break;
-            case 'absen':
-                columns = this.getAbsenColumns();
-                break;
-            case 'omset':
-                columns = this.getOmsetColumns();
-                break;
-            case 'pemasukan-pengeluaran':
-                columns = this.getPemasukanPengeluaranColumns();
-                break;
-            case 'transaksi-cancel':
-                columns = this.getTransaksiCancelColumns();
-                break;
-            default:
-                columns = this.getDetailTransaksiColumns();
-        }
-
-        // Pastikan elemen tabel ada
         const tableContainer = document.getElementById('reports-table');
         if (!tableContainer) {
             console.error('Table container #reports-table not found');
             return;
         }
 
+        const columns = this.getTableColumns();
+        
         this.table = new DataTable('reports-table', {
             columns: columns,
             searchable: true,
@@ -731,22 +713,32 @@ async switchTab(tabId) {
         this.table.updateData(this.currentData);
     }
 
-    // Update table when switching tabs
-    async updateTableForCurrentTab() {
+    updateTableForCurrentTab() {
         console.log('Updating table for tab:', this.currentTab);
         
-        if (this.table) {
-            // Destroy existing table jika method destroy ada
-            if (typeof this.table.destroy === 'function') {
-                this.table.destroy();
-            }
+        if (this.table && typeof this.table.destroy === 'function') {
+            this.table.destroy();
         }
         
-        // Reinitialize table with new columns
         this.initTable();
     }
 
-    // Column definitions untuk setiap jenis laporan
+    getTableColumns() {
+        const columnDefinitions = {
+            'detail-transaksi': this.getDetailTransaksiColumns(),
+            'pembayaran': this.getPembayaranColumns(),
+            'komisi': this.getKomisiColumns(),
+            'membercard': this.getMembercardColumns(),
+            'absen': this.getAbsenColumns(),
+            'omset': this.getOmsetColumns(),
+            'pemasukan-pengeluaran': this.getPemasukanPengeluaranColumns(),
+            'transaksi-cancel': this.getTransaksiCancelColumns()
+        };
+
+        return columnDefinitions[this.currentTab] || this.getDetailTransaksiColumns();
+    }
+
+    // Column definitions
     getDetailTransaksiColumns() {
         return [
             { 
@@ -965,28 +957,39 @@ async switchTab(tabId) {
 
     // ==================== EVENT HANDLERS ====================
 
-    // Bind events
     bindEvents() {
         console.log('Binding events');
+        
+        // Filter button
         const filterBtn = document.getElementById('apply-filters');
-        const exportBtn = document.getElementById('export-report');
-
         if (filterBtn) {
             filterBtn.addEventListener('click', () => this.applyFilters());
         } else {
             console.warn('Filter button not found');
         }
         
+        // Export button
+        const exportBtn = document.getElementById('export-report');
         if (exportBtn) {
             exportBtn.addEventListener('click', () => this.exportReport());
         } else {
             console.warn('Export button not found');
         }
+
+        // Enter key untuk filters
+        const filterInputs = document.querySelectorAll('#start-date, #end-date, #outlet-filter');
+        filterInputs.forEach(input => {
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    this.applyFilters();
+                }
+            });
+        });
     }
 
-    // Apply filters
     async applyFilters() {
         console.log('Applying filters');
+        
         const startDate = document.getElementById('start-date');
         const endDate = document.getElementById('end-date');
         const outlet = document.getElementById('outlet-filter');
@@ -995,13 +998,14 @@ async switchTab(tabId) {
         if (endDate) this.filters.endDate = endDate.value;
         if (outlet) this.filters.outlet = outlet.value;
 
+        console.log('Filters applied:', this.filters);
+        
         await this.loadData();
         Notifications.success('Filter diterapkan');
     }
 
     // ==================== SUMMARY & EXPORT ====================
 
-    // Update summary cards based on current tab
     updateSummary() {
         let totalSales = 0;
         let totalTransactions = 0;
@@ -1078,18 +1082,19 @@ async switchTab(tabId) {
                 totalProfit = totalSales * 0.15;
         }
 
-        const totalSalesEl = document.getElementById('total-sales');
-        const totalTransactionsEl = document.getElementById('total-transactions');
-        const totalItemsEl = document.getElementById('total-items');
-        const totalProfitEl = document.getElementById('total-profit');
-
-        if (totalSalesEl) totalSalesEl.textContent = Helpers.formatCurrency(totalSales);
-        if (totalTransactionsEl) totalTransactionsEl.textContent = totalTransactions;
-        if (totalItemsEl) totalItemsEl.textContent = totalItems;
-        if (totalProfitEl) totalProfitEl.textContent = Helpers.formatCurrency(totalProfit);
+        this.updateSummaryCard('total-sales', Helpers.formatCurrency(totalSales));
+        this.updateSummaryCard('total-transactions', totalTransactions);
+        this.updateSummaryCard('total-items', totalItems);
+        this.updateSummaryCard('total-profit', Helpers.formatCurrency(totalProfit));
     }
 
-    // Export report based on current tab
+    updateSummaryCard(elementId, value) {
+        const element = document.getElementById(elementId);
+        if (element) {
+            element.textContent = value;
+        }
+    }
+
     async exportReport() {
         try {
             Helpers.showLoading();
@@ -1097,43 +1102,43 @@ async switchTab(tabId) {
             let csvContent = "";
             let filename = "";
 
-            switch(this.currentTab) {
-                case 'detail-transaksi':
+            const exportMethods = {
+                'detail-transaksi': () => {
                     csvContent = this.generateDetailTransaksiCSV();
                     filename = `laporan-detail-transaksi-${new Date().toISOString().split('T')[0]}.csv`;
-                    break;
-                case 'pembayaran':
+                },
+                'pembayaran': () => {
                     csvContent = this.generatePembayaranCSV();
                     filename = `laporan-pembayaran-${new Date().toISOString().split('T')[0]}.csv`;
-                    break;
-                case 'komisi':
+                },
+                'komisi': () => {
                     csvContent = this.generateKomisiCSV();
                     filename = `laporan-komisi-${new Date().toISOString().split('T')[0]}.csv`;
-                    break;
-                case 'membercard':
+                },
+                'membercard': () => {
                     csvContent = this.generateMembercardCSV();
                     filename = `laporan-membercard-${new Date().toISOString().split('T')[0]}.csv`;
-                    break;
-                case 'absen':
+                },
+                'absen': () => {
                     csvContent = this.generateAbsenCSV();
                     filename = `laporan-absen-${new Date().toISOString().split('T')[0]}.csv`;
-                    break;
-                case 'omset':
+                },
+                'omset': () => {
                     csvContent = this.generateOmsetCSV();
                     filename = `laporan-omset-${new Date().toISOString().split('T')[0]}.csv`;
-                    break;
-                case 'pemasukan-pengeluaran':
+                },
+                'pemasukan-pengeluaran': () => {
                     csvContent = this.generatePemasukanPengeluaranCSV();
                     filename = `laporan-pemasukan-pengeluaran-${new Date().toISOString().split('T')[0]}.csv`;
-                    break;
-                case 'transaksi-cancel':
+                },
+                'transaksi-cancel': () => {
                     csvContent = this.generateTransaksiCancelCSV();
                     filename = `laporan-transaksi-cancel-${new Date().toISOString().split('T')[0]}.csv`;
-                    break;
-                default:
-                    csvContent = this.generateDetailTransaksiCSV();
-                    filename = `laporan-${this.currentTab}-${new Date().toISOString().split('T')[0]}.csv`;
-            }
+                }
+            };
+
+            const exportMethod = exportMethods[this.currentTab] || exportMethods['detail-transaksi'];
+            exportMethod();
 
             // Create and download file
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -1157,7 +1162,7 @@ async switchTab(tabId) {
         }
     }
 
-    // CSV generation methods untuk setiap laporan
+    // CSV generation methods
     generateDetailTransaksiCSV() {
         let csvContent = "Tanggal,Order No,Outlet,Kasir,Customer,Item,Qty,Harga Jual,Amount,Payment Type,Status\n";
         
@@ -1307,6 +1312,22 @@ async switchTab(tabId) {
 
         return csvContent;
     }
+
+    // Cleanup method
+    destroy() {
+        if (this.table && typeof this.table.destroy === 'function') {
+            this.table.destroy();
+        }
+        
+        // Remove event listeners
+        const tabs = document.querySelectorAll('.report-tab');
+        tabs.forEach(tab => {
+            tab.replaceWith(tab.cloneNode(true));
+        });
+        
+        this.isInitialized = false;
+        console.log('Reports module destroyed');
+    }
 }
 
 // Initialize reports globally
@@ -1314,4 +1335,9 @@ let reports = null;
 document.addEventListener('DOMContentLoaded', () => {
     reports = new Reports();
     window.reportsModule = reports; // Expose for debugging
+    
+    // Auto-initialize if element exists
+    if (document.getElementById('reports-table')) {
+        reports.init();
+    }
 });
