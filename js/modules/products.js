@@ -1,24 +1,38 @@
 // Products Module
 class Products {
     constructor() {
-        this.currentData = [];
-        this.groupProducts = [];
-        this.table = null;
-        this.currentProductId = null;
-        this.selectedFile = null;
-        this.imagePreviewUrl = null;
-        this.outlets = [];
-    }
+    this.currentData = [];
+    this.groupProducts = [];
+    this.table = null;
+    this.currentProductId = null;
+    this.selectedFile = null;
+    this.imagePreviewUrl = null;
+    this.outlets = [];
+    this.isInitialized = false; // Tambah flag initialization
+    console.log('Products class initialized');
+}
+
 
     // Initialize module
     async init() {
+    if (this.isInitialized) {
+        console.log('Products already initialized');
+        return;
+    }
+
+    console.log('Initializing Products module...');
+    try {
         await this.loadOutlets();
         await this.loadGroupProducts();
         await this.loadData();
         this.initTable();
         this.bindEvents();
+        this.isInitialized = true;
+        console.log('✅ Products module initialized successfully');
+    } catch (error) {
+        console.error('❌ Error initializing Products:', error);
     }
-
+}
     // Load outlets from app
     async loadOutlets() {
         if (window.app && window.app.getOutlets) {
@@ -100,114 +114,165 @@ class Products {
 
     // Initialize table
     initTable() {
-        this.table = new DataTable('products-table', {
-            columns: [
-                { title: 'Outlet', key: 'outlet' },
-                { title: 'Nama Produk', key: 'nama_produk' },
-                { title: 'Group Produk', key: 'group_produk' },
-                { 
-                    title: 'Foto', 
-                    key: 'foto_url',
-                    formatter: (value) => {
-                        if (!value) return '<span class="text-gray-400">-</span>';
-                        return `
-                            <img src="${value}" alt="Produk" class="w-10 h-10 object-cover rounded-md cursor-pointer" 
-                                 onclick="products.showImagePreview('${value}')">
-                        `;
-                    }
-                },
-                { 
-                    title: 'Harga Jual', 
-                    key: 'harga_jual',
-                    type: 'currency'
-                },
-                { 
-                    title: 'Stok', 
-                    key: 'stok',
-                    formatter: (value, row) => {
-                        // Jika stok NULL atau inventory nonaktif, tampilkan Unlimited
-                        if (value === null || value === undefined || !row.inventory) {
-                            return `
-                                <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">
-                                    Unlimited
-                                </span>
-                            `;
-                        }
-                        return value || 0;
-                    }
-                },
-                { 
-                    title: 'Inventory', 
-                    key: 'inventory',
-                    formatter: (value) => value ? 
-                        '<span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">Aktif</span>' :
-                        '<span class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">Nonaktif</span>'
-                },
-                { 
-                    title: 'Status', 
-                    key: 'status',
-                    formatter: (value) => {
-                        const isActive = value === 'active';
-                        return `
-                            <span class="px-2 py-1 text-xs rounded-full ${
-                                isActive 
-                                    ? 'bg-green-100 text-green-800' 
-                                    : 'bg-red-100 text-red-800'
-                            }">
-                                ${isActive ? 'Aktif' : 'Nonaktif'}
-                            </span>
-                        `;
-                    }
+    console.log('Initializing products table...');
+    
+    const columns = [
+        { title: 'Outlet', key: 'outlet' },
+        { title: 'Nama Produk', key: 'nama_produk' },
+        { title: 'Group Produk', key: 'group_produk' },
+        { 
+            title: 'Foto', 
+            key: 'foto_url',
+            formatter: (value) => {
+                if (!value) return '<span class="text-gray-400">-</span>';
+                return `
+                    <img src="${value}" alt="Produk" class="w-10 h-10 object-cover rounded-md cursor-pointer" 
+                         onclick="window.products.showImagePreview('${value}')">
+                `;
+            }
+        },
+        { 
+            title: 'Harga Jual', 
+            key: 'harga_jual',
+            type: 'currency'
+        },
+        { 
+            title: 'Stok', 
+            key: 'stok',
+            formatter: (value, row) => {
+                // Jika stok NULL atau inventory nonaktif, tampilkan Unlimited
+                if (value === null || value === undefined || !row.inventory) {
+                    return `
+                        <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">
+                            Unlimited
+                        </span>
+                    `;
                 }
-            ],
-            actions: [
-                {
-                    text: 'Edit',
-                    onclick: 'products.edit',
-                    color: 'blue'
-                },
-                {
-                    text: 'Hapus',
-                    onclick: 'products.delete',
-                    color: 'red'
-                }
-            ],
-            searchable: true,
-            pagination: true,
-            pageSize: 10,
-	    searchInput: {
+                return value || 0;
+            }
+        },
+        { 
+            title: 'Inventory', 
+            key: 'inventory',
+            formatter: (value) => value ? 
+                '<span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">Aktif</span>' :
+                '<span class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">Nonaktif</span>'
+        },
+        { 
+            title: 'Status', 
+            key: 'status',
+            formatter: (value) => {
+                const isActive = value === 'active';
+                return `
+                    <span class="px-2 py-1 text-xs rounded-full ${
+                        isActive 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-red-100 text-red-800'
+                    }">
+                        ${isActive ? 'Aktif' : 'Nonaktif'}
+                    </span>
+                `;
+            }
+        },
+        {
+            title: 'Aksi',
+            key: 'id',
+            formatter: (id, row) => this.getActionButtons(id, row)
+        }
+    ];
+
+    this.table = new DataTable('products-table', {
+        columns: columns,
+        searchable: true,
+        pagination: true,
+        pageSize: 10,
+        searchInput: {
             enabled: true,
             placeholder: 'Cari produk...'
         }
-        });
+    });
 
-        this.table.init();
-        this.table.updateData(this.currentData);
-    }
+    this.table.init();
+    this.table.updateData(this.currentData);
+    console.log('Products table initialized');
+}
+
+// Get action buttons HTML - NEW METHOD
+getActionButtons(id, row) {
+    return `
+        <div class="flex space-x-2">
+            <button 
+                onclick="window.products.handleEdit('${id}')" 
+                class="inline-flex items-center px-3 py-1.5 border border-blue-300 text-sm font-medium rounded-md text-blue-700 bg-blue-50 hover:bg-blue-100 hover:text-blue-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+                title="Edit Produk"
+            >
+                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                </svg>
+                Edit
+            </button>
+            <button 
+                onclick="window.products.handleDelete('${id}')" 
+                class="inline-flex items-center px-3 py-1.5 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-red-50 hover:bg-red-100 hover:text-red-800 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
+                title="Hapus Produk"
+            >
+                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+                Hapus
+            </button>
+        </div>
+    `;
+}
+
+// Handle edit - PUBLIC METHOD
+handleEdit(id) {
+    console.log('Edit handled for:', id);
+    this.edit(id);
+}
+
+// Handle delete - PUBLIC METHOD  
+handleDelete(id) {
+    console.log('Delete handled for:', id);
+    this.delete(id);
+}
+
 
     // Bind events dengan filter
     bindEvents() {
-        // Add button event
-        const addBtn = document.getElementById('add-product');
-        if (addBtn) {
-            addBtn.addEventListener('click', () => this.showForm());
-        }
-
-        // Filter events
-        const outletFilter = document.getElementById('outlet-filter');
-        const statusFilter = document.getElementById('status-filter');
-        const inventoryFilter = document.getElementById('inventory-filter');
-
-        if (outletFilter) {
-            outletFilter.addEventListener('change', () => this.applyFilters());
-        }
-        if (statusFilter) {
-            statusFilter.addEventListener('change', () => this.applyFilters());
-        }
-        if (inventoryFilter) {
-            inventoryFilter.addEventListener('change', () => this.applyFilters());
-        }
+    console.log('Binding products events...');
+    
+    // Add button event
+    const addBtn = document.getElementById('add-product');
+    if (addBtn) {
+        // Remove existing event listeners first
+        addBtn.replaceWith(addBtn.cloneNode(true));
+        const newAddBtn = document.getElementById('add-product');
+        
+        newAddBtn.addEventListener('click', () => {
+            console.log('Add product button clicked');
+            this.showForm();
+        });
+        console.log('Add button event bound');
+    } else {
+        console.error('Add product button not found!');
     }
+
+    // Filter events
+    const outletFilter = document.getElementById('outlet-filter');
+    const statusFilter = document.getElementById('status-filter');
+    const inventoryFilter = document.getElementById('inventory-filter');
+
+    if (outletFilter) {
+        outletFilter.addEventListener('change', () => this.applyFilters());
+    }
+    if (statusFilter) {
+        statusFilter.addEventListener('change', () => this.applyFilters());
+    }
+    if (inventoryFilter) {
+        inventoryFilter.addEventListener('change', () => this.applyFilters());
+    }
+}
 
     // Apply filters
     applyFilters() {
@@ -360,12 +425,28 @@ class Products {
         `;
 
         const buttons = [
-            {
-                text: 'Tutup',
-                onclick: 'modal.close()',
-                primary: false
+    {
+        text: 'Batal',
+        onclick: () => {
+            console.log('Cancel button clicked');
+            modal.close();
+        },
+        primary: false
+    },
+    {
+        text: isEdit ? 'Update Data' : 'Simpan Data',
+        onclick: () => {
+            console.log('Save button clicked');
+            if (isEdit) {
+                this.validateAndUpdate(item.id);
+            } else {
+                this.validateAndSave();
             }
-        ];
+        },
+        primary: true
+    }
+];
+
 
         modal.createModal('Preview Foto Produk', content, buttons);
     }
@@ -909,9 +990,21 @@ class Products {
     }
 }
 
-// Initialize products globally
+// Initialize products globally - FIXED VERSION
 let products = null;
+
 document.addEventListener('DOMContentLoaded', () => {
-    products = new Products();
-    window.products = products;
+    console.log('DOM loaded, checking for products module...');
+    
+    // Hanya inisialisasi jika di halaman yang memiliki products
+    if (document.getElementById('products-table')) {
+        console.log('Initializing products module...');
+        products = new Products();
+        window.products = products;
+        
+        // Tunggu sedikit untuk memastikan app sudah terload
+        setTimeout(() => {
+            products.init();
+        }, 100);
+    }
 });
