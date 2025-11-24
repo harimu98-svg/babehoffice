@@ -1067,113 +1067,149 @@ extractDateFromTimestamp(timestamp) {
     }
 
     getPemasukanPengeluaranColumns() {
-        return [
-            { 
-                title: 'Tanggal', 
-                key: 'tanggal',
-                type: 'date'
-            },
-            { title: 'Outlet', key: 'outlet' },
-            { title: 'Kasir', key: 'kasir' },
-            { 
-                title: 'Omset Cash', 
-                key: 'omset_cash',
-                type: 'currency'
-            },
-            { 
-                title: 'Top Up Kas', 
-                key: 'top_up_kas',
-                type: 'currency'
-            },
-            { 
-                title: 'Sisa Setoran', 
-                key: 'sisa_setoran',
-                type: 'currency'
-            },
-            { 
-                title: 'Hutang Komisi', 
-                key: 'hutang_komisi',
-                type: 'currency'
-            },
-            { 
-                title: 'Pemasukan Lain', 
-                key: 'pemasukan_lain_lain',
-                type: 'currency'
-            },
-            { title: 'Note Pemasukan', key: 'note_pemasukan_lain' },
-            { 
-                title: 'Komisi', 
-                key: 'komisi',
-                type: 'currency'
-            },
-            { 
-                title: 'UOP', 
-                key: 'uop',
-                type: 'currency'
-            },
-            { 
-                title: 'Tips QRIS', 
-                key: 'tips_qris',
-                type: 'currency'
-            },
-            { 
-                title: 'Pengeluaran Lain', 
-                key: 'pengeluaran_lain_lain',
-                type: 'currency'
-            },
-            { title: 'Note Pengeluaran', key: 'note_pengeluaran_lain' },
-            { 
-                title: 'Bayar Hutang Komisi', 
-                key: 'bayar_hutang_komisi',
-                type: 'currency'
-            },
-            { 
-                title: 'Iuran RT', 
-                key: 'iuran_rt',
-                type: 'currency'
-            },
-            { 
-                title: 'Sumbangan', 
-                key: 'sumbangan',
-                type: 'currency'
-            },
-            { 
-                title: 'Iuran Sampah', 
-                key: 'iuran_sampah',
-                type: 'currency'
-            },
-            { 
-                title: 'Galon', 
-                key: 'galon',
-                type: 'currency'
-            },
-            { 
-                title: 'Biaya Admin Setoran', 
-                key: 'biaya_admin_setoran',
-                type: 'currency'
-            },
-            { 
-                title: 'Yakult', 
-                key: 'yakult',
-                type: 'currency'
-            },
-            { 
-                title: 'Total Pemasukan', 
-                key: 'pemasukan',
-                type: 'currency'
-            },
-            { 
-                title: 'Total Pengeluaran', 
-                key: 'pengeluaran',
-                type: 'currency'
-            },
-            { 
-                title: 'Saldo', 
-                key: 'saldo',
-                type: 'currency'
-            }
-        ];
-    }
+    return [
+        // Kolom Informasi Dasar
+        { 
+            title: 'Tanggal', 
+            key: 'tanggal',
+            type: 'date'
+        },
+        { title: 'Outlet', key: 'outlet' },
+        { title: 'Kasir', key: 'kasir' },
+        
+        // === KELOMPOK PEMASUKAN - BIRU ===
+        { 
+            title: 'Omset Cash', 
+            key: 'omset_cash',
+            type: 'currency',
+            className: 'bg-blue-50 text-blue-900 font-medium'
+        },
+        { 
+            title: 'Top Up Kas', 
+            key: 'top_up_kas',
+            type: 'currency',
+            className: 'bg-blue-50 text-blue-900'
+        },
+        { 
+            title: 'Sisa Setoran', 
+            key: 'sisa_setoran',
+            type: 'currency',
+            className: 'bg-blue-50 text-blue-900'
+        },
+        { 
+            title: 'Hutang Komisi', 
+            key: 'hutang_komisi',
+            type: 'currency',
+            className: 'bg-blue-50 text-blue-900'
+        },
+        { 
+            title: 'Pemasukan Lain', 
+            key: 'pemasukan_lain_lain',
+            type: 'currency',
+            className: 'bg-blue-50 text-blue-900'
+        },
+        { 
+            title: 'Note Pemasukan', 
+            key: 'note_pemasukan_lain',
+            className: 'bg-blue-50 text-blue-900'
+        },
+        
+        // === KELOMPOK PENGELUARAN - MERAH ===
+        { 
+            title: 'Komisi', 
+            key: 'komisi',
+            type: 'currency',
+            className: 'bg-red-50 text-red-900 font-medium'
+        },
+        { 
+            title: 'UOP', 
+            key: 'uop',
+            type: 'currency',
+            className: 'bg-red-50 text-red-900'
+        },
+        { 
+            title: 'Tips QRIS', 
+            key: 'tips_qris',
+            type: 'currency',
+            className: 'bg-red-50 text-red-900'
+        },
+        { 
+            title: 'Bayar Hutang Komisi', 
+            key: 'bayar_hutang_komisi',
+            type: 'currency',
+            className: 'bg-red-50 text-red-900'
+        },
+        { 
+            title: 'Iuran RT', 
+            key: 'iuran_rt',
+            type: 'currency',
+            className: 'bg-red-50 text-red-900'
+        },
+        { 
+            title: 'Sumbangan', 
+            key: 'sumbangan',
+            type: 'currency',
+            className: 'bg-red-50 text-red-900'
+        },
+        { 
+            title: 'Iuran Sampah', 
+            key: 'iuran_sampah',
+            type: 'currency',
+            className: 'bg-red-50 text-red-900'
+        },
+        { 
+            title: 'Galon', 
+            key: 'galon',
+            type: 'currency',
+            className: 'bg-red-50 text-red-900'
+        },
+        { 
+            title: 'Biaya Admin Setoran', 
+            key: 'biaya_admin_setoran',
+            type: 'currency',
+            className: 'bg-red-50 text-red-900'
+        },
+        { 
+            title: 'Yakult', 
+            key: 'yakult',
+            type: 'currency',
+            className: 'bg-red-50 text-red-900'
+        },
+        // Pengeluaran Lain dipindah ke sini (setelah Yakult)
+        { 
+            title: 'Pengeluaran Lain', 
+            key: 'pengeluaran_lain_lain',
+            type: 'currency',
+            className: 'bg-red-50 text-red-900 font-medium'
+        },
+        { 
+            title: 'Note Pengeluaran', 
+            key: 'note_pengeluaran_lain',
+            className: 'bg-red-50 text-red-900'
+        },
+        
+        // === KELOMPOK TOTAL - HIJAU ===
+        { 
+            title: 'Total Pemasukan', 
+            key: 'pemasukan',
+            type: 'currency',
+            className: 'bg-green-50 text-green-900 font-semibold'
+        },
+        { 
+            title: 'Total Pengeluaran', 
+            key: 'pengeluaran',
+            type: 'currency',
+            className: 'bg-green-50 text-green-900 font-semibold'
+        },
+        { 
+            title: 'Saldo', 
+            key: 'saldo',
+            type: 'currency',
+            className: 'bg-green-50 text-green-900 font-semibold'
+        }
+    ];
+}
+
 
     getTransaksiCancelColumns() {
         return [
@@ -1542,41 +1578,41 @@ generateKomisiCSV() {
     }
 
     generatePemasukanPengeluaranCSV() {
-        let csvContent = "Tanggal,Outlet,Kasir,Omset Cash,Top Up Kas,Sisa Setoran,Hutang Komisi,Pemasukan Lain,Note Pemasukan,Komisi,UOP,Tips QRIS,Pengeluaran Lain,Note Pengeluaran,Bayar Hutang Komisi,Iuran RT,Sumbangan,Iuran Sampah,Galon,Biaya Admin Setoran,Yakult,Total Pemasukan,Total Pengeluaran,Saldo\n";
+    let csvContent = "Tanggal,Outlet,Kasir,Omset Cash,Top Up Kas,Sisa Setoran,Hutang Komisi,Pemasukan Lain,Note Pemasukan,Komisi,UOP,Tips QRIS,Bayar Hutang Komisi,Iuran RT,Sumbangan,Iuran Sampah,Galon,Biaya Admin Setoran,Yakult,Pengeluaran Lain,Note Pengeluaran,Total Pemasukan,Total Pengeluaran,Saldo\n";
+    
+    this.currentData.forEach(item => {
+        const row = [
+            item.tanggal,
+            item.outlet,
+            item.kasir,
+            item.omset_cash,
+            item.top_up_kas,
+            item.sisa_setoran,
+            item.hutang_komisi,
+            item.pemasukan_lain_lain,
+            item.note_pemasukan_lain,
+            item.komisi,
+            item.uop,
+            item.tips_qris,
+            item.bayar_hutang_komisi,
+            item.iuran_rt,
+            item.sumbangan,
+            item.iuran_sampah,
+            item.galon,
+            item.biaya_admin_setoran,
+            item.yakult,
+            item.pengeluaran_lain_lain, // Dipindah setelah Yakult
+            item.note_pengeluaran_lain, // Dipindah setelah Yakult
+            item.pemasukan,
+            item.pengeluaran,
+            item.saldo
+        ].map(field => `"${field}"`).join(',');
         
-        this.currentData.forEach(item => {
-            const row = [
-                item.tanggal,
-                item.outlet,
-                item.kasir,
-                item.omset_cash,
-                item.top_up_kas,
-                item.sisa_setoran,
-                item.hutang_komisi,
-                item.pemasukan_lain_lain,
-                item.note_pemasukan_lain,
-                item.komisi,
-                item.uop,
-                item.tips_qris,
-                item.pengeluaran_lain_lain,
-                item.note_pengeluaran_lain,
-                item.bayar_hutang_komisi,
-                item.iuran_rt,
-                item.sumbangan,
-                item.iuran_sampah,
-                item.galon,
-                item.biaya_admin_setoran,
-                item.yakult,
-                item.pemasukan,
-                item.pengeluaran,
-                item.saldo
-            ].map(field => `"${field}"`).join(',');
-            
-            csvContent += row + '\n';
-        });
+        csvContent += row + '\n';
+    });
 
-        return csvContent;
-    }
+    return csvContent;
+}
 
     generateTransaksiCancelCSV() {
         let csvContent = "Tanggal,Order No,Outlet,Kasir,Customer,Amount,Alasan Cancel\n";
