@@ -954,7 +954,15 @@ class Reports {
             key: 'tanggal',
             formatter: (value) => {
                 if (!value || value === 'Unknown') return '-';
-                return value; // Langsung return value karena format sudah YYYY-MM-DD
+                
+                // Jika value masih full timestamp, ambil bagian tanggalnya
+                if (value.includes('T') || value.includes(' ')) {
+                    const datePart = value.split('T')[0] || value.split(' ')[0];
+                    return datePart;
+                }
+                
+                // Jika sudah YYYY-MM-DD, return langsung
+                return value;
             }
         },
         { title: 'Outlet', key: 'outlet' },
