@@ -20,31 +20,7 @@ class App {
     }
 }
 
- async loadModuleScript(moduleName) {
-        // Jika sudah diload, return langsung
-        if (this.moduleScriptsLoaded[moduleName]) {
-            console.log(`📦 ${moduleName}.js already loaded`);
-            return true;
-        }
 
-        console.log(`🔄 Loading ${moduleName}.js dynamically...`);
-        
-        return new Promise((resolve, reject) => {
-            const script = document.createElement('script');
-            script.src = `js/${moduleName}.js`;
-            script.onload = () => {
-                console.log(`✅ ${moduleName}.js loaded successfully`);
-                this.moduleScriptsLoaded[moduleName] = true;
-                resolve(true);
-            };
-            script.onerror = () => {
-                console.error(`❌ Failed to load ${moduleName}.js`);
-                this.moduleScriptsLoaded[moduleName] = false;
-                reject(new Error(`Failed to load ${moduleName}.js`));
-            };
-            document.head.appendChild(script);
-        });
-    }
     // Initialize application
     async init() {
         console.log('App initializing...');
