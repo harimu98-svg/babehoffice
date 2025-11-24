@@ -653,9 +653,6 @@ class Members {
     }
 }
 
-        console.log('Save successful:', result);
-
-        modal.close();
         
         // PERBAIKAN: Refresh data dan update currentData
         await this.loadData();
