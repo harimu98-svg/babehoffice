@@ -117,6 +117,23 @@ class Members {
         }
     }
 
+    // Format date helper function
+    formatDate(dateString) {
+        if (!dateString) return '-';
+        
+        try {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('id-ID', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            });
+        } catch (error) {
+            console.error('Error formatting date:', dateString, error);
+            return dateString;
+        }
+    }
+
     // Initialize table
     initTable() {
         console.log('Initializing members table...');
@@ -150,8 +167,7 @@ class Members {
             { 
                 title: 'Berlaku', 
                 key: 'berlaku',
-                type: 'date',
-                formatter: (value) => value ? Helpers.formatDate(value) : '-'
+                formatter: (value) => this.formatDate(value)
             },
             { 
                 title: 'Status', 
@@ -247,7 +263,7 @@ class Members {
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${item.id_member || '-'}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${item.outlet || '-'}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${item.point || 0}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${item.berlaku ? Helpers.formatDate(item.berlaku) : '-'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${this.formatDate(item.berlaku)}</td>
                     <td class="px-6 py-4 whitespace-nowrap">
                         <span class="px-3 py-1 text-xs font-medium rounded-full ${
                             item.status === 'active' 
