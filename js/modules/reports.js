@@ -323,41 +323,32 @@ class Reports {
         data.forEach(item => {
             const outlet = item.outlet || 'Unknown';
             const paymentType = item.payment_type || 'cash';
+            const kasir = item.kasir || 'Unknown';
+            const tanggal = item.order_date ? item.order_date.split('T')[0] : 'Unknown';
             const amount = parseFloat(item.amount) || 0;
             const isCancel = item.status === 'canceled' || item.status === 'cancelled';
             
-            if (!result[outlet]) {
-                result[outlet] = {};
-            }
+            const key = `${outlet}-${paymentType}-${kasir}-${tanggal}`;
             
-            if (!result[outlet][paymentType]) {
-                result[outlet][paymentType] = {
+            if (!result[key]) {
+                result[key] = {
+                    outlet: outlet,
+                    payment_type: paymentType,
+                    kasir: kasir,
+                    tanggal: tanggal,
                     totalAmount: 0,
                     totalAmountCancel: 0
                 };
             }
             
             if (isCancel) {
-                result[outlet][paymentType].totalAmountCancel += amount;
+                result[key].totalAmountCancel += amount;
             } else {
-                result[outlet][paymentType].totalAmount += amount;
+                result[key].totalAmount += amount;
             }
         });
         
-        // Convert to array format for table
-        const tableData = [];
-        Object.keys(result).forEach(outlet => {
-            Object.keys(result[outlet]).forEach(paymentType => {
-                tableData.push({
-                    outlet: outlet,
-                    payment_type: paymentType,
-                    total_amount_cancel: result[outlet][paymentType].totalAmountCancel,
-                    total_amount: result[outlet][paymentType].totalAmount
-                });
-            });
-        });
-        
-        return tableData;
+        return Object.values(result);
     }
 
     async loadLaporanKomisi() {
@@ -390,17 +381,19 @@ class Reports {
         
         data.forEach(item => {
             const outlet = item.outlet || 'Unknown';
+            const serveBy = item.serve_by || 'Unknown';
             const kasir = item.kasir || 'Unknown';
             const amount = parseFloat(item.amount) || 0;
             const isCompleted = item.status === 'completed';
             
             if (!isCompleted) return;
             
-            const key = `${outlet}-${kasir}`;
+            const key = `${outlet}-${serveBy}-${kasir}`;
             
             if (!result[key]) {
                 result[key] = {
                     outlet: outlet,
+                    serve_by: serveBy,
                     kasir: kasir,
                     total_amount: 0,
                     total_komisi: 0
@@ -440,26 +433,12 @@ class Reports {
     }
 
     processMembercardData(data) {
-        const result = {};
-        
-        data.forEach(item => {
-            const outlet = item.outlet || 'Unknown';
-            const kasir = item.created_by || item.kasir || 'Unknown';
-            
-            const key = `${outlet}-${kasir}`;
-            
-            if (!result[key]) {
-                result[key] = {
-                    outlet: outlet,
-                    kasir: kasir,
-                    jumlah_membercard: 0
-                };
-            }
-            
-            result[key].jumlah_membercard += 1;
-        });
-        
-        return Object.values(result);
+        return data.map(item => ({
+            outlet: item.outlet || 'Unknown',
+            kasir: item.kasir_create || item.kasir || 'Unknown',
+            tanggal: item.tanggal_create || item.created_at || 'Unknown',
+            jumlah_membercard: 1
+        }));
     }
 
     generateFallbackMembercardData() {
@@ -469,10 +448,13 @@ class Reports {
         return outlets.map(outlet => {
             const kasir = kasirs[Math.floor(Math.random() * kasirs.length)];
             const jumlah = Math.floor(Math.random() * 20) + 10;
+            const today = new Date();
+            const tanggal = today.toISOString().split('T')[0];
             
             return {
                 outlet: outlet,
                 kasir: kasir,
+                tanggal: tanggal,
                 jumlah_membercard: jumlah
             };
         });
@@ -487,12 +469,12 @@ class Reports {
                 .select('*')
                 .order('clockin', { ascending: false });
 
-        if (this.filters.startDate) {
-            query = query.gte('clockin', this.filters.startDate + 'T00:00:00Z');
-        }
-        if (this.filters.endDate) {
-            query = query.lte('clockin', this.filters.endDate + 'T23:59:59Z');
-        }
+            if (this.filters.startDate) {
+                query = query.gte('clockin', this.filters.startDate + 'T00:00:00Z');
+            }
+            if (this.filters.endDate) {
+                query = query.lte('clockin', this.filters.endDate + 'T23:59:59Z');
+            }
             if (this.filters.outlet) {
                 query = query.eq('outlet', this.filters.outlet);
             }
@@ -510,19 +492,40 @@ class Reports {
     processAbsenData(data) {
         return data.map(item => {
             const clockin = new Date(item.clockin);
-            const clockout = item.clockout ? new Date(item.clockout) : new Date();
+            const clockout = item.clockout ? new Date(item.clockout) : null;
             
-            const diffMs = clockout - clockin;
+            const diffMs = clockout ? clockout - clockin : 0;
             const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
             const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-            const jamKerja = `${diffHours} jam ${diffMinutes} menit`;
+            const jamKerja = clockout ? `${diffHours} jam ${diffMinutes} menit` : 'Masih bekerja';
+            
+            // Hitung keterangan
+            let keterangan = '';
+            const jadwalMasuk = new Date(clockin);
+            jadwalMasuk.setHours(8, 0, 0, 0); // Jadwal masuk jam 8:00
+            
+            if (clockin > jadwalMasuk) {
+                const telatMs = clockin - jadwalMasuk;
+                const telatMenit = Math.floor(telatMs / (1000 * 60));
+                keterangan = `Terlambat ${telatMenit} menit`;
+            } else {
+                keterangan = 'Tepat waktu';
+            }
+            
+            // Jadwal pulang default jam 17:00
+            const jadwalPulang = new Date(clockin);
+            jadwalPulang.setHours(17, 0, 0, 0);
             
             return {
                 outlet: item.outlet || 'Unknown',
                 karyawan: item.karyawan || item.nama_karyawan || 'Unknown',
+                tanggal: clockin.toISOString().split('T')[0],
+                jadwal_masuk: '08:00',
+                jadwal_pulang: '17:00',
                 clockin: item.clockin,
                 clockout: item.clockout,
-                jam_kerja: jamKerja
+                jam_kerja: jamKerja,
+                keterangan: keterangan
             };
         });
     }
@@ -556,12 +559,28 @@ class Reports {
             const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
             const jamKerja = `${diffHours} jam ${diffMinutes} menit`;
             
+            let keterangan = '';
+            const jadwalMasuk = new Date(date);
+            jadwalMasuk.setHours(8, 0, 0, 0);
+            
+            if (clockin > jadwalMasuk) {
+                const telatMs = clockin - jadwalMasuk;
+                const telatMenit = Math.floor(telatMs / (1000 * 60));
+                keterangan = `Terlambat ${telatMenit} menit`;
+            } else {
+                keterangan = 'Tepat waktu';
+            }
+            
             data.push({
                 outlet: outlet,
                 karyawan: karyawan,
+                tanggal: date.toISOString().split('T')[0],
+                jadwal_masuk: '08:00',
+                jadwal_pulang: '17:00',
                 clockin: clockin.toISOString(),
                 clockout: clockout.toISOString(),
-                jam_kerja: jamKerja
+                jam_kerja: jamKerja,
+                keterangan: keterangan
             });
         }
         
@@ -652,42 +671,50 @@ class Reports {
 
             return data || [];
         } catch (error) {
-            console.warn('Arus kas table not found, using fallback data');
+            console.warn('Kas table not found, using fallback data');
             return this.generateFallbackPemasukanPengeluaranData();
         }
     }
 
     generateFallbackPemasukanPengeluaranData() {
         const outlets = ['Rempoa', 'Ciputat', 'Pondok Cabe'];
-        const jenisList = ['pemasukan', 'pengeluaran'];
-        const kategoriPemasukan = ['Penjualan', 'Top Up Member', 'Lainnya'];
-        const kategoriPengeluaran = ['Gaji Karyawan', 'Bahan Baku', 'Operasional', 'Listrik', 'Air'];
+        const kasirs = ['Devi Siska Sari', 'Hari Suryono', 'Echwan Abdillah'];
         
         const data = [];
         const today = new Date();
         
-        for (let i = 0; i < 30; i++) {
+        for (let i = 0; i < 7; i++) {
             const date = new Date();
             date.setDate(today.getDate() - i);
             
             const outlet = outlets[Math.floor(Math.random() * outlets.length)];
-            const jenis = jenisList[Math.floor(Math.random() * jenisList.length)];
-            const kategori = jenis === 'pemasukan' 
-                ? kategoriPemasukan[Math.floor(Math.random() * kategoriPemasukan.length)]
-                : kategoriPengeluaran[Math.floor(Math.random() * kategoriPengeluaran.length)];
-            
-            const nominal = jenis === 'pemasukan' 
-                ? Math.floor(Math.random() * 5000000) + 1000000
-                : Math.floor(Math.random() * 2000000) + 500000;
+            const kasir = kasirs[Math.floor(Math.random() * kasirs.length)];
             
             data.push({
-                outlet: outlet,
                 tanggal: date.toISOString().split('T')[0],
-                jenis: jenis,
-                kategori: kategori,
-                keterangan: `${jenis === 'pemasukan' ? 'Penerimaan' : 'Pengeluaran'} ${kategori}`,
-                nominal: nominal,
-                created_by: ['Hari Suryono', 'Echwan Abdillah', 'Ahmad Fauzi'][Math.floor(Math.random() * 3)]
+                outlet: outlet,
+                kasir: kasir,
+                omset_cash: Math.floor(Math.random() * 1000000) + 500000,
+                top_up_kas: Math.floor(Math.random() * 100000) + 50000,
+                sisa_setoran: Math.floor(Math.random() * 200000),
+                hutang_komisi: Math.floor(Math.random() * 300000),
+                pemasukan_lain_lain: Math.floor(Math.random() * 50000),
+                note_pemasukan_lain: 'Pemasukan lain-lain',
+                komisi: Math.floor(Math.random() * 400000),
+                uop: Math.floor(Math.random() * 100000),
+                tips_qris: Math.floor(Math.random() * 50000),
+                pengeluaran_lain_lain: Math.floor(Math.random() * 100000),
+                note_pengeluaran_lain: 'Pengeluaran lain-lain',
+                bayar_hutang_komisi: Math.floor(Math.random() * 200000),
+                iuran_rt: Math.floor(Math.random() * 50000),
+                sumbangan: Math.floor(Math.random() * 100000),
+                iuran_sampah: Math.floor(Math.random() * 20000),
+                galon: Math.floor(Math.random() * 15000),
+                biaya_admin_setoran: Math.floor(Math.random() * 25000),
+                yakult: Math.floor(Math.random() * 10000),
+                pemasukan: Math.floor(Math.random() * 1500000) + 500000,
+                pengeluaran: Math.floor(Math.random() * 800000) + 200000,
+                saldo: Math.floor(Math.random() * 2000000) + 1000000
             });
         }
         
@@ -800,6 +827,7 @@ class Reports {
             { title: 'Order No', key: 'order_no' },
             { title: 'Outlet', key: 'outlet' },
             { title: 'Kasir', key: 'kasir' },
+            { title: 'Served By', key: 'serve_by' },
             { title: 'Customer', key: 'customer_name' },
             { title: 'Item', key: 'item_name' },
             { title: 'Qty', key: 'qty' },
@@ -855,7 +883,13 @@ class Reports {
 
     getPembayaranColumns() {
         return [
+            { 
+                title: 'Tanggal', 
+                key: 'tanggal',
+                type: 'date'
+            },
             { title: 'Outlet', key: 'outlet' },
+            { title: 'Kasir', key: 'kasir' },
             { 
                 title: 'Type Pembayaran', 
                 key: 'payment_type',
@@ -871,12 +905,12 @@ class Reports {
             },
             { 
                 title: 'Total Amount Cancel', 
-                key: 'total_amount_cancel',
+                key: 'totalAmountCancel',
                 type: 'currency'
             },
             { 
                 title: 'Total Amount', 
-                key: 'total_amount',
+                key: 'totalAmount',
                 type: 'currency'
             }
         ];
@@ -885,7 +919,8 @@ class Reports {
     getKomisiColumns() {
         return [
             { title: 'Outlet', key: 'outlet' },
-            { title: 'Served By', key: 'kasir' },
+            { title: 'Served By', key: 'serve_by' },
+            { title: 'Kasir', key: 'kasir' },
             { 
                 title: 'Total Amount', 
                 key: 'total_amount',
@@ -901,6 +936,11 @@ class Reports {
 
     getMembercardColumns() {
         return [
+            { 
+                title: 'Tanggal', 
+                key: 'tanggal',
+                type: 'date'
+            },
             { title: 'Outlet', key: 'outlet' },
             { title: 'Kasir', key: 'kasir' },
             { title: 'Jumlah Membercard', key: 'jumlah_membercard' }
@@ -909,8 +949,15 @@ class Reports {
 
     getAbsenColumns() {
         return [
+            { 
+                title: 'Tanggal', 
+                key: 'tanggal',
+                type: 'date'
+            },
             { title: 'Outlet', key: 'outlet' },
             { title: 'Karyawan', key: 'karyawan' },
+            { title: 'Jadwal Masuk', key: 'jadwal_masuk' },
+            { title: 'Jadwal Pulang', key: 'jadwal_pulang' },
             { 
                 title: 'Clock In', 
                 key: 'clockin',
@@ -921,7 +968,8 @@ class Reports {
                 key: 'clockout',
                 type: 'datetime'
             },
-            { title: 'Jam Kerja', key: 'jam_kerja' }
+            { title: 'Jam Kerja', key: 'jam_kerja' },
+            { title: 'Keterangan', key: 'keterangan' }
         ];
     }
 
@@ -949,36 +997,110 @@ class Reports {
 
     getPemasukanPengeluaranColumns() {
         return [
-            { title: 'Outlet', key: 'outlet' },
             { 
                 title: 'Tanggal', 
                 key: 'tanggal',
                 type: 'date'
             },
+            { title: 'Outlet', key: 'outlet' },
+            { title: 'Kasir', key: 'kasir' },
             { 
-                title: 'Jenis', 
-                key: 'jenis',
-                formatter: (value) => {
-                    const isPemasukan = value === 'pemasukan';
-                    return `
-                        <span class="px-2 py-1 text-xs rounded-full ${
-                            isPemasukan 
-                                ? 'bg-green-100 text-green-800' 
-                                : 'bg-red-100 text-red-800'
-                        }">
-                            ${isPemasukan ? 'Pemasukan' : 'Pengeluaran'}
-                        </span>
-                    `;
-                }
-            },
-            { title: 'Kategori', key: 'kategori' },
-            { title: 'Keterangan', key: 'keterangan' },
-            { 
-                title: 'Nominal', 
-                key: 'nominal',
+                title: 'Omset Cash', 
+                key: 'omset_cash',
                 type: 'currency'
             },
-            { title: 'Dibuat Oleh', key: 'created_by' }
+            { 
+                title: 'Top Up Kas', 
+                key: 'top_up_kas',
+                type: 'currency'
+            },
+            { 
+                title: 'Sisa Setoran', 
+                key: 'sisa_setoran',
+                type: 'currency'
+            },
+            { 
+                title: 'Hutang Komisi', 
+                key: 'hutang_komisi',
+                type: 'currency'
+            },
+            { 
+                title: 'Pemasukan Lain', 
+                key: 'pemasukan_lain_lain',
+                type: 'currency'
+            },
+            { title: 'Note Pemasukan', key: 'note_pemasukan_lain' },
+            { 
+                title: 'Komisi', 
+                key: 'komisi',
+                type: 'currency'
+            },
+            { 
+                title: 'UOP', 
+                key: 'uop',
+                type: 'currency'
+            },
+            { 
+                title: 'Tips QRIS', 
+                key: 'tips_qris',
+                type: 'currency'
+            },
+            { 
+                title: 'Pengeluaran Lain', 
+                key: 'pengeluaran_lain_lain',
+                type: 'currency'
+            },
+            { title: 'Note Pengeluaran', key: 'note_pengeluaran_lain' },
+            { 
+                title: 'Bayar Hutang Komisi', 
+                key: 'bayar_hutang_komisi',
+                type: 'currency'
+            },
+            { 
+                title: 'Iuran RT', 
+                key: 'iuran_rt',
+                type: 'currency'
+            },
+            { 
+                title: 'Sumbangan', 
+                key: 'sumbangan',
+                type: 'currency'
+            },
+            { 
+                title: 'Iuran Sampah', 
+                key: 'iuran_sampah',
+                type: 'currency'
+            },
+            { 
+                title: 'Galon', 
+                key: 'galon',
+                type: 'currency'
+            },
+            { 
+                title: 'Biaya Admin Setoran', 
+                key: 'biaya_admin_setoran',
+                type: 'currency'
+            },
+            { 
+                title: 'Yakult', 
+                key: 'yakult',
+                type: 'currency'
+            },
+            { 
+                title: 'Total Pemasukan', 
+                key: 'pemasukan',
+                type: 'currency'
+            },
+            { 
+                title: 'Total Pengeluaran', 
+                key: 'pengeluaran',
+                type: 'currency'
+            },
+            { 
+                title: 'Saldo', 
+                key: 'saldo',
+                type: 'currency'
+            }
         ];
     }
 
@@ -1090,9 +1212,9 @@ class Reports {
                 break;
             
             case 'pembayaran':
-                totalSales = this.currentData.reduce((sum, item) => sum + (parseFloat(item.total_amount) || 0), 0);
+                totalSales = this.currentData.reduce((sum, item) => sum + (parseFloat(item.totalAmount) || 0), 0);
                 totalTransactions = this.currentData.length;
-                totalItems = this.currentData.reduce((sum, item) => sum + (parseFloat(item.total_amount_cancel) || 0), 0);
+                totalItems = this.currentData.reduce((sum, item) => sum + (parseFloat(item.totalAmountCancel) || 0), 0);
                 totalProfit = totalSales - totalItems;
                 break;
             
@@ -1125,12 +1247,8 @@ class Reports {
                 break;
             
             case 'pemasukan-pengeluaran':
-                const pemasukan = this.currentData
-                    .filter(item => item.jenis === 'pemasukan')
-                    .reduce((sum, item) => sum + (parseFloat(item.nominal) || 0), 0);
-                const pengeluaran = this.currentData
-                    .filter(item => item.jenis === 'pengeluaran')
-                    .reduce((sum, item) => sum + (parseFloat(item.nominal) || 0), 0);
+                const pemasukan = this.currentData.reduce((sum, item) => sum + (parseFloat(item.pemasukan) || 0), 0);
+                const pengeluaran = this.currentData.reduce((sum, item) => sum + (parseFloat(item.pengeluaran) || 0), 0);
                 totalSales = pemasukan;
                 totalTransactions = this.currentData.length;
                 totalItems = pengeluaran;
@@ -1233,7 +1351,7 @@ class Reports {
 
     // CSV generation methods
     generateDetailTransaksiCSV() {
-        let csvContent = "Tanggal,Order No,Outlet,Kasir,Customer,Item,Qty,Harga Jual,Amount,Payment Type,Status\n";
+        let csvContent = "Tanggal,Order No,Outlet,Kasir,Served By,Customer,Item,Qty,Harga Jual,Amount,Payment Type,Status\n";
         
         this.currentData.forEach(item => {
             const row = [
@@ -1241,6 +1359,7 @@ class Reports {
                 item.order_no,
                 item.outlet,
                 item.kasir,
+                item.serve_by,
                 item.customer_name,
                 item.item_name,
                 item.qty,
@@ -1257,14 +1376,16 @@ class Reports {
     }
 
     generatePembayaranCSV() {
-        let csvContent = "Outlet,Type Pembayaran,Total Amount Cancel,Total Amount\n";
+        let csvContent = "Tanggal,Outlet,Kasir,Type Pembayaran,Total Amount Cancel,Total Amount\n";
         
         this.currentData.forEach(item => {
             const row = [
+                item.tanggal,
                 item.outlet,
+                item.kasir,
                 item.payment_type,
-                item.total_amount_cancel,
-                item.total_amount
+                item.totalAmountCancel,
+                item.totalAmount
             ].map(field => `"${field}"`).join(',');
             
             csvContent += row + '\n';
@@ -1274,11 +1395,12 @@ class Reports {
     }
 
     generateKomisiCSV() {
-        let csvContent = "Outlet,Served By,Total Amount,Total Komisi\n";
+        let csvContent = "Outlet,Served By,Kasir,Total Amount,Total Komisi\n";
         
         this.currentData.forEach(item => {
             const row = [
                 item.outlet,
+                item.serve_by,
                 item.kasir,
                 item.total_amount,
                 item.total_komisi
@@ -1291,10 +1413,11 @@ class Reports {
     }
 
     generateMembercardCSV() {
-        let csvContent = "Outlet,Kasir,Jumlah Membercard\n";
+        let csvContent = "Tanggal,Outlet,Kasir,Jumlah Membercard\n";
         
         this.currentData.forEach(item => {
             const row = [
+                item.tanggal,
                 item.outlet,
                 item.kasir,
                 item.jumlah_membercard
@@ -1307,15 +1430,19 @@ class Reports {
     }
 
     generateAbsenCSV() {
-        let csvContent = "Outlet,Karyawan,Clock In,Clock Out,Jam Kerja\n";
+        let csvContent = "Tanggal,Outlet,Karyawan,Jadwal Masuk,Jadwal Pulang,Clock In,Clock Out,Jam Kerja,Keterangan\n";
         
         this.currentData.forEach(item => {
             const row = [
+                item.tanggal,
                 item.outlet,
                 item.karyawan,
+                item.jadwal_masuk,
+                item.jadwal_pulang,
                 Helpers.formatDateWIB(item.clockin),
                 Helpers.formatDateWIB(item.clockout),
-                item.jam_kerja
+                item.jam_kerja,
+                item.keterangan
             ].map(field => `"${field}"`).join(',');
             
             csvContent += row + '\n';
@@ -1343,17 +1470,34 @@ class Reports {
     }
 
     generatePemasukanPengeluaranCSV() {
-        let csvContent = "Outlet,Tanggal,Jenis,Kategori,Keterangan,Nominal,Dibuat Oleh\n";
+        let csvContent = "Tanggal,Outlet,Kasir,Omset Cash,Top Up Kas,Sisa Setoran,Hutang Komisi,Pemasukan Lain,Note Pemasukan,Komisi,UOP,Tips QRIS,Pengeluaran Lain,Note Pengeluaran,Bayar Hutang Komisi,Iuran RT,Sumbangan,Iuran Sampah,Galon,Biaya Admin Setoran,Yakult,Total Pemasukan,Total Pengeluaran,Saldo\n";
         
         this.currentData.forEach(item => {
             const row = [
-                item.outlet,
                 item.tanggal,
-                item.jenis,
-                item.kategori,
-                item.keterangan,
-                item.nominal,
-                item.created_by
+                item.outlet,
+                item.kasir,
+                item.omset_cash,
+                item.top_up_kas,
+                item.sisa_setoran,
+                item.hutang_komisi,
+                item.pemasukan_lain_lain,
+                item.note_pemasukan_lain,
+                item.komisi,
+                item.uop,
+                item.tips_qris,
+                item.pengeluaran_lain_lain,
+                item.note_pengeluaran_lain,
+                item.bayar_hutang_komisi,
+                item.iuran_rt,
+                item.sumbangan,
+                item.iuran_sampah,
+                item.galon,
+                item.biaya_admin_setoran,
+                item.yakult,
+                item.pemasukan,
+                item.pengeluaran,
+                item.saldo
             ].map(field => `"${field}"`).join(',');
             
             csvContent += row + '\n';
