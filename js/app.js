@@ -903,8 +903,10 @@ initModule(moduleName) {
     console.log('Available modules:', {
         GroupProducts: typeof GroupProducts,
         Products: typeof Products,
+        Members: typeof Members, // TAMBAH INI
         groupProducts: typeof groupProducts,
         products: typeof products,
+        members: typeof members, // TAMBAH INI
         dashboard: typeof dashboard
     });
     
@@ -923,7 +925,6 @@ initModule(moduleName) {
                     
                 case 'products':
                     console.log('🔄 Initializing products module...');
-                    // CEK MULTIPLE APPROACHES SEPERTI GROUP_PRODUCTS
                     if (typeof Products !== 'undefined') {
                         console.log('📦 Using Products class constructor');
                         window.products = new Products();
@@ -968,39 +969,84 @@ initModule(moduleName) {
                     }
                     break;
                     
+                case 'members':
+                    console.log('🔄 Initializing members module...');
+                    // PATTERN YANG SAMA DENGAN PRODUCTS & GROUP_PRODUCTS
+                    if (typeof Members !== 'undefined') {
+                        console.log('📦 Using Members class constructor');
+                        window.members = new Members();
+                        window.members.init();
+                        console.log('✅ Members module initialized via constructor');
+                    } 
+                    else if (typeof members !== 'undefined' && members !== null) {
+                        console.log('📦 Using existing members instance');
+                        if (typeof members.init === 'function') {
+                            members.init();
+                            console.log('✅ Members module initialized (existing instance)');
+                        } else {
+                            console.error('❌ members.init is not a function');
+                        }
+                    }
+                    else {
+                        console.error('❌ Members class not defined, attempting dynamic load...');
+                        this.loadModuleScript('members');
+                    }
+                    break;
+                    
+                case 'employees':
+                    console.log('🔄 Initializing employees module...');
+                    // APPLY SAME PATTERN
+                    if (typeof Employees !== 'undefined') {
+                        console.log('📦 Using Employees class constructor');
+                        window.employees = new Employees();
+                        window.employees.init();
+                        console.log('✅ Employees module initialized via constructor');
+                    } 
+                    else if (typeof employees !== 'undefined' && employees !== null) {
+                        console.log('📦 Using existing employees instance');
+                        if (typeof employees.init === 'function') {
+                            employees.init();
+                            console.log('✅ Employees module initialized (existing instance)');
+                        } else {
+                            console.error('❌ employees.init is not a function');
+                        }
+                    }
+                    else {
+                        console.error('❌ Employees class not defined, attempting dynamic load...');
+                        this.loadModuleScript('employees');
+                    }
+                    break;
+                    
+                case 'outlets':
+                    console.log('🔄 Initializing outlets module...');
+                    // APPLY SAME PATTERN
+                    if (typeof Outlets !== 'undefined') {
+                        console.log('📦 Using Outlets class constructor');
+                        window.outlets = new Outlets();
+                        window.outlets.init();
+                        console.log('✅ Outlets module initialized via constructor');
+                    } 
+                    else if (typeof outlets !== 'undefined' && outlets !== null) {
+                        console.log('📦 Using existing outlets instance');
+                        if (typeof outlets.init === 'function') {
+                            outlets.init();
+                            console.log('✅ Outlets module initialized (existing instance)');
+                        } else {
+                            console.error('❌ outlets.init is not a function');
+                        }
+                    }
+                    else {
+                        console.error('❌ Outlets class not defined, attempting dynamic load...');
+                        this.loadModuleScript('outlets');
+                    }
+                    break;
+                    
                 case 'stock_management':
                     if (typeof stockManagement !== 'undefined' && stockManagement !== null) {
                         stockManagement.init();
                         console.log('✅ Stock Management module initialized');
                     } else {
                         console.error('❌ Stock Management module not available');
-                    }
-                    break;
-                    
-                case 'employees':
-                    if (typeof employees !== 'undefined' && employees !== null) {
-                        employees.init();
-                        console.log('✅ Employees module initialized');
-                    } else {
-                        console.error('❌ Employees module not available');
-                    }
-                    break;
-                    
-                case 'members':
-                    if (typeof members !== 'undefined' && members !== null) {
-                        members.init();
-                        console.log('✅ Members module initialized');
-                    } else {
-                        console.error('❌ Members module not available');
-                    }
-                    break;
-                    
-                case 'outlets':
-                    if (typeof outlets !== 'undefined' && outlets !== null) {
-                        outlets.init();
-                        console.log('✅ Outlets module initialized');
-                    } else {
-                        console.error('❌ Outlets module not available');
                     }
                     break;
                     
