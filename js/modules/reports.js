@@ -1,8 +1,13 @@
-// Reports Module dengan 8 Tab Laporan - FIXED VERSION
+// Reports Module dengan 8 Tab Laporan - FINAL VERSION
 class Reports {
     constructor() {
+        // Cek apakah instance sudah ada
+        if (window.reportsInstance) {
+            return window.reportsInstance;
+        }
+        
         this.currentData = [];
-        this.currentTab = 'detail-transaksi'; // Tab default
+        this.currentTab = 'detail-transaksi';
         this.table = null;
         this.filters = {
             startDate: '',
@@ -10,8 +15,9 @@ class Reports {
             outlet: ''
         };
         this.isInitialized = false;
+        this.tableInitialized = false;
         
-        // Bind methods to maintain 'this' context
+        // Bind methods
         this.init = this.init.bind(this);
         this.initTabs = this.initTabs.bind(this);
         this.switchTab = this.switchTab.bind(this);
@@ -23,29 +29,40 @@ class Reports {
         this.updateSummary = this.updateSummary.bind(this);
         this.updateReportTitle = this.updateReportTitle.bind(this);
         this.updateTableForCurrentTab = this.updateTableForCurrentTab.bind(this);
+        this.cleanup = this.cleanup.bind(this);
+        this.setDefaultDateFilter = this.setDefaultDateFilter.bind(this);
+
+        window.reportsInstance = this;
     }
 
     // Initialize module
     async init() {
-        if (this.isInitialized) {
-            console.log('Reports module already initialized');
-            return;
-        }
+        console.log('Initializing Reports module, current state:', {
+            initialized: this.isInitialized,
+            tableInitialized: this.tableInitialized
+        });
 
-        console.log('Initializing Reports module');
-        
         try {
-            this.initTabs();
-            this.initFilters();
-            this.bindEvents();
+            // Reset UI state pertama kali
+            if (!this.isInitialized) {
+                this.setDefaultDateFilter();
+                this.initTabs();
+                this.initFilters();
+                this.bindEvents();
+                
+                this.setActiveTabUI(this.currentTab);
+                this.updateReportTitle();
+                
+                await this.loadData();
+                this.isInitialized = true;
+            } else {
+                // Jika sudah initialized, cukup render ulang
+                console.log('Reports module already initialized, re-rendering...');
+                this.setActiveTabUI(this.currentTab);
+                this.updateReportTitle();
+                await this.loadData();
+            }
             
-            // Set active tab UI pertama kali
-            this.setActiveTabUI(this.currentTab);
-            this.updateReportTitle();
-            
-            await this.loadData();
-            
-            this.isInitialized = true;
             console.log('Reports module initialized successfully');
         } catch (error) {
             console.error('Failed to initialize Reports module:', error);
@@ -53,8 +70,26 @@ class Reports {
         }
     }
 
+    // Set default date filter (hari ini)
+    setDefaultDateFilter() {
+        const today = new Date();
+        const todayString = today.toISOString().split('T')[0];
+        
+        this.filters.startDate = todayString;
+        this.filters.endDate = todayString;
+        
+        console.log('Default date filter set to today:', todayString);
+    }
+
     // Initialize tabs
     initTabs() {
+        // Hapus event listeners lama jika ada
+        const oldTabs = document.querySelectorAll('.report-tab');
+        oldTabs.forEach(tab => {
+            const newTab = tab.cloneNode(true);
+            tab.parentNode.replaceChild(newTab, tab);
+        });
+
         const tabs = document.querySelectorAll('.report-tab');
         console.log('Found tabs:', tabs.length);
         
@@ -112,7 +147,7 @@ class Reports {
         }
     }
 
-    // Switch between tabs - FIXED VERSION
+    // Switch between tabs
     async switchTab(tabId) {
         if (this.currentTab === tabId) {
             console.log('Tab already active:', tabId);
@@ -152,15 +187,7 @@ class Reports {
     initFilters() {
         console.log('Initializing filters');
         
-        // Set default dates (last 30 days)
-        const endDate = new Date();
-        const startDate = new Date();
-        startDate.setDate(startDate.getDate() - 30);
-
-        this.filters.startDate = startDate.toISOString().split('T')[0];
-        this.filters.endDate = endDate.toISOString().split('T')[0];
-        
-        // Set filter values in DOM jika elemen ada
+        // Set filter values in DOM
         const startDateEl = document.getElementById('start-date');
         const endDateEl = document.getElementById('end-date');
         const outletEl = document.getElementById('outlet-filter');
@@ -213,7 +240,7 @@ class Reports {
             console.log('Data loaded:', this.currentData.length, 'records');
             
             // Initialize or update table
-            if (!this.table) {
+            if (!this.table || !this.tableInitialized) {
                 this.initTable();
             } else {
                 this.updateTableForCurrentTab();
@@ -226,6 +253,12 @@ class Reports {
             console.error('Error loading data:', error);
             Notifications.error('Gagal memuat data laporan: ' + error.message);
             this.currentData = [];
+            
+            // Tetap initialize table dengan data kosong
+            if (!this.table || !this.tableInitialized) {
+                this.initTable();
+            }
+            
             this.updateSummary();
             return [];
         }
@@ -454,12 +487,12 @@ class Reports {
                 .select('*')
                 .order('clockin', { ascending: false });
 
-            if (this.filters.startDate) {
-                query = query.gte('clockin', this.filters.startDate);
-            }
-            if (this.filters.endDate) {
-                query = query.lte('clockin', this.filters.endDate);
-            }
+        if (this.filters.startDate) {
+            query = query.gte('clockin', this.filters.startDate + 'T00:00:00Z');
+        }
+        if (this.filters.endDate) {
+            query = query.lte('clockin', this.filters.endDate + 'T23:59:59Z');
+        }
             if (this.filters.outlet) {
                 query = query.eq('outlet', this.filters.outlet);
             }
@@ -697,10 +730,20 @@ class Reports {
         const tableContainer = document.getElementById('reports-table');
         if (!tableContainer) {
             console.error('Table container #reports-table not found');
+            // Retry setelah delay
+            setTimeout(() => this.initTable(), 100);
             return;
         }
 
+        // Bersihkan container terlebih dahulu
+        tableContainer.innerHTML = '';
+
         const columns = this.getTableColumns();
+        
+        // Destroy table lama jika ada
+        if (this.table && typeof this.table.destroy === 'function') {
+            this.table.destroy();
+        }
         
         this.table = new DataTable('reports-table', {
             columns: columns,
@@ -711,16 +754,24 @@ class Reports {
 
         this.table.init();
         this.table.updateData(this.currentData);
+        this.tableInitialized = true;
+        
+        console.log('Table initialized successfully');
     }
 
     updateTableForCurrentTab() {
         console.log('Updating table for tab:', this.currentTab);
         
-        if (this.table && typeof this.table.destroy === 'function') {
-            this.table.destroy();
+        if (this.table && this.tableInitialized) {
+            // Gunakan metode update yang ada
+            const columns = this.getTableColumns();
+            this.table.options.columns = columns;
+            this.table.updateData(this.currentData);
+            console.log('Table updated with new data');
+        } else {
+            // Jika table belum ada, initialize baru
+            this.initTable();
         }
-        
-        this.initTable();
     }
 
     getTableColumns() {
@@ -960,6 +1011,20 @@ class Reports {
     bindEvents() {
         console.log('Binding events');
         
+        // Hapus event listeners lama
+        const oldFilterBtn = document.getElementById('apply-filters');
+        const oldExportBtn = document.getElementById('export-report');
+        
+        if (oldFilterBtn) {
+            const newFilterBtn = oldFilterBtn.cloneNode(true);
+            oldFilterBtn.parentNode.replaceChild(newFilterBtn, oldFilterBtn);
+        }
+        
+        if (oldExportBtn) {
+            const newExportBtn = oldExportBtn.cloneNode(true);
+            oldExportBtn.parentNode.replaceChild(newExportBtn, oldExportBtn);
+        }
+
         // Filter button
         const filterBtn = document.getElementById('apply-filters');
         if (filterBtn) {
@@ -979,7 +1044,11 @@ class Reports {
         // Enter key untuk filters
         const filterInputs = document.querySelectorAll('#start-date, #end-date, #outlet-filter');
         filterInputs.forEach(input => {
-            input.addEventListener('keypress', (e) => {
+            // Clone dan replace untuk menghapus event listeners lama
+            const newInput = input.cloneNode(true);
+            input.parentNode.replaceChild(newInput, input);
+            
+            newInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
                     this.applyFilters();
                 }
@@ -1314,30 +1383,47 @@ class Reports {
     }
 
     // Cleanup method
-    destroy() {
+    cleanup() {
+        console.log('Cleaning up Reports module');
+        
         if (this.table && typeof this.table.destroy === 'function') {
             this.table.destroy();
+            this.table = null;
+            this.tableInitialized = false;
         }
         
-        // Remove event listeners
-        const tabs = document.querySelectorAll('.report-tab');
-        tabs.forEach(tab => {
-            tab.replaceWith(tab.cloneNode(true));
-        });
-        
+        // Reset state tapi pertahankan instance
+        this.currentData = [];
+        this.currentTab = 'detail-transaksi';
         this.isInitialized = false;
+        
+        console.log('Reports module cleaned up');
+    }
+
+    // Destroy method
+    destroy() {
+        this.cleanup();
         console.log('Reports module destroyed');
     }
 }
 
 // Initialize reports globally
 let reports = null;
+
 document.addEventListener('DOMContentLoaded', () => {
-    reports = new Reports();
-    window.reportsModule = reports; // Expose for debugging
+    // Gunakan singleton pattern
+    if (!window.reportsInstance) {
+        reports = new Reports();
+        window.reportsModule = reports;
+    } else {
+        reports = window.reportsInstance;
+    }
     
-    // Auto-initialize if element exists
+    // Auto-initialize jika element exists
     if (document.getElementById('reports-table')) {
-        reports.init();
+        // Delay sedikit untuk memastikan DOM siap
+        setTimeout(() => {
+            reports.init();
+        }, 100);
     }
 });
