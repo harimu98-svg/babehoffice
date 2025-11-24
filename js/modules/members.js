@@ -715,61 +715,76 @@ class Members {
 
     // Delete member
     delete(id) {
-        console.log('Delete button clicked for ID:', id);
+    console.log('Delete button clicked for ID:', id);
+    console.log('Current data:', this.currentData);
+    
+    const item = this.currentData.find(d => d.id == id);
+    if (!item) {
+        console.error('Item not found for deletion:', id);
+        console.log('Available IDs:', this.currentData.map(d => d.id));
+        Notifications.error('Data tidak ditemukan');
+        return;
+    }
+
+    console.log('Showing confirmation for:', item);
+    
+    const confirmMessage = `
+        <div class="text-center">
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                </svg>
+            </div>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">Hapus Member?</h3>
+            <p class="text-sm text-gray-500 mb-4">
+                Anda akan menghapus member <strong>"${this.escapeHtml(item.nama)}"</strong> dari outlet <strong>"${this.escapeHtml(item.outlet)}"</strong>. 
+                Tindakan ini tidak dapat dibatalkan.
+            </p>
+        </div>
+    `;
+
+    modal.showConfirm(
+        confirmMessage,
+        () => this.confirmDelete(id),
+        () => console.log('Delete cancelled')
+    );
+}
+  async confirmDelete(id) {
+    try {
+        console.log('Confirming delete for:', id);
+        console.log('Data before delete:', this.currentData);
         
-        const item = this.currentData.find(d => d.id === id);
-        if (!item) {
-            console.error('Item not found for deletion:', id);
-            Notifications.error('Data tidak ditemukan');
+        Helpers.showLoading();
+
+        const { error } = await supabase
+            .from('membercard')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            console.error('Supabase delete error:', error);
+            
+            // Handle specific errors
+            if (error.code === '23503') {
+                Notifications.error('Tidak dapat menghapus member karena masih digunakan di transaksi lain');
+            } else {
+                throw error;
+            }
             return;
         }
 
-        console.log('Showing confirmation for:', item);
+        console.log('Delete successful for ID:', id);
         
-        const confirmMessage = `
-            <div class="text-center">
-                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
-                    <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z"/>
-                    </svg>
-                </div>
-                <h3 class="text-lg font-medium text-gray-900 mb-2">Hapus Member?</h3>
-                <p class="text-sm text-gray-500 mb-4">
-                    Anda akan menghapus member <strong>"${this.escapeHtml(item.nama)}"</strong>. Tindakan ini tidak dapat dibatalkan.
-                </p>
-            </div>
-        `;
+        // Refresh data setelah delete berhasil
+        await this.loadData();
+        Notifications.success('Member berhasil dihapus!');
 
-        modal.showConfirm(
-            confirmMessage,
-            () => this.confirmDelete(id),
-            () => console.log('Delete cancelled')
-        );
+    } catch (error) {
+        Helpers.hideLoading();
+        console.error('Error deleting member:', error);
+        Notifications.error('Gagal menghapus member: ' + error.message);
     }
-
-    async confirmDelete(id) {
-        try {
-            console.log('Confirming delete for:', id);
-            Helpers.showLoading();
-
-            const { error } = await supabase
-                .from('membercard')
-                .delete()
-                .eq('id', id);
-
-            if (error) throw error;
-
-            console.log('Delete successful');
-            await this.loadData();
-            Notifications.success('Member berhasil dihapus!');
-
-        } catch (error) {
-            Helpers.hideLoading();
-            console.error('Error deleting member:', error);
-            Notifications.error('Gagal menghapus member: ' + error.message);
-        }
-    }
-
+}
     // Refresh data
     async refresh() {
         console.log('Refreshing members data...');
