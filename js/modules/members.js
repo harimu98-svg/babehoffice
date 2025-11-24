@@ -54,45 +54,68 @@ class Members {
 
     // Load data from Supabase dengan pagination
     async loadData(filters = {}) {
-    try {
-        Helpers.showLoading();
-        console.log('Loading members data...', filters);
-        
-        let query = supabase
-            .from('membercard')
-            .select('*');
+        try {
+            Helpers.showLoading();
+            console.log('Loading members data...', filters);
+            
+            const allData = [];
+            let page = 1;
+            const pageSize = 1000;
+            let hasMore = true;
 
-        // Apply filters
-        if (filters.outlet) {
-            query = query.eq('outlet', filters.outlet);
+            while (hasMore) {
+                const from = (page - 1) * pageSize;
+                const to = from + pageSize - 1;
+                
+                let query = supabase
+                    .from('membercard')
+                    .select('*')
+                    .range(from, to);
+
+                // Apply filters
+                if (filters.outlet) {
+                    query = query.eq('outlet', filters.outlet);
+                }
+                if (filters.status) {
+                    query = query.eq('status', filters.status);
+                }
+
+                const { data, error } = await query.order('nama', { ascending: true });
+
+                if (error) throw error;
+
+                if (data && data.length > 0) {
+                    allData.push(...data);
+                    
+                    if (data.length < pageSize) {
+                        hasMore = false;
+                    } else {
+                        page++;
+                    }
+                } else {
+                    hasMore = false;
+                }
+            }
+
+            console.log('✅ Finished loading members:', {
+                totalLoaded: allData.length,
+                pages: page
+            });
+
+            this.currentData = allData;
+            if (this.table) {
+                this.table.updateData(this.currentData);
+            }
+
+            Helpers.hideLoading();
+            return this.currentData;
+        } catch (error) {
+            Helpers.hideLoading();
+            console.error('Error loading members:', error);
+            Notifications.error('Gagal memuat data member: ' + error.message);
+            return [];
         }
-        if (filters.status) {
-            query = query.eq('status', filters.status);
-        }
-
-        const { data, error } = await query.order('nama', { ascending: true });
-
-        if (error) throw error;
-
-        // PERBAIKAN: Pastikan currentData selalu ter-update
-        this.currentData = data || [];
-        console.log('✅ Finished loading members:', this.currentData.length, 'items');
-        console.log('Member IDs:', this.currentData.map(m => m.id));
-        
-        if (this.table) {
-            this.table.updateData(this.currentData);
-        }
-
-        Helpers.hideLoading();
-        return this.currentData;
-    } catch (error) {
-        Helpers.hideLoading();
-        console.error('Error loading members data:', error);
-        Notifications.error('Gagal memuat data member: ' + error.message);
-        return [];
     }
-}
-
 
     // Initialize table
     initTable() {
@@ -124,23 +147,12 @@ class Members {
                 key: 'point',
                 formatter: (value) => value || 0
             },
-           { 
-    title: 'Tanggal Daftar', 
-    key: 'created_at',
-    formatter: (value) => {
-        if (!value) return '-';
-        try {
-            const date = new Date(value);
-            return date.toLocaleDateString('id-ID', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric'
-            });
-        } catch (error) {
-            return '-';
-        }
-    }
-},
+            { 
+                title: 'Berlaku', 
+                key: 'berlaku',
+                type: 'date',
+                formatter: (value) => value ? Helpers.formatDate(value) : '-'
+            },
             { 
                 title: 'Status', 
                 key: 'status',
@@ -592,104 +604,67 @@ class Members {
 
     // Save new member
     async save() {
-    try {
-        const form = document.getElementById('member-form');
-        const formData = new FormData(form);
-        
-        // Create data object - FIXED: gunakan nama kolom yang sesuai dengan database
-        const data = {
-            nama: formData.get('nama'),
-            telepon: formData.get('telepon'),
-            email: formData.get('email'),
-            outlet: formData.get('outlet'),
-            alamat: formData.get('alamat'),
-            status: formData.get('status') || 'active',
-            poin: 0, // Default value untuk poin
-            created_at: new Date().toISOString() // Tambahkan timestamp
-        };
-
-        console.log('Member data to save:', data);
-
-        // Validasi data sebelum save
-        if (!data.nama || !data.telepon || !data.outlet) {
-            Notifications.error('Nama, telepon, dan outlet harus diisi');
-            return;
-        }
-
-        Helpers.showLoading();
-
-        // FIXED: Gunakan insert tanpa parameter columns
-        const { data: result, error } = await supabase
-            .from('membercard')
-            .insert([data])
-            .select();
-
-        if (error) {
-            console.error('Supabase insert error:', error);
+        try {
+            console.log('Saving new member...');
             
-            // Handle specific errors
-            if (error.code === '23505') {
-                Notifications.error('Member dengan telepon atau email tersebut sudah ada');
-            } else if (error.code === '23503') {
-                Notifications.error('Outlet tidak valid');
-            } else {
+            if (!this.validateForm()) {
+                return;
+            }
+
+            const form = document.getElementById('member-form');
+            const formData = new FormData(form);
+            
+            const data = {
+                nama: formData.get('nama').trim(),
+                nomorWA: formData.get('nomorWA').trim(),
+                id_member: formData.get('id_member')?.trim() || null,
+                outlet: formData.get('outlet'),
+                tanggal_lahir: formData.get('tanggal_lahir') || null,
+                alamat: formData.get('alamat')?.trim() || null,
+                berlaku: formData.get('berlaku') || null,
+                point: parseInt(formData.get('point')) || 0,
+                status: formData.get('status') || 'active'
+            };
+
+            console.log('Member data to save:', data);
+
+            Helpers.showLoading();
+
+            const { data: result, error } = await supabase
+                .from('membercard')
+                .insert([data])
+                .select();
+
+            if (error) {
+                console.error('Supabase error:', error);
                 throw error;
             }
-            return;
+
+            console.log('Save successful:', result);
+
+            modal.close();
+            await this.loadData();
+            Notifications.success('Member berhasil ditambahkan!');
+
+        } catch (error) {
+            Helpers.hideLoading();
+            console.error('Error saving member:', error);
+            Notifications.error('Gagal menambah member: ' + error.message);
         }
-
-        console.log('Save successful:', result);
-
-        modal.close();
-        
-        // Refresh data setelah save berhasil
-        await this.loadData();
-        Notifications.success('Member berhasil ditambahkan!');
-
-    } catch (error) {
-        Helpers.hideLoading();
-        console.error('Save member error:', error);
-        Notifications.error('Gagal menambah member: ' + error.message);
     }
-}
 
-        
-        // PERBAIKAN: Refresh data dan update currentData
-        await this.loadData();
-        Notifications.success('Member berhasil ditambahkan!');
-
-    } catch (error) {
-        Helpers.hideLoading();
-        console.error('Save member error:', error);
-        Notifications.error('Gagal menambah member: ' + error.message);
-    }
-}
     // Edit member
     edit(id) {
-    console.log('Editing member:', id);
-    console.log('Current data:', this.currentData);
-    
-    const item = this.currentData.find(d => d.id == id);
-    if (item) {
-        console.log('Found item for editing:', item);
-        this.showForm(item);
-    } else {
-        console.error('Item not found for editing:', id);
-        console.log('Available IDs:', this.currentData.map(d => d.id));
-        Notifications.error('Data tidak ditemukan untuk diedit');
-        
-        // Refresh data dan coba lagi
-        this.loadData().then(() => {
-            const refreshedItem = this.currentData.find(d => d.id == id);
-            if (refreshedItem) {
-                console.log('Found after refresh:', refreshedItem);
-                this.showForm(refreshedItem);
-            } else {
-                Notifications.error('Data masih tidak ditemukan setelah refresh');
-            }
-        });
+        console.log('Editing member:', id);
+        const item = this.currentData.find(d => d.id === id);
+        if (item) {
+            console.log('Found item for editing:', item);
+            this.showForm(item);
+        } else {
+            console.error('Item not found for editing:', id);
+            Notifications.error('Data tidak ditemukan untuk diedit');
+        }
     }
-}
 
     // Update member
     async update(id) {
@@ -745,76 +720,61 @@ class Members {
 
     // Delete member
     delete(id) {
-    console.log('Delete button clicked for ID:', id);
-    console.log('Current data:', this.currentData);
-    
-    const item = this.currentData.find(d => d.id == id);
-    if (!item) {
-        console.error('Item not found for deletion:', id);
-        console.log('Available IDs:', this.currentData.map(d => d.id));
-        Notifications.error('Data tidak ditemukan');
-        return;
-    }
-
-    console.log('Showing confirmation for:', item);
-    
-    const confirmMessage = `
-        <div class="text-center">
-            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
-                <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z"/>
-                </svg>
-            </div>
-            <h3 class="text-lg font-medium text-gray-900 mb-2">Hapus Member?</h3>
-            <p class="text-sm text-gray-500 mb-4">
-                Anda akan menghapus member <strong>"${this.escapeHtml(item.nama)}"</strong> dari outlet <strong>"${this.escapeHtml(item.outlet)}"</strong>. 
-                Tindakan ini tidak dapat dibatalkan.
-            </p>
-        </div>
-    `;
-
-    modal.showConfirm(
-        confirmMessage,
-        () => this.confirmDelete(id),
-        () => console.log('Delete cancelled')
-    );
-}
-  async confirmDelete(id) {
-    try {
-        console.log('Confirming delete for:', id);
-        console.log('Data before delete:', this.currentData);
+        console.log('Delete button clicked for ID:', id);
         
-        Helpers.showLoading();
-
-        const { error } = await supabase
-            .from('membercard')
-            .delete()
-            .eq('id', id);
-
-        if (error) {
-            console.error('Supabase delete error:', error);
-            
-            // Handle specific errors
-            if (error.code === '23503') {
-                Notifications.error('Tidak dapat menghapus member karena masih digunakan di transaksi lain');
-            } else {
-                throw error;
-            }
+        const item = this.currentData.find(d => d.id === id);
+        if (!item) {
+            console.error('Item not found for deletion:', id);
+            Notifications.error('Data tidak ditemukan');
             return;
         }
 
-        console.log('Delete successful for ID:', id);
+        console.log('Showing confirmation for:', item);
         
-        // Refresh data setelah delete berhasil
-        await this.loadData();
-        Notifications.success('Member berhasil dihapus!');
+        const confirmMessage = `
+            <div class="text-center">
+                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                    <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-medium text-gray-900 mb-2">Hapus Member?</h3>
+                <p class="text-sm text-gray-500 mb-4">
+                    Anda akan menghapus member <strong>"${this.escapeHtml(item.nama)}"</strong>. Tindakan ini tidak dapat dibatalkan.
+                </p>
+            </div>
+        `;
 
-    } catch (error) {
-        Helpers.hideLoading();
-        console.error('Error deleting member:', error);
-        Notifications.error('Gagal menghapus member: ' + error.message);
+        modal.showConfirm(
+            confirmMessage,
+            () => this.confirmDelete(id),
+            () => console.log('Delete cancelled')
+        );
     }
-}
+
+    async confirmDelete(id) {
+        try {
+            console.log('Confirming delete for:', id);
+            Helpers.showLoading();
+
+            const { error } = await supabase
+                .from('membercard')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+
+            console.log('Delete successful');
+            await this.loadData();
+            Notifications.success('Member berhasil dihapus!');
+
+        } catch (error) {
+            Helpers.hideLoading();
+            console.error('Error deleting member:', error);
+            Notifications.error('Gagal menghapus member: ' + error.message);
+        }
+    }
+
     // Refresh data
     async refresh() {
         console.log('Refreshing members data...');
