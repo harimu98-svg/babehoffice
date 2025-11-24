@@ -3,9 +3,20 @@ class App {
     constructor() {
         this.currentModule = 'dashboard';
         this.outlets = [];
-        this.moduleScriptsLoaded = {}; // Track loaded scripts
+        this.moduleScriptsLoaded = {};
+        this.modulePaths = {
+            'members': 'js/modules/members.js',
+            'employees': 'js/modules/employees.js',
+            'outlets': 'js/modules/outlets.js',
+            'products': 'js/modules/products.js',
+            'group_products': 'js/modules/group_products.js',
+            'stock_management': 'js/modules/stock_management.js',
+            'reports': 'js/modules/reports.js'
+        };
         this.init();
     }
+
+
     console.log('🔄 App constructor called');
     
     // Tunggu sampai DOM fully ready
