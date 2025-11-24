@@ -896,30 +896,11 @@ async loadOrderTransaksi() {
 
 processOrderTransaksiData(data) {
     return data.map(item => {
-        // Format tanggal dan waktu
-        let orderDate = 'Unknown';
-        let orderTime = 'Unknown';
-        
-        if (item.order_date) {
-            if (item.order_date.includes(' ')) {
-                // Format: "24/11/2025 11:14:12"
-                const [datePart, timePart] = item.order_date.split(' ');
-                orderDate = datePart;
-                orderTime = timePart;
-            } else if (item.order_date.includes('T')) {
-                // Format ISO
-                orderDate = item.order_date.split('T')[0];
-                orderTime = item.order_date.split('T')[1].split('.')[0];
-            } else {
-                orderDate = item.order_date;
-            }
-        }
-
         return {
             outlet: item.outlet || 'Unknown',
             order_no: item.order_no || '',
-            order_date: orderDate,
-            order_time: orderTime,
+            order_date: item.order_date ? item.order_date.split(' ')[0] : 'Unknown', // Ambil tanggal saja
+            order_time: item.order_time || 'Unknown', // ← LANGSUNG AMBIL DARI order_time
             serve_by: item.serve_by || '',
             kasir: item.kasir || '',
             customer_id: item.customer_id || '',
