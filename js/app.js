@@ -1127,15 +1127,57 @@ initializeEmployees() {
 }
 
 initializeMembers() {
-    if (typeof members !== 'undefined' && members !== null) {
-        if (!members.isInitialized) {
-            members.init();
-            console.log('✅ Members module initialized');
+    console.log('🔄 Initializing members module...');
+    
+    // Approach 1: Gunakan class constructor
+    if (typeof Members !== 'undefined') {
+        console.log('📦 Using Members class constructor');
+        if (!window.members || !window.members.isInitialized) {
+            window.members = new Members();
+            window.members.init();
+            console.log('✅ Members module initialized via constructor');
         } else {
             console.log('ℹ️ Members already initialized');
         }
-    } else {
-        console.error('❌ Members module not available');
+    } 
+    // Approach 2: Gunakan existing instance
+    else if (typeof members !== 'undefined' && members !== null) {
+        console.log('📦 Using existing members instance');
+        if (typeof members.init === 'function' && !members.isInitialized) {
+            members.init();
+            console.log('✅ Members module initialized (existing instance)');
+        } else if (members.isInitialized) {
+            console.log('ℹ️ Members instance already initialized');
+        } else {
+            console.error('❌ members.init is not a function');
+        }
+    }
+    // Approach 3: Dynamic loading
+    else {
+        console.error('❌ Members class not defined, attempting dynamic load...');
+        this.loadModuleScript('members');
+        
+        // Fallback: show user-friendly message
+        const content = document.getElementById('content');
+        if (content) {
+            content.innerHTML += `
+                <div class="bg-yellow-50 border border-yellow-200 rounded-md p-4 mt-4">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-sm font-medium text-yellow-800">Module Sedang Dimuat</h3>
+                            <div class="mt-2 text-sm text-yellow-700">
+                                <p>Members module sedang dimuat. Silakan refresh halaman atau tunggu beberapa saat.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
     }
 }
 
