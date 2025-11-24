@@ -1,4 +1,4 @@
-// Group Products Module - COMPLETE FIXED VERSION
+// Group Products Module - FIXED VERSION (without updated_at)
 class GroupProducts {
     constructor() {
         this.currentData = [];
@@ -61,7 +61,7 @@ class GroupProducts {
             const { data, error } = await supabase
                 .from('group_produk')
                 .select('*')
-                .order('created_at', { ascending: false });
+                .order('group', { ascending: true }); // Urutkan berdasarkan nama group
 
             if (error) throw error;
 
@@ -82,17 +82,11 @@ class GroupProducts {
         }
     }
 
-    // Initialize table
+    // Initialize table - WITHOUT ID COLUMN
     initTable() {
         console.log('Initializing group products table...');
         
         const columns = [
-            { 
-                title: 'ID', 
-                key: 'id',
-                formatter: (value) => `<span class="text-xs text-gray-500">${value ? value.substring(0, 8) + '...' : '-'}</span>`,
-                width: '120px'
-            },
             { 
                 title: 'Outlet', 
                 key: 'outlet',
@@ -215,7 +209,7 @@ class GroupProducts {
         container.innerHTML = tableHTML;
     }
 
-    // Get action buttons HTML - FIXED VERSION
+    // Get action buttons HTML
     getActionButtons(id, row) {
         return `
             <div class="flex space-x-2">
@@ -261,26 +255,6 @@ class GroupProducts {
             console.log('Add button event bound');
         } else {
             console.error('Add button not found!');
-        }
-
-        // Refresh button (jika ada)
-        const refreshBtn = document.getElementById('refresh-group-products');
-        if (!refreshBtn) {
-            // Tambahkan refresh button jika belum ada
-            const header = document.querySelector('#group-products-table')?.closest('.bg-white')?.querySelector('.px-6.py-4');
-            if (header) {
-                const refreshButton = document.createElement('button');
-                refreshButton.id = 'refresh-group-products';
-                refreshButton.className = 'bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors ml-2';
-                refreshButton.innerHTML = `
-                    <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                    </svg>
-                    Refresh
-                `;
-                refreshButton.addEventListener('click', () => this.loadData());
-                header.appendChild(refreshButton);
-            }
         }
     }
 
@@ -496,7 +470,7 @@ class GroupProducts {
         }
     }
 
-    // Update group product
+    // Update group product - FIXED: REMOVE updated_at
     async update(id) {
         try {
             console.log('Updating group product:', id);
@@ -530,8 +504,8 @@ class GroupProducts {
                 .update({
                     outlet: data.outlet.trim(),
                     group: data.group.trim(),
-                    status: data.status || 'active',
-                    updated_at: new Date().toISOString()
+                    status: data.status || 'active'
+                    // REMOVED: updated_at: new Date().toISOString()
                 })
                 .eq('id', id)
                 .select();
@@ -655,8 +629,3 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 100);
     }
 });
-
-// Export untuk module system (jika digunakan)
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = GroupProducts;
-}
