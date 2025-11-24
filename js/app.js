@@ -2,62 +2,9 @@
 class App {
     constructor() {
         this.currentModule = 'dashboard';
-        this.outlets = [];
-        this.moduleScriptsLoaded = {};
-        this.modulePaths = {
-            'members': 'js/modules/members.js',
-            'employees': 'js/modules/employees.js',
-            'outlets': 'js/modules/outlets.js',
-            'products': 'js/modules/products.js',
-            'group_products': 'js/modules/group_products.js',
-            'stock_management': 'js/modules/stock_management.js',
-            'reports': 'js/modules/reports.js'
-        };
+        this.outlets = []; // Tambah properti outlets
         this.init();
     }
-
-    // Load module script dynamically dengan path yang benar
-    async loadModuleScript(moduleName) {
-        // Jika sudah diload, return langsung
-        if (this.moduleScriptsLoaded[moduleName]) {
-            console.log(`📦 ${moduleName}.js already loaded`);
-            return true;
-        }
-
-        // Dapatkan path dari mapping
-        const modulePath = this.modulePaths[moduleName] || `js/modules/${moduleName}.js`;
-        
-        console.log(`🔄 Loading ${moduleName} from: ${modulePath}`);
-        
-        return new Promise((resolve, reject) => {
-            const script = document.createElement('script');
-            script.src = modulePath;
-            script.onload = () => {
-                console.log(`✅ ${moduleName}.js loaded successfully`);
-                this.moduleScriptsLoaded[moduleName] = true;
-                resolve(true);
-            };
-            script.onerror = () => {
-                console.error(`❌ Failed to load ${modulePath}`);
-                this.moduleScriptsLoaded[moduleName] = false;
-                reject(new Error(`Failed to load ${modulePath}`));
-            };
-            document.head.appendChild(script);
-        });
-    }
-
-    // Tunggu sampai DOM fully ready
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            console.log('✅ DOM fully loaded, initializing app...');
-            this.init();
-        });
-    } else {
-        console.log('✅ DOM already ready, initializing app...');
-        this.init();
-    }
-}
-
 
     // Initialize application
     async init() {
@@ -934,17 +881,14 @@ loadStockManagement() {
     `;
 }
 
-
-// Update initModule method - FIXED VERSION
+   // Update initModule method - FIXED VERSION
 initModule(moduleName) {
     console.log('Initializing module JS:', moduleName);
     console.log('Available modules:', {
         GroupProducts: typeof GroupProducts,
         Products: typeof Products,
-        Members: typeof Members, // TAMBAH INI
         groupProducts: typeof groupProducts,
         products: typeof products,
-        members: typeof members, // TAMBAH INI
         dashboard: typeof dashboard
     });
     
@@ -963,6 +907,7 @@ initModule(moduleName) {
                     
                 case 'products':
                     console.log('🔄 Initializing products module...');
+                    // CEK MULTIPLE APPROACHES SEPERTI GROUP_PRODUCTS
                     if (typeof Products !== 'undefined') {
                         console.log('📦 Using Products class constructor');
                         window.products = new Products();
@@ -1007,84 +952,39 @@ initModule(moduleName) {
                     }
                     break;
                     
-                case 'members':
-                    console.log('🔄 Initializing members module...');
-                    // PATTERN YANG SAMA DENGAN PRODUCTS & GROUP_PRODUCTS
-                    if (typeof Members !== 'undefined') {
-                        console.log('📦 Using Members class constructor');
-                        window.members = new Members();
-                        window.members.init();
-                        console.log('✅ Members module initialized via constructor');
-                    } 
-                    else if (typeof members !== 'undefined' && members !== null) {
-                        console.log('📦 Using existing members instance');
-                        if (typeof members.init === 'function') {
-                            members.init();
-                            console.log('✅ Members module initialized (existing instance)');
-                        } else {
-                            console.error('❌ members.init is not a function');
-                        }
-                    }
-                    else {
-                        console.error('❌ Members class not defined, attempting dynamic load...');
-                        this.loadModuleScript('members');
-                    }
-                    break;
-                    
-                case 'employees':
-                    console.log('🔄 Initializing employees module...');
-                    // APPLY SAME PATTERN
-                    if (typeof Employees !== 'undefined') {
-                        console.log('📦 Using Employees class constructor');
-                        window.employees = new Employees();
-                        window.employees.init();
-                        console.log('✅ Employees module initialized via constructor');
-                    } 
-                    else if (typeof employees !== 'undefined' && employees !== null) {
-                        console.log('📦 Using existing employees instance');
-                        if (typeof employees.init === 'function') {
-                            employees.init();
-                            console.log('✅ Employees module initialized (existing instance)');
-                        } else {
-                            console.error('❌ employees.init is not a function');
-                        }
-                    }
-                    else {
-                        console.error('❌ Employees class not defined, attempting dynamic load...');
-                        this.loadModuleScript('employees');
-                    }
-                    break;
-                    
-                case 'outlets':
-                    console.log('🔄 Initializing outlets module...');
-                    // APPLY SAME PATTERN
-                    if (typeof Outlets !== 'undefined') {
-                        console.log('📦 Using Outlets class constructor');
-                        window.outlets = new Outlets();
-                        window.outlets.init();
-                        console.log('✅ Outlets module initialized via constructor');
-                    } 
-                    else if (typeof outlets !== 'undefined' && outlets !== null) {
-                        console.log('📦 Using existing outlets instance');
-                        if (typeof outlets.init === 'function') {
-                            outlets.init();
-                            console.log('✅ Outlets module initialized (existing instance)');
-                        } else {
-                            console.error('❌ outlets.init is not a function');
-                        }
-                    }
-                    else {
-                        console.error('❌ Outlets class not defined, attempting dynamic load...');
-                        this.loadModuleScript('outlets');
-                    }
-                    break;
-                    
                 case 'stock_management':
                     if (typeof stockManagement !== 'undefined' && stockManagement !== null) {
                         stockManagement.init();
                         console.log('✅ Stock Management module initialized');
                     } else {
                         console.error('❌ Stock Management module not available');
+                    }
+                    break;
+                    
+                case 'employees':
+                    if (typeof employees !== 'undefined' && employees !== null) {
+                        employees.init();
+                        console.log('✅ Employees module initialized');
+                    } else {
+                        console.error('❌ Employees module not available');
+                    }
+                    break;
+                    
+                case 'members':
+                    if (typeof members !== 'undefined' && members !== null) {
+                        members.init();
+                        console.log('✅ Members module initialized');
+                    } else {
+                        console.error('❌ Members module not available');
+                    }
+                    break;
+                    
+                case 'outlets':
+                    if (typeof outlets !== 'undefined' && outlets !== null) {
+                        outlets.init();
+                        console.log('✅ Outlets module initialized');
+                    } else {
+                        console.error('❌ Outlets module not available');
                     }
                     break;
                     
@@ -1104,191 +1004,6 @@ initModule(moduleName) {
             console.error('💥 Error initializing module:', moduleName, error);
         }
     }, 300);
-}
-
-// Separate initialization methods untuk better organization
-initializeDashboard() {
-    if (typeof dashboard !== 'undefined' && dashboard !== null) {
-        // Cek jika sudah initialized
-        if (!dashboard.isInitialized) {
-            dashboard.init();
-            console.log('✅ Dashboard module initialized');
-        } else {
-            console.log('ℹ️ Dashboard already initialized');
-        }
-    } else {
-        console.error('❌ Dashboard module not available');
-    }
-}
-
-initializeProducts() {
-    console.log('🔄 Initializing products module...');
-    
-    // Approach 1: Gunakan class constructor
-    if (typeof Products !== 'undefined') {
-        console.log('📦 Using Products class constructor');
-        if (!window.products || !window.products.isInitialized) {
-            window.products = new Products();
-            window.products.init();
-            console.log('✅ Products module initialized via constructor');
-        } else {
-            console.log('ℹ️ Products already initialized');
-        }
-    } 
-    // Approach 2: Gunakan existing instance
-    else if (typeof products !== 'undefined' && products !== null) {
-        console.log('📦 Using existing products instance');
-        if (typeof products.init === 'function' && !products.isInitialized) {
-            products.init();
-            console.log('✅ Products module initialized (existing instance)');
-        } else if (products.isInitialized) {
-            console.log('ℹ️ Products instance already initialized');
-        } else {
-            console.error('❌ products.init is not a function');
-        }
-    }
-    // Approach 3: Dynamic loading
-    else {
-        console.error('❌ Products class not defined, attempting dynamic load...');
-        this.loadModuleScript('products');
-    }
-}
-
-initializeGroupProducts() {
-    console.log('🔄 Initializing group_products module...');
-    
-    if (typeof GroupProducts !== 'undefined') {
-        console.log('📦 Using GroupProducts class constructor');
-        if (!window.groupProducts || !window.groupProducts.isInitialized) {
-            window.groupProducts = new GroupProducts();
-            window.groupProducts.init();
-            console.log('✅ Group products module initialized via constructor');
-        } else {
-            console.log('ℹ️ GroupProducts already initialized');
-        }
-    } 
-    else if (typeof groupProducts !== 'undefined' && groupProducts !== null) {
-        console.log('📦 Using existing groupProducts instance');
-        if (typeof groupProducts.init === 'function' && !groupProducts.isInitialized) {
-            groupProducts.init();
-            console.log('✅ Group products module initialized (existing instance)');
-        } else if (groupProducts.isInitialized) {
-            console.log('ℹ️ GroupProducts instance already initialized');
-        } else {
-            console.error('❌ groupProducts.init is not a function');
-        }
-    }
-    else {
-        console.error('❌ GroupProducts class not defined, attempting dynamic load...');
-        this.loadModuleScript('group_products');
-    }
-}
-
-initializeStockManagement() {
-    if (typeof stockManagement !== 'undefined' && stockManagement !== null) {
-        if (!stockManagement.isInitialized) {
-            stockManagement.init();
-            console.log('✅ Stock Management module initialized');
-        } else {
-            console.log('ℹ️ Stock Management already initialized');
-        }
-    } else {
-        console.error('❌ Stock Management module not available');
-    }
-}
-
-initializeEmployees() {
-    if (typeof employees !== 'undefined' && employees !== null) {
-        if (!employees.isInitialized) {
-            employees.init();
-            console.log('✅ Employees module initialized');
-        } else {
-            console.log('ℹ️ Employees already initialized');
-        }
-    } else {
-        console.error('❌ Employees module not available');
-    }
-}
-
-initializeMembers() {
-    console.log('🔄 Initializing members module...');
-    
-    // Approach 1: Gunakan class constructor
-    if (typeof Members !== 'undefined') {
-        console.log('📦 Using Members class constructor');
-        if (!window.members || !window.members.isInitialized) {
-            window.members = new Members();
-            window.members.init();
-            console.log('✅ Members module initialized via constructor');
-        } else {
-            console.log('ℹ️ Members already initialized');
-        }
-    } 
-    // Approach 2: Gunakan existing instance
-    else if (typeof members !== 'undefined' && members !== null) {
-        console.log('📦 Using existing members instance');
-        if (typeof members.init === 'function' && !members.isInitialized) {
-            members.init();
-            console.log('✅ Members module initialized (existing instance)');
-        } else if (members.isInitialized) {
-            console.log('ℹ️ Members instance already initialized');
-        } else {
-            console.error('❌ members.init is not a function');
-        }
-    }
-    // Approach 3: Dynamic loading
-    else {
-        console.error('❌ Members class not defined, attempting dynamic load...');
-        this.loadModuleScript('members');
-        
-        // Fallback: show user-friendly message
-        const content = document.getElementById('content');
-        if (content) {
-            content.innerHTML += `
-                <div class="bg-yellow-50 border border-yellow-200 rounded-md p-4 mt-4">
-                    <div class="flex">
-                        <div class="flex-shrink-0">
-                            <svg class="h-5 w-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z"/>
-                            </svg>
-                        </div>
-                        <div class="ml-3">
-                            <h3 class="text-sm font-medium text-yellow-800">Module Sedang Dimuat</h3>
-                            <div class="mt-2 text-sm text-yellow-700">
-                                <p>Members module sedang dimuat. Silakan refresh halaman atau tunggu beberapa saat.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-    }
-}
-
-initializeOutlets() {
-    if (typeof outlets !== 'undefined' && outlets !== null) {
-        if (!outlets.isInitialized) {
-            outlets.init();
-            console.log('✅ Outlets module initialized');
-        } else {
-            console.log('ℹ️ Outlets already initialized');
-        }
-    } else {
-        console.error('❌ Outlets module not available');
-    }
-}
-
-initializeReports() {
-    if (typeof reports !== 'undefined' && reports !== null) {
-        if (!reports.isInitialized) {
-            reports.init();
-            console.log('✅ Reports module initialized');
-        } else {
-            console.log('ℹ️ Reports already initialized');
-        }
-    } else {
-        console.error('❌ Reports module not available');
-    }
 }
 
     // Load dashboard statistics
