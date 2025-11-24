@@ -515,34 +515,43 @@ extractDateFromTimestamp(timestamp) {
 
 
 
-    async loadLaporanAbsen() {
-        console.log('Loading laporan absen');
-        
-        try {
-            let query = supabase
-                .from('absen')
-                .select('*')
-                .order('clockin', { ascending: false });
+  async loadLaporanAbsen() {
+    console.log('Loading laporan absen');
+    
+    try {
+        let query = supabase
+            .from('absen')
+            .select('*')
+            .order('tanggal', { ascending: false });
 
-            if (this.filters.startDate) {
-                query = query.gte('clockin', this.filters.startDate + 'T00:00:00Z');
-            }
-            if (this.filters.endDate) {
-                query = query.lte('clockin', this.filters.endDate + 'T23:59:59Z');
-            }
-            if (this.filters.outlet) {
-                query = query.eq('outlet', this.filters.outlet);
-            }
-
-            const { data, error } = await query;
-            if (error) throw error;
-
-            return this.processAbsenData(data || []);
-        } catch (error) {
-            console.warn('Absen table not found, using fallback data');
-            return this.generateFallbackAbsenData();
+        // FILTER KHUSUS UNTUK ABSEN (DD/MM/YYYY)
+        if (this.filters.startDate) {
+            // Convert YYYY-MM-DD ke DD/MM/YYYY untuk table absen
+            const [year, month, day] = this.filters.startDate.split('-');
+            const startDateAbsenFormat = `${day}/${month}/${year}`;
+            query = query.gte('tanggal', startDateAbsenFormat);
+            console.log('⏰ Filter start date (absen):', startDateAbsenFormat);
         }
+        if (this.filters.endDate) {
+            const [year, month, day] = this.filters.endDate.split('-');
+            const endDateAbsenFormat = `${day}/${month}/${year}`;
+            query = query.lte('tanggal', endDateAbsenFormat);
+            console.log('⏰ Filter end date (absen):', endDateAbsenFormat);
+        }
+        if (this.filters.outlet) {
+            query = query.eq('outlet', this.filters.outlet);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        console.log('📊 Data absen ditemukan:', data.length, 'records');
+        return this.processAbsenData(data || []);
+    } catch (error) {
+        console.error('Error load absen:', error);
+        return this.generateFallbackAbsenData();
     }
+}
 
     processAbsenData(data) {
     return data.map(item => {
