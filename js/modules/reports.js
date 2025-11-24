@@ -434,33 +434,39 @@ class Reports {
         }
     }
 
-    processMembercardData(data) {
-        return data.map(item => ({
-            outlet: item.outlet || 'Unknown',
-            kasir: item.kasir_create || item.kasir || 'Unknown',
-            tanggal: item.tanggal_create || item.created_at || 'Unknown',
-            jumlah_membercard: 1
-        }));
-    }
-
-    generateFallbackMembercardData() {
-        const outlets = ['Rempoa', 'Ciputat', 'Pondok Cabe'];
-        const kasirs = ['Hari Suryono', 'Echwan Abdillah', 'Ahmad Fauzi'];
+   processMembercardData(data) {
+    return data.map(item => {
+        // Ambil tanggal dari created_at (format: 2025-10-19 12:02:29.410984+00)
+        const tanggal = item.created_at ? item.created_at.split(' ')[0] : 'Unknown';
         
-        return outlets.map(outlet => {
-            const kasir = kasirs[Math.floor(Math.random() * kasirs.length)];
-            const jumlah = Math.floor(Math.random() * 20) + 10;
-            const today = new Date();
-            const tanggal = today.toISOString().split('T')[0];
-            
-            return {
-                outlet: outlet,
-                kasir: kasir,
-                tanggal: tanggal,
-                jumlah_membercard: jumlah
-            };
-        });
-    }
+        return {
+            outlet: item.outlet || 'Unknown',
+            kasir: item.kasir_create || item.kasir || item.created_by || 'Unknown',
+            tanggal: tanggal,
+            jumlah_membercard: 1
+        };
+    });
+}
+
+   generateFallbackMembercardData() {
+    const outlets = ['Rempoa', 'Ciputat', 'Pondok Cabe'];
+    const kasirs = ['Hari Suryono', 'Echwan Abdillah', 'Ahmad Fauzi'];
+    
+    return outlets.map(outlet => {
+        const kasir = kasirs[Math.floor(Math.random() * kasirs.length)];
+        const jumlah = Math.floor(Math.random() * 20) + 10;
+        const today = new Date();
+        const tanggal = today.toISOString().split('T')[0]; // Format YYYY-MM-DD
+        
+        return {
+            outlet: outlet,
+            kasir: kasir,
+            tanggal: tanggal,
+            jumlah_membercard: jumlah
+        };
+    });
+}
+
 
     async loadLaporanAbsen() {
         console.log('Loading laporan absen');
@@ -942,17 +948,20 @@ class Reports {
     }
 
     getMembercardColumns() {
-        return [
-            { 
-                title: 'Tanggal', 
-                key: 'tanggal',
-                type: 'date'
-            },
-            { title: 'Outlet', key: 'outlet' },
-            { title: 'Kasir', key: 'kasir' },
-            { title: 'Jumlah Membercard', key: 'jumlah_membercard' }
-        ];
-    }
+    return [
+        { 
+            title: 'Tanggal', 
+            key: 'tanggal',
+            formatter: (value) => {
+                if (!value || value === 'Unknown') return '-';
+                return value; // Langsung return value karena format sudah YYYY-MM-DD
+            }
+        },
+        { title: 'Outlet', key: 'outlet' },
+        { title: 'Kasir', key: 'kasir' },
+        { title: 'Jumlah Membercard', key: 'jumlah_membercard' }
+    ];
+}
 
     getAbsenColumns() {
         return [
@@ -1421,21 +1430,21 @@ generateKomisiCSV() {
 }
 
     generateMembercardCSV() {
-        let csvContent = "Tanggal,Outlet,Kasir,Jumlah Membercard\n";
+    let csvContent = "Tanggal,Outlet,Kasir,Jumlah Membercard\n";
+    
+    this.currentData.forEach(item => {
+        const row = [
+            item.tanggal,
+            item.outlet,
+            item.kasir,
+            item.jumlah_membercard
+        ].map(field => `"${field}"`).join(',');
         
-        this.currentData.forEach(item => {
-            const row = [
-                item.tanggal,
-                item.outlet,
-                item.kasir,
-                item.jumlah_membercard
-            ].map(field => `"${field}"`).join(',');
-            
-            csvContent += row + '\n';
-        });
+        csvContent += row + '\n';
+    });
 
-        return csvContent;
-    }
+    return csvContent;
+}
 
     generateAbsenCSV() {
         let csvContent = "Tanggal,Outlet,Karyawan,Jadwal Masuk,Jadwal Pulang,Clock In,Clock Out,Jam Kerja,Keterangan\n";
