@@ -1069,147 +1069,38 @@ extractDateFromTimestamp(timestamp) {
     getPemasukanPengeluaranColumns() {
     return [
         // Kolom Informasi Dasar
-        { 
-            title: 'Tanggal', 
-            key: 'tanggal',
-            type: 'date'
-        },
-        { title: 'Outlet', key: 'outlet' },
-        { title: 'Kasir', key: 'kasir' },
+        { title: '📅 Tanggal', key: 'tanggal', type: 'date' },
+        { title: '🏪 Outlet', key: 'outlet' },
+        { title: '👤 Kasir', key: 'kasir' },
         
-        // === KELOMPOK PEMASUKAN - BIRU ===
-        { 
-            title: 'Omset Cash', 
-            key: 'omset_cash',
-            type: 'currency',
-            className: 'bg-blue-50 text-blue-900 font-medium'
-        },
-        { 
-            title: 'Top Up Kas', 
-            key: 'top_up_kas',
-            type: 'currency',
-            className: 'bg-blue-50 text-blue-900'
-        },
-        { 
-            title: 'Sisa Setoran', 
-            key: 'sisa_setoran',
-            type: 'currency',
-            className: 'bg-blue-50 text-blue-900'
-        },
-        { 
-            title: 'Hutang Komisi', 
-            key: 'hutang_komisi',
-            type: 'currency',
-            className: 'bg-blue-50 text-blue-900'
-        },
-        { 
-            title: 'Pemasukan Lain', 
-            key: 'pemasukan_lain_lain',
-            type: 'currency',
-            className: 'bg-blue-50 text-blue-900'
-        },
-        { 
-            title: 'Note Pemasukan', 
-            key: 'note_pemasukan_lain',
-            className: 'bg-blue-50 text-blue-900'
-        },
+        // PEMASUKAN - Biru (hanya emoji)
+        { title: '💵 Omset Cash', key: 'omset_cash', type: 'currency' },
+        { title: '💰 Top Up Kas', key: 'top_up_kas', type: 'currency' },
+        { title: '🔄 Sisa Setoran', key: 'sisa_setoran', type: 'currency' },
+        { title: '🏦 Hutang Komisi', key: 'hutang_komisi', type: 'currency' },
+        { title: '📥 Pemasukan Lain', key: 'pemasukan_lain_lain', type: 'currency' },
+        { title: '📝 Note Pemasukan', key: 'note_pemasukan_lain' },
         
-        // === KELOMPOK PENGELUARAN - MERAH ===
-        { 
-            title: 'Komisi', 
-            key: 'komisi',
-            type: 'currency',
-            className: 'bg-red-50 text-red-900 font-medium'
-        },
-        { 
-            title: 'UOP', 
-            key: 'uop',
-            type: 'currency',
-            className: 'bg-red-50 text-red-900'
-        },
-        { 
-            title: 'Tips QRIS', 
-            key: 'tips_qris',
-            type: 'currency',
-            className: 'bg-red-50 text-red-900'
-        },
-        { 
-            title: 'Bayar Hutang Komisi', 
-            key: 'bayar_hutang_komisi',
-            type: 'currency',
-            className: 'bg-red-50 text-red-900'
-        },
-        { 
-            title: 'Iuran RT', 
-            key: 'iuran_rt',
-            type: 'currency',
-            className: 'bg-red-50 text-red-900'
-        },
-        { 
-            title: 'Sumbangan', 
-            key: 'sumbangan',
-            type: 'currency',
-            className: 'bg-red-50 text-red-900'
-        },
-        { 
-            title: 'Iuran Sampah', 
-            key: 'iuran_sampah',
-            type: 'currency',
-            className: 'bg-red-50 text-red-900'
-        },
-        { 
-            title: 'Galon', 
-            key: 'galon',
-            type: 'currency',
-            className: 'bg-red-50 text-red-900'
-        },
-        { 
-            title: 'Biaya Admin Setoran', 
-            key: 'biaya_admin_setoran',
-            type: 'currency',
-            className: 'bg-red-50 text-red-900'
-        },
-        { 
-            title: 'Yakult', 
-            key: 'yakult',
-            type: 'currency',
-            className: 'bg-red-50 text-red-900'
-        },
-        // Pengeluaran Lain dipindah ke sini (setelah Yakult)
-        { 
-            title: 'Pengeluaran Lain', 
-            key: 'pengeluaran_lain_lain',
-            type: 'currency',
-            className: 'bg-red-50 text-red-900 font-medium'
-        },
-        { 
-            title: 'Note Pengeluaran', 
-            key: 'note_pengeluaran_lain',
-            className: 'bg-red-50 text-red-900'
-        },
+        // PENGELUARAN - Merah (hanya emoji)
+        { title: '💸 Komisi', key: 'komisi', type: 'currency' },
+        { title: '👥 UOP', key: 'uop', type: 'currency' },
+        { title: '💳 Tips QRIS', key: 'tips_qris', type: 'currency' },
+        { title: '💳 Bayar Hutang', key: 'bayar_hutang_komisi', type: 'currency' },
+        { title: '🏘️ Iuran RT', key: 'iuran_rt', type: 'currency' },
+        { title: '🎁 Sumbangan', key: 'sumbangan', type: 'currency' },
+        { title: '🗑️ Iuran Sampah', key: 'iuran_sampah', type: 'currency' },
+        { title: '💧 Galon', key: 'galon', type: 'currency' },
+        { title: '🏦 Biaya Admin', key: 'biaya_admin_setoran', type: 'currency' },
+        { title: '🥤 Yakult', key: 'yakult', type: 'currency' },
+        { title: '📤 Pengeluaran Lain', key: 'pengeluaran_lain_lain', type: 'currency' },
+        { title: '📝 Note Pengeluaran', key: 'note_pengeluaran_lain' },
         
-        // === KELOMPOK TOTAL - HIJAU ===
-        { 
-            title: 'Total Pemasukan', 
-            key: 'pemasukan',
-            type: 'currency',
-            className: 'bg-green-50 text-green-900 font-semibold'
-        },
-        { 
-            title: 'Total Pengeluaran', 
-            key: 'pengeluaran',
-            type: 'currency',
-            className: 'bg-green-50 text-green-900 font-semibold'
-        },
-        { 
-            title: 'Saldo', 
-            key: 'saldo',
-            type: 'currency',
-            className: 'bg-green-50 text-green-900 font-semibold'
-        }
+        // TOTAL - Hijau (hanya emoji)
+        { title: '✅ Total Pemasukan', key: 'pemasukan', type: 'currency' },
+        { title: '❌ Total Pengeluaran', key: 'pengeluaran', type: 'currency' },
+        { title: '💰 Saldo', key: 'saldo', type: 'currency' }
     ];
 }
-
 
     getTransaksiCancelColumns() {
         return [
@@ -1524,11 +1415,17 @@ generateKomisiCSV() {
     let csvContent = "Tanggal,Outlet,Kasir,Jumlah Membercard\n";
     
     this.currentData.forEach(item => {
+        // Pastikan format tanggal konsisten untuk CSV
+        const tanggal = this.formatDateForCSV(item.tanggal);
+        const outlet = item.outlet || 'Unknown';
+        const kasir = item.kasir || 'Unknown';
+        const jumlah = item.jumlah_membercard || 0;
+        
         const row = [
-            item.tanggal,
-            item.outlet,
-            item.kasir,
-            item.jumlah_membercard
+            tanggal,
+            outlet,
+            kasir,
+            jumlah
         ].map(field => `"${field}"`).join(',');
         
         csvContent += row + '\n';
@@ -1536,6 +1433,20 @@ generateKomisiCSV() {
 
     return csvContent;
 }
+
+// Helper method untuk format tanggal CSV
+formatDateForCSV(dateString) {
+    if (!dateString || dateString === 'Unknown') return 'Unknown';
+    
+    if (dateString.includes('T')) {
+        return dateString.split('T')[0];
+    } else if (dateString.includes(' ')) {
+        return dateString.split(' ')[0];
+    } else {
+        return dateString;
+    }
+}
+
 
     generateAbsenCSV() {
         let csvContent = "Tanggal,Outlet,Karyawan,Jadwal Masuk,Jadwal Pulang,Clock In,Clock Out,Jam Kerja,Keterangan\n";
