@@ -596,20 +596,29 @@ class Members {
         const form = document.getElementById('member-form');
         const formData = new FormData(form);
         
-        // Create data object
+        // Create data object - FIXED: gunakan nama kolom yang sesuai dengan database
         const data = {
             nama: formData.get('nama'),
             telepon: formData.get('telepon'),
             email: formData.get('email'),
             outlet: formData.get('outlet'),
             alamat: formData.get('alamat'),
-            status: formData.get('status') || 'active'
+            status: formData.get('status') || 'active',
+            poin: 0, // Default value untuk poin
+            created_at: new Date().toISOString() // Tambahkan timestamp
         };
 
         console.log('Member data to save:', data);
 
+        // Validasi data sebelum save
+        if (!data.nama || !data.telepon || !data.outlet) {
+            Notifications.error('Nama, telepon, dan outlet harus diisi');
+            return;
+        }
+
         Helpers.showLoading();
 
+        // FIXED: Gunakan insert tanpa parameter columns
         const { data: result, error } = await supabase
             .from('membercard')
             .insert([data])
@@ -617,8 +626,32 @@ class Members {
 
         if (error) {
             console.error('Supabase insert error:', error);
-            throw error;
+            
+            // Handle specific errors
+            if (error.code === '23505') {
+                Notifications.error('Member dengan telepon atau email tersebut sudah ada');
+            } else if (error.code === '23503') {
+                Notifications.error('Outlet tidak valid');
+            } else {
+                throw error;
+            }
+            return;
         }
+
+        console.log('Save successful:', result);
+
+        modal.close();
+        
+        // Refresh data setelah save berhasil
+        await this.loadData();
+        Notifications.success('Member berhasil ditambahkan!');
+
+    } catch (error) {
+        Helpers.hideLoading();
+        console.error('Save member error:', error);
+        Notifications.error('Gagal menambah member: ' + error.message);
+    }
+}
 
         console.log('Save successful:', result);
 
