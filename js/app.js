@@ -881,65 +881,115 @@ loadStockManagement() {
     `;
 }
 
-    // Update initModule method untuk include dashboard
-    initModule(moduleName) {
-        console.log('Initializing module JS:', moduleName);
-        switch (moduleName) {
-            case 'dashboard':
-                if (typeof dashboard !== 'undefined') {
-                    dashboard.init();
-                    console.log('Dashboard module initialized');
-                } else {
-                    console.error('Dashboard module not defined');
-                }
-                break;
-            case 'products':
-                if (typeof products !== 'undefined') {
-                    products.init();
-                    console.log('Products module initialized');
-                }
-                break;
-            case 'group_products':
-                if (typeof groupProducts !== 'undefined') {
-                    groupProducts.init();
-                    console.log('Group products module initialized');
-                }
-                break;
-		case 'stock_management':
-            if (typeof stockManagement !== 'undefined') {
-                stockManagement.init();
-                console.log('Stock Management module initialized');
+   // Update initModule method - FIXED VERSION
+initModule(moduleName) {
+    console.log('Initializing module JS:', moduleName);
+    console.log('Available modules:', {
+        GroupProducts: typeof GroupProducts,
+        groupProducts: typeof groupProducts,
+        products: typeof products,
+        dashboard: typeof dashboard
+    });
+    
+    // Beri timeout untuk memastikan DOM ter-render sepenuhnya
+    setTimeout(() => {
+        try {
+            switch (moduleName) {
+                case 'dashboard':
+                    if (typeof dashboard !== 'undefined' && dashboard !== null) {
+                        dashboard.init();
+                        console.log('✅ Dashboard module initialized');
+                    } else {
+                        console.error('❌ Dashboard module not available');
+                    }
+                    break;
+                    
+                case 'products':
+                    if (typeof products !== 'undefined' && products !== null) {
+                        products.init();
+                        console.log('✅ Products module initialized');
+                    } else {
+                        console.error('❌ Products module not available');
+                    }
+                    break;
+                    
+                case 'group_products':
+                    console.log('🔄 Initializing group_products module...');
+                    // Coba multiple approaches
+                    if (typeof GroupProducts !== 'undefined') {
+                        console.log('📦 Using GroupProducts class constructor');
+                        window.groupProducts = new GroupProducts();
+                        window.groupProducts.init();
+                        console.log('✅ Group products module initialized via constructor');
+                    } 
+                    else if (typeof groupProducts !== 'undefined' && groupProducts !== null) {
+                        console.log('📦 Using existing groupProducts instance');
+                        if (typeof groupProducts.init === 'function') {
+                            groupProducts.init();
+                            console.log('✅ Group products module initialized (existing instance)');
+                        } else {
+                            console.error('❌ groupProducts.init is not a function');
+                        }
+                    }
+                    else {
+                        console.error('❌ GroupProducts class not defined, attempting dynamic load...');
+                        this.loadModuleScript('group_products');
+                    }
+                    break;
+                    
+                case 'stock_management':
+                    if (typeof stockManagement !== 'undefined' && stockManagement !== null) {
+                        stockManagement.init();
+                        console.log('✅ Stock Management module initialized');
+                    } else {
+                        console.error('❌ Stock Management module not available');
+                    }
+                    break;
+                    
+                case 'employees':
+                    if (typeof employees !== 'undefined' && employees !== null) {
+                        employees.init();
+                        console.log('✅ Employees module initialized');
+                    } else {
+                        console.error('❌ Employees module not available');
+                    }
+                    break;
+                    
+                case 'members':
+                    if (typeof members !== 'undefined' && members !== null) {
+                        members.init();
+                        console.log('✅ Members module initialized');
+                    } else {
+                        console.error('❌ Members module not available');
+                    }
+                    break;
+                    
+                case 'outlets':
+                    if (typeof outlets !== 'undefined' && outlets !== null) {
+                        outlets.init();
+                        console.log('✅ Outlets module initialized');
+                    } else {
+                        console.error('❌ Outlets module not available');
+                    }
+                    break;
+                    
+                case 'reports':
+                    if (typeof reports !== 'undefined' && reports !== null) {
+                        reports.init();
+                        console.log('✅ Reports module initialized');
+                    } else {
+                        console.error('❌ Reports module not available');
+                    }
+                    break;
+                    
+                default:
+                    console.log('ℹ️ No specific JS for module:', moduleName);
             }
-            break;
-            case 'employees':
-                if (typeof employees !== 'undefined') {
-                    employees.init();
-                    console.log('Employees module initialized');
-                }
-                break;
-            case 'members':
-                if (typeof members !== 'undefined') {
-                    members.init();
-                    console.log('Members module initialized');
-                }
-                break;
-            case 'outlets':
-                if (typeof outlets !== 'undefined') {
-                    outlets.init();
-                    console.log('Outlets module initialized');
-                }
-                break;
-            case 'reports':
-                if (typeof reports !== 'undefined') {
-                    reports.init();
-                    console.log('Reports module initialized');
-                }
-                break;
-            default:
-                console.log('No specific JS for module:', moduleName);
+        } catch (error) {
+            console.error('💥 Error initializing module:', moduleName, error);
         }
-    }
-
+    }, 300); // Increased delay untuk pastikan semua script terload
+}
     // Load dashboard statistics
     async loadDashboardStats() {
         console.log('Loading dashboard statistics');
