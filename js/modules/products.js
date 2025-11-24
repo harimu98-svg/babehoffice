@@ -123,92 +123,98 @@ class Products {
         console.log('Initializing products table...');
         
         const columns = [
-            { 
-                title: 'Outlet', 
-                key: 'outlet',
-                formatter: (value) => `<span class="font-medium">${value || '-'}</span>`
-            },
-            { 
-                title: 'Nama Produk', 
-                key: 'nama_produk',
-                formatter: (value) => `<span class="text-gray-900 font-semibold">${value || '-'}</span>`
-            },
-            { 
-                title: 'Group Produk', 
-                key: 'group_produk',
-                formatter: (value) => `<span class="text-gray-700">${value || '-'}</span>`
-            },
-            { 
-                title: 'Foto', 
-                key: 'foto_url',
-                formatter: (value) => {
-                    if (!value) return '<span class="text-gray-400 text-sm">-</span>';
-                    return `
-                        <img src="${value}" alt="Produk" class="w-10 h-10 object-cover rounded-md cursor-pointer border" 
-                             onclick="window.products.showImagePreview('${value}')">
-                    `;
-                },
-                width: '80px'
-            },
-            { 
-                title: 'Harga Beli', 
-                key: 'harga_beli',
-                formatter: (value) => value ? `Rp ${Helpers.formatNumber(value)}` : 'Rp 0'
-            },
-            { 
-                title: 'Harga Jual', 
-                key: 'harga_jual',
-                formatter: (value) => value ? `Rp ${Helpers.formatNumber(value)}` : 'Rp 0'
-            },
-            { 
-                title: 'Stok', 
-                key: 'stok',
-                formatter: (value, row) => {
-                    // Jika stok NULL atau inventory nonaktif, tampilkan Unlimited
-                    if (value === null || value === undefined || !row.inventory) {
-                        return `
-                            <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800 border border-blue-200">
-                                📦 Unlimited
-                            </span>
-                        `;
-                    }
-                    return `
-                        <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800 border border-green-200">
-                            ${value || 0}
-                        </span>
-                    `;
-                }
-            },
-            { 
-                title: 'Inventory', 
-                key: 'inventory',
-                formatter: (value) => value ? 
-                    '<span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800 border border-green-200">✅ Aktif</span>' :
-                    '<span class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800 border border-gray-200">❌ Nonaktif</span>'
-            },
-            { 
-                title: 'Status', 
-                key: 'status',
-                formatter: (value) => {
-                    const isActive = value === 'active';
-                    return `
-                        <span class="px-2 py-1 text-xs rounded-full ${
-                            isActive 
-                                ? 'bg-green-100 text-green-800 border border-green-200' 
-                                : 'bg-red-100 text-red-800 border border-red-200'
-                        }">
-                            ${isActive ? '🟢 Aktif' : '🔴 Nonaktif'}
-                        </span>
-                    `;
-                }
-            },
-            {
-                title: 'Aksi',
-                key: 'id',
-                formatter: (id, row) => this.getActionButtons(id, row),
-                width: '150px'
+    { 
+        title: 'Outlet', 
+        key: 'outlet',
+        formatter: (value) => `<span class="font-medium">${value || '-'}</span>`
+    },
+    { 
+        title: 'Nama Produk', 
+        key: 'nama_produk',
+        formatter: (value) => `<span class="text-gray-900 font-semibold">${value || '-'}</span>`
+    },
+    { 
+        title: 'Group Produk', 
+        key: 'group_produk',
+        formatter: (value) => `<span class="text-gray-700">${value || '-'}</span>`
+    },
+    { 
+        title: 'Foto', 
+        key: 'foto_url',
+        formatter: (value) => {
+            if (!value) return '<span class="text-gray-400 text-sm">-</span>';
+            return `
+                <img src="${value}" alt="Produk" class="w-10 h-10 object-cover rounded-md cursor-pointer border" 
+                     onclick="window.products.showImagePreview('${value}')">
+            `;
+        },
+        width: '80px'
+    },
+    { 
+        title: 'Harga Beli', 
+        key: 'harga_beli',
+        formatter: (value) => {
+            if (!value) return 'Rp 0';
+            return `Rp ${value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")}`;
+        }
+    },
+    { 
+        title: 'Harga Jual', 
+        key: 'harga_jual',
+        formatter: (value) => {
+            if (!value) return 'Rp 0';
+            return `Rp ${value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")}`;
+        }
+    },
+    { 
+        title: 'Stok', 
+        key: 'stok',
+        formatter: (value, row) => {
+            // Jika stok NULL atau inventory nonaktif, tampilkan Unlimited
+            if (value === null || value === undefined || !row.inventory) {
+                return `
+                    <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+                        📦 Unlimited
+                    </span>
+                `;
             }
-        ];
+            return `
+                <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800 border border-green-200">
+                    ${value || 0}
+                </span>
+            `;
+        }
+    },
+    { 
+        title: 'Inventory', 
+        key: 'inventory',
+        formatter: (value) => value ? 
+            '<span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800 border border-green-200">✅ Aktif</span>' :
+            '<span class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800 border border-gray-200">❌ Nonaktif</span>'
+    },
+    { 
+        title: 'Status', 
+        key: 'status',
+        formatter: (value) => {
+            const isActive = value === 'active';
+            return `
+                <span class="px-2 py-1 text-xs rounded-full ${
+                    isActive 
+                        ? 'bg-green-100 text-green-800 border border-green-200' 
+                        : 'bg-red-100 text-red-800 border border-red-200'
+                }">
+                    ${isActive ? '🟢 Aktif' : '🔴 Nonaktif'}
+                </span>
+            `;
+        }
+    },
+    {
+        title: 'Aksi',
+        key: 'id',
+        formatter: (id, row) => this.getActionButtons(id, row),
+        width: '150px'
+    }
+];
 
         // Cek jika DataTable class tersedia
         if (typeof DataTable === 'undefined') {
