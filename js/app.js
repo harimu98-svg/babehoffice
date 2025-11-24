@@ -1,10 +1,25 @@
 // Main application
 class App {
     constructor() {
-        this.currentModule = 'dashboard';
-        this.outlets = []; // Tambah properti outlets
+    this.currentModule = 'dashboard';
+    this.outlets = [];
+    this.modules = {};
+    this.moduleTimeouts = {}; // Tambah ini untuk manage timeouts
+    
+    console.log('🔄 App constructor called');
+    
+    // Tunggu sampai DOM fully ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('✅ DOM fully loaded, initializing app...');
+            this.init();
+        });
+    } else {
+        console.log('✅ DOM already ready, initializing app...');
         this.init();
     }
+}
+
 
     // Initialize application
     async init() {
