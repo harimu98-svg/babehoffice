@@ -435,37 +435,84 @@ class Reports {
     }
 
    processMembercardData(data) {
-    return data.map(item => {
-        // Ambil tanggal dari created_at (format: 2025-10-19 12:02:29.410984+00)
-        const tanggal = item.created_at ? item.created_at.split(' ')[0] : 'Unknown';
+    const groupedData = {};
+    
+    data.forEach(item => {
+        // Extract tanggal dari created_at
+        const tanggal = this.extractDateFromTimestamp(item.created_at);
+        const outlet = item.outlet || 'Unknown';
+        const kasir = item.kasir_create || item.kasir || item.created_by || 'Unknown';
         
-        return {
-            outlet: item.outlet || 'Unknown',
-            kasir: item.kasir_create || item.kasir || item.created_by || 'Unknown',
-            tanggal: tanggal,
-            jumlah_membercard: 1
-        };
+        const key = `${tanggal}-${outlet}-${kasir}`;
+        
+        if (!groupedData[key]) {
+            groupedData[key] = {
+                tanggal: tanggal,
+                outlet: outlet,
+                kasir: kasir,
+                jumlah_membercard: 0
+            };
+        }
+        
+        groupedData[key].jumlah_membercard += 1;
     });
+    
+    return Object.values(groupedData);
 }
 
-   generateFallbackMembercardData() {
-    const outlets = ['Rempoa', 'Ciputat', 'Pondok Cabe'];
-    const kasirs = ['Hari Suryono', 'Echwan Abdillah', 'Ahmad Fauzi'];
+// Helper method untuk extract tanggal dari berbagai format timestamp
+extractDateFromTimestamp(timestamp) {
+    if (!timestamp) return 'Unknown';
     
-    return outlets.map(outlet => {
-        const kasir = kasirs[Math.floor(Math.random() * kasirs.length)];
-        const jumlah = Math.floor(Math.random() * 20) + 10;
-        const today = new Date();
-        const tanggal = today.toISOString().split('T')[0]; // Format YYYY-MM-DD
-        
-        return {
-            outlet: outlet,
-            kasir: kasir,
-            tanggal: tanggal,
-            jumlah_membercard: jumlah
-        };
-    });
+    if (timestamp.includes('T')) {
+        return timestamp.split('T')[0];
+    } else if (timestamp.includes(' ')) {
+        return timestamp.split(' ')[0];
+    } else {
+        return timestamp;
+    }
 }
+
+
+  processMembercardData(data) {
+    const groupedData = {};
+    
+    data.forEach(item => {
+        // Extract tanggal dari created_at
+        const tanggal = this.extractDateFromTimestamp(item.created_at);
+        const outlet = item.outlet || 'Unknown';
+        const kasir = item.kasir_create || item.kasir || item.created_by || 'Unknown';
+        
+        const key = `${tanggal}-${outlet}-${kasir}`;
+        
+        if (!groupedData[key]) {
+            groupedData[key] = {
+                tanggal: tanggal,
+                outlet: outlet,
+                kasir: kasir,
+                jumlah_membercard: 0
+            };
+        }
+        
+        groupedData[key].jumlah_membercard += 1;
+    });
+    
+    return Object.values(groupedData);
+}
+
+// Helper method untuk extract tanggal dari berbagai format timestamp
+extractDateFromTimestamp(timestamp) {
+    if (!timestamp) return 'Unknown';
+    
+    if (timestamp.includes('T')) {
+        return timestamp.split('T')[0];
+    } else if (timestamp.includes(' ')) {
+        return timestamp.split(' ')[0];
+    } else {
+        return timestamp;
+    }
+}
+
 
 
     async loadLaporanAbsen() {
