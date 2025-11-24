@@ -356,66 +356,74 @@ class Reports {
         return Object.values(result);
     }
 
-    async loadLaporanKomisi() {
-        console.log('Loading laporan komisi');
-        
-        let query = supabase
-            .from('transaksi_detail')
-            .select('*')
-            .order('order_date', { ascending: false });
+   async loadLaporanKomisi() {
+    console.log('Loading laporan komisi');
+    
+    let query = supabase
+        .from('transaksi_detail')
+        .select('*')
+        .order('order_date', { ascending: false });
 
-        // Apply filters
-        if (this.filters.startDate) {
-            query = query.gte('order_date', this.filters.startDate);
-        }
-        if (this.filters.endDate) {
-            query = query.lte('order_date', this.filters.endDate);
-        }
-        if (this.filters.outlet) {
-            query = query.eq('outlet', this.filters.outlet);
-        }
-
-        const { data, error } = await query;
-        if (error) throw error;
-
-        return this.processKomisiData(data || []);
+    // Apply filters
+    if (this.filters.startDate) {
+        query = query.gte('order_date', this.filters.startDate);
+    }
+    if (this.filters.endDate) {
+        query = query.lte('order_date', this.filters.endDate);
+    }
+    if (this.filters.outlet) {
+        query = query.eq('outlet', this.filters.outlet);
     }
 
+    const { data, error } = await query;
+    if (error) throw error;
+
+    return this.processKomisiData(data || []);
+}
     processKomisiData(data) {
-        const result = {};
+    const result = {};
+    
+    data.forEach(item => {
+        const outlet = item.outlet || 'Unknown';
+        const serveBy = item.serve_by || 'Unknown';
+        const kasir = item.kasir || 'Unknown';
+        const tanggal = item.order_date ? item.order_date.split('T')[0] : 'Unknown';
+        const amount = parseFloat(item.amount) || 0;
+        const isCompleted = item.status === 'completed';
+        const isUOP = item.item_group === 'UOP'; // Cek apakah UOP
         
-        data.forEach(item => {
-            const tanggal = item.order_date ? item.order_date.split('T')[0] : 'Unknown'; 
-            const outlet = item.outlet || 'Unknown';
-            const serveBy = item.serve_by || 'Unknown';
-            const kasir = item.kasir || 'Unknown';
-            const amount = parseFloat(item.amount) || 0;
-            const isCompleted = item.status === 'completed';
-            
-            if (!isCompleted) return;
-            
-           const key = `${tanggal}-${outlet}-${serveBy}-${kasir}`;
-            
-            if (!result[key]) {
-                result[key] = {
-                    tanggal: tanggal, 
-                    outlet: outlet,
-                    serve_by: serveBy,
-                    kasir: kasir,
-                    total_amount: 0,
-                    total_komisi: 0
-                };
-            }
-            
-            result[key].total_amount += amount;
-            
-            // Hitung komisi (contoh: 10% dari total amount)
+        if (!isCompleted) return;
+        
+        const key = `${outlet}-${serveBy}-${kasir}-${tanggal}`;
+        
+        if (!result[key]) {
+            result[key] = {
+                tanggal: tanggal,        // Tambah kolom tanggal
+                outlet: outlet,          // Tambah kolom outlet
+                serve_by: serveBy,       // Tambah kolom serve_by
+                kasir: kasir,
+                total_amount: 0,
+                total_uop: 0,           // Tambah kolom UOP
+                total_komisi: 0
+            };
+        }
+        
+        result[key].total_amount += amount;
+        
+        // Hitung UOP jika item_group = UOP
+        if (isUOP) {
+            result[key].total_uop += amount;
+        }
+        
+        // Hitung komisi (10% dari total amount, kecuali UOP)
+        if (!isUOP) {
             const komisi = amount * 0.1;
             result[key].total_komisi += komisi;
-        });
-        
-        return Object.values(result);
-    }
+        }
+    });
+    
+    return Object.values(result);
+}
 
     async loadLaporanMembercard() {
         console.log('Loading laporan membercard');
@@ -1122,27 +1130,35 @@ processOrderTransaksiData(data) {
     }
 
     getKomisiColumns() {
-        return [
-            { 
-            title: 'Tanggal',  // KOLOM BARU
+    return [
+        { 
+            title: 'Tanggal', 
             key: 'tanggal',
             type: 'date'
         },
-            { title: 'Outlet', key: 'outlet' },
-            { title: 'Served By', key: 'serve_by' },
-            { title: 'Kasir', key: 'kasir' },
-            { 
-                title: 'Total Amount', 
-                key: 'total_amount',
-                type: 'currency'
-            },
-            { 
-                title: 'Total Komisi', 
-                key: 'total_komisi',
-                type: 'currency'
+        { title: 'Outlet', key: 'outlet' },
+        { title: 'Serve By', key: 'serve_by' },
+        { title: 'Kasir', key: 'kasir' },
+        { 
+            title: 'Total Amount', 
+            key: 'total_amount',
+            type: 'currency'
+        },
+        { 
+            title: 'UOP', 
+            key: 'total_uop',
+            type: 'currency',
+            formatter: (value) => {
+                return value > 0 ? Helpers.formatCurrency(value) : '-';
             }
-        ];
-    }
+        },
+        { 
+            title: 'Total Komisi', 
+            key: 'total_komisi',
+            type: 'currency'
+        }
+    ];
+}
 
     getMembercardColumns() {
     return [
@@ -1691,15 +1707,16 @@ processOrderTransaksiData(data) {
     }
 
 generateKomisiCSV() {
-    let csvContent = "Tanggal,Outlet,Served By,Kasir,Total Amount,Total Komisi\n"; // TAMBAH TANGGAL
+    let csvContent = "Tanggal,Outlet,Serve By,Kasir,Total Amount,UOP,Total Komisi\n";
     
     this.currentData.forEach(item => {
         const row = [
-            item.tanggal, // TAMBAH INI
+            item.tanggal,
             item.outlet,
             item.serve_by,
             item.kasir,
             item.total_amount,
+            item.total_uop || 0,
             item.total_komisi
         ].map(field => `"${field}"`).join(',');
         
