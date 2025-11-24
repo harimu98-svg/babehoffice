@@ -380,6 +380,7 @@ class Reports {
         const result = {};
         
         data.forEach(item => {
+            const tanggal = item.order_date ? item.order_date.split('T')[0] : 'Unknown'; 
             const outlet = item.outlet || 'Unknown';
             const serveBy = item.serve_by || 'Unknown';
             const kasir = item.kasir || 'Unknown';
@@ -388,10 +389,11 @@ class Reports {
             
             if (!isCompleted) return;
             
-            const key = `${outlet}-${serveBy}-${kasir}`;
+           const key = `${tanggal}-${outlet}-${serveBy}-${kasir}`;
             
             if (!result[key]) {
                 result[key] = {
+                    tanggal: tanggal, 
                     outlet: outlet,
                     serve_by: serveBy,
                     kasir: kasir,
@@ -918,6 +920,11 @@ class Reports {
 
     getKomisiColumns() {
         return [
+            { 
+            title: 'Tanggal',  // KOLOM BARU
+            key: 'tanggal',
+            type: 'date'
+        },
             { title: 'Outlet', key: 'outlet' },
             { title: 'Served By', key: 'serve_by' },
             { title: 'Kasir', key: 'kasir' },
@@ -1394,23 +1401,24 @@ class Reports {
         return csvContent;
     }
 
-    generateKomisiCSV() {
-        let csvContent = "Outlet,Served By,Kasir,Total Amount,Total Komisi\n";
+generateKomisiCSV() {
+    let csvContent = "Tanggal,Outlet,Served By,Kasir,Total Amount,Total Komisi\n"; // TAMBAH TANGGAL
+    
+    this.currentData.forEach(item => {
+        const row = [
+            item.tanggal, // TAMBAH INI
+            item.outlet,
+            item.serve_by,
+            item.kasir,
+            item.total_amount,
+            item.total_komisi
+        ].map(field => `"${field}"`).join(',');
         
-        this.currentData.forEach(item => {
-            const row = [
-                item.outlet,
-                item.serve_by,
-                item.kasir,
-                item.total_amount,
-                item.total_komisi
-            ].map(field => `"${field}"`).join(',');
-            
-            csvContent += row + '\n';
-        });
+        csvContent += row + '\n';
+    });
 
-        return csvContent;
-    }
+    return csvContent;
+}
 
     generateMembercardCSV() {
         let csvContent = "Tanggal,Outlet,Kasir,Jumlah Membercard\n";
