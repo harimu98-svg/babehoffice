@@ -545,45 +545,105 @@ extractDateFromTimestamp(timestamp) {
     }
 
     processAbsenData(data) {
-        return data.map(item => {
-            const clockin = new Date(item.clockin);
-            const clockout = item.clockout ? new Date(item.clockout) : null;
-            
-            const diffMs = clockout ? clockout - clockin : 0;
-            const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-            const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-            const jamKerja = clockout ? `${diffHours} jam ${diffMinutes} menit` : 'Masih bekerja';
-            
-            // Hitung keterangan
-            let keterangan = '';
-            const jadwalMasuk = new Date(clockin);
-            jadwalMasuk.setHours(8, 0, 0, 0); // Jadwal masuk jam 8:00
-            
-            if (clockin > jadwalMasuk) {
-                const telatMs = clockin - jadwalMasuk;
-                const telatMenit = Math.floor(telatMs / (1000 * 60));
-                keterangan = `Terlambat ${telatMenit} menit`;
-            } else {
-                keterangan = 'Tepat waktu';
+    return data.map(item => {
+        // Handle format tanggal dari kolom 'tanggal' (08/10/2025)
+        let tanggal = 'Unknown';
+        if (item.tanggal) {
+            // Format: DD/MM/YYYY -> YYYY-MM-DD
+            const parts = item.tanggal.split('/');
+            if (parts.length === 3) {
+                const day = parts[0].padStart(2, '0');
+                const month = parts[1].padStart(2, '0');
+                const year = parts[2];
+                tanggal = `${year}-${month}-${day}`;
             }
+        }
+        
+        // Gunakan 'nama' sebagai karyawan
+        const karyawan = item.nama || 'Unknown';
+        
+        // Default jadwal
+        const jadwalMasuk = '09:00';
+        const jadwalPulang = '21:00';
+        
+        // Handle clockin (format: "11:10")
+        let clockinTime = item.clockin || '';
+        let clockinFull = '';
+        if (clockinTime && tanggal !== 'Unknown') {
+            clockinFull = `${tanggal}T${clockinTime.padStart(5, '0')}:00`; // Pastikan format HH:MM
+        }
+        
+        // Handle clockout (format: "17:30")
+        let clockoutTime = item.clockout || '';
+        let clockoutFull = '';
+        if (clockoutTime && tanggal !== 'Unknown') {
+            clockoutFull = `${tanggal}T${clockoutTime.padStart(5, '0')}:00`;
+        }
+        
+        // Hitung jam kerja dari clockout - clockin
+        let jamKerja = 'Masih bekerja';
+        if (clockinFull && clockoutFull) {
+            try {
+                const clockin = new Date(clockinFull);
+                const clockout = new Date(clockoutFull);
+                
+                if (!isNaN(clockin.getTime()) && !isNaN(clockout.getTime())) {
+                    const diffMs = clockout - clockin;
+                    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+                    jamKerja = `${diffHours} jam ${diffMinutes} menit`;
+                }
+            } catch (e) {
+                console.warn('Error hitung jam kerja:', e);
+                jamKerja = 'Error hitung';
+            }
+        }
+        
+        // Hitung keterangan
+        let keterangan = '';
+        
+        if (clockinTime) {
+            const [clockinHours, clockinMinutes] = clockinTime.split(':').map(Number);
+            const [jadwalMasukHours, jadwalMasukMinutes] = jadwalMasuk.split(':').map(Number);
             
-            // Jadwal pulang default jam 17:00
-            const jadwalPulang = new Date(clockin);
-            jadwalPulang.setHours(17, 0, 0, 0);
+            // Terlambat masuk jika clockin > jadwal masuk
+            if (clockinHours > jadwalMasukHours || 
+                (clockinHours === jadwalMasukHours && clockinMinutes > jadwalMasukMinutes)) {
+                const telatMenit = (clockinHours - jadwalMasukHours) * 60 + (clockinMinutes - jadwalMasukMinutes);
+                keterangan = `Terlambat ${telatMenit} menit`;
+            }
+        }
+        
+        if (clockoutTime && keterangan === '') {
+            const [clockoutHours, clockoutMinutes] = clockoutTime.split(':').map(Number);
+            const [jadwalPulangHours, jadwalPulangMinutes] = jadwalPulang.split(':').map(Number);
             
-            return {
-                outlet: item.outlet || 'Unknown',
-                karyawan: item.karyawan || item.nama_karyawan || 'Unknown',
-                tanggal: clockin.toISOString().split('T')[0],
-                jadwal_masuk: '08:00',
-                jadwal_pulang: '17:00',
-                clockin: item.clockin,
-                clockout: item.clockout,
-                jam_kerja: jamKerja,
-                keterangan: keterangan
-            };
-        });
-    }
+            // Pulang cepat jika clockout < jadwal pulang
+            if (clockoutHours < jadwalPulangHours || 
+                (clockoutHours === jadwalPulangHours && clockoutMinutes < jadwalPulangMinutes)) {
+                const cepatMenit = (jadwalPulangHours - clockoutHours) * 60 + (jadwalPulangMinutes - clockoutMinutes);
+                keterangan = `Pulang Cepat ${cepatMenit} menit`;
+            }
+        }
+        
+        // Jika tidak ada keterangan khusus
+        if (keterangan === '' && clockinTime) {
+            keterangan = 'Tepat waktu';
+        }
+        
+        return {
+            outlet: item.outlet || 'Unknown',
+            karyawan: karyawan,
+            tanggal: tanggal,
+            jadwal_masuk: jadwalMasuk,
+            jadwal_pulang: jadwalPulang,
+            clockin: clockinFull,
+            clockout: clockoutFull,
+            jam_kerja: jamKerja,
+            keterangan: keterangan
+        };
+    });
+}
 
     generateFallbackAbsenData() {
         const outlets = ['Rempoa', 'Ciputat', 'Pondok Cabe'];
