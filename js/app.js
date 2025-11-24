@@ -886,6 +886,7 @@ initModule(moduleName) {
     console.log('Initializing module JS:', moduleName);
     console.log('Available modules:', {
         GroupProducts: typeof GroupProducts,
+        Products: typeof Products,
         groupProducts: typeof groupProducts,
         products: typeof products,
         dashboard: typeof dashboard
@@ -905,17 +906,31 @@ initModule(moduleName) {
                     break;
                     
                 case 'products':
-                    if (typeof products !== 'undefined' && products !== null) {
-                        products.init();
-                        console.log('✅ Products module initialized');
-                    } else {
-                        console.error('❌ Products module not available');
+                    console.log('🔄 Initializing products module...');
+                    // CEK MULTIPLE APPROACHES SEPERTI GROUP_PRODUCTS
+                    if (typeof Products !== 'undefined') {
+                        console.log('📦 Using Products class constructor');
+                        window.products = new Products();
+                        window.products.init();
+                        console.log('✅ Products module initialized via constructor');
+                    } 
+                    else if (typeof products !== 'undefined' && products !== null) {
+                        console.log('📦 Using existing products instance');
+                        if (typeof products.init === 'function') {
+                            products.init();
+                            console.log('✅ Products module initialized (existing instance)');
+                        } else {
+                            console.error('❌ products.init is not a function');
+                        }
+                    }
+                    else {
+                        console.error('❌ Products class not defined, attempting dynamic load...');
+                        this.loadModuleScript('products');
                     }
                     break;
                     
                 case 'group_products':
                     console.log('🔄 Initializing group_products module...');
-                    // Coba multiple approaches
                     if (typeof GroupProducts !== 'undefined') {
                         console.log('📦 Using GroupProducts class constructor');
                         window.groupProducts = new GroupProducts();
@@ -988,8 +1003,9 @@ initModule(moduleName) {
         } catch (error) {
             console.error('💥 Error initializing module:', moduleName, error);
         }
-    }, 300); // Increased delay untuk pastikan semua script terload
+    }, 300);
 }
+
     // Load dashboard statistics
     async loadDashboardStats() {
         console.log('Loading dashboard statistics');
