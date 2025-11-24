@@ -1,1197 +1,1052 @@
-// Products Module - COMPLETE FIXED VERSION
-class Products {
+// Main application
+class App {
     constructor() {
-        this.currentData = [];
-        this.groupProducts = [];
-        this.table = null;
-        this.currentProductId = null;
-        this.selectedFile = null;
-        this.imagePreviewUrl = null;
-        this.outlets = [];
-        this.isInitialized = false;
-        console.log('✅ Products class initialized');
+        this.currentModule = 'dashboard';
+        this.outlets = []; // Tambah properti outlets
+        this.init();
     }
 
-    // Initialize module
+    // Initialize application
     async init() {
-        if (this.isInitialized) {
-            console.log('Products already initialized');
+        console.log('App initializing...');
+        
+        // Check authentication
+        if (!await Auth.checkAuth() && !window.location.pathname.endsWith('login.html')) {
+            console.log('Not authenticated, redirecting to login');
+            window.location.href = 'login.html';
             return;
         }
 
-        console.log('🔄 Initializing Products module...');
-        try {
-            await this.loadOutlets();
-            await this.loadGroupProducts();
-            await this.loadData();
-            this.initTable();
-            this.bindEvents();
-            this.isInitialized = true;
-            console.log('✅ Products module initialized successfully');
-        } catch (error) {
-            console.error('❌ Error initializing Products:', error);
+        if (window.location.pathname.endsWith('login.html')) {
+            return;
         }
+
+        // Load outlets data first
+        await this.loadOutletsData();
+
+        // Initialize components
+        this.initSidebar();
+        this.initHeader();
+        this.loadModule('dashboard');
+        this.updateDateTime();
+
+        // Update datetime every second
+        setInterval(() => this.updateDateTime(), 1000);
     }
 
-    // Load outlets from app
-    async loadOutlets() {
+    // Load outlets data from Supabase
+    async loadOutletsData() {
         try {
-            if (window.app && window.app.getOutlets) {
-                this.outlets = window.app.getOutlets();
-                console.log('Loaded outlets from app:', this.outlets);
-            } else {
-                // Fallback: load outlets directly
-                const { data, error } = await supabase
-                    .from('outlet')
-                    .select('outlet')
-                    .order('outlet', { ascending: true });
+            const { data, error } = await supabase
+                .from('outlet')
+                .select('outlet')
+                .order('outlet', { ascending: true });
 
-                if (!error) {
-                    this.outlets = data || [];
-                }
-            }
-            console.log('Products outlets:', this.outlets);
+            if (error) throw error;
+
+            this.outlets = data || [];
+            console.log('Outlets loaded:', this.outlets);
         } catch (error) {
             console.error('Error loading outlets:', error);
             this.outlets = [];
         }
     }
 
-    // Load group products for dropdown
-    async loadGroupProducts() {
-        try {
-            const { data, error } = await supabase
-                .from('group_produk')
-                .select('group')
-                .eq('status', 'active')
-                .order('group', { ascending: true });
-
-            if (error) throw error;
-
-            this.groupProducts = data || [];
-            console.log('Loaded group products:', this.groupProducts);
-        } catch (error) {
-            console.error('Error loading group products:', error);
-            this.groupProducts = [];
-        }
+    // Get outlets for other modules
+    getOutlets() {
+        return this.outlets;
     }
 
-    // Load data from Supabase dengan filter
-    async loadData(filters = {}) {
-        try {
-            Helpers.showLoading();
-            console.log('Loading products data with filters:', filters);
-            
-            let query = supabase
-                .from('produk')
-                .select('*');
-
-            // Apply filters
-            if (filters.outlet) {
-                query = query.eq('outlet', filters.outlet);
-            }
-            if (filters.status) {
-                query = query.eq('status', filters.status);
-            }
-            if (filters.inventory !== undefined && filters.inventory !== '') {
-                query = query.eq('inventory', filters.inventory === 'true');
-            }
-
-            const { data, error } = await query.order('nama_produk', { ascending: true });
-
-            if (error) throw error;
-
-            this.currentData = data || [];
-            console.log('Loaded products:', this.currentData);
-            
-            if (this.table) {
-                this.table.updateData(this.currentData);
-            }
-
-            Helpers.hideLoading();
-            return this.currentData;
-        } catch (error) {
-            Helpers.hideLoading();
-            console.error('Error loading products data:', error);
-            Notifications.error('Gagal memuat data produk: ' + error.message);
-            return [];
-        }
+   // Initialize sidebar dengan logo - SEMUA MODUL DITAMPILKAN
+initSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    if (!sidebar) {
+        console.error('Sidebar element not found');
+        return;
     }
 
-    // Initialize table - FIXED VERSION
-    initTable() {
-        console.log('Initializing products table...');
-        
-        const columns = [
-            { 
-                title: 'Outlet', 
-                key: 'outlet',
-                formatter: (value) => `<span class="font-medium">${value || '-'}</span>`
-            },
-            { 
-                title: 'Nama Produk', 
-                key: 'nama_produk',
-                formatter: (value) => `<span class="text-gray-900 font-semibold">${value || '-'}</span>`
-            },
-            { 
-                title: 'Group Produk', 
-                key: 'group_produk',
-                formatter: (value) => `<span class="text-gray-700">${value || '-'}</span>`
-            },
-            { 
-                title: 'Foto', 
-                key: 'foto_url',
-                formatter: (value) => {
-                    if (!value) return '<span class="text-gray-400 text-sm">-</span>';
-                    return `
-                        <img src="${value}" alt="Produk" class="w-10 h-10 object-cover rounded-md cursor-pointer border" 
-                             onclick="window.products.showImagePreview('${value}')">
-                    `;
-                },
-                width: '80px'
-            },
-            { 
-                title: 'Harga Beli', 
-                key: 'harga_beli',
-                formatter: (value) => value ? `Rp ${Helpers.formatNumber(value)}` : 'Rp 0'
-            },
-            { 
-                title: 'Harga Jual', 
-                key: 'harga_jual',
-                formatter: (value) => value ? `Rp ${Helpers.formatNumber(value)}` : 'Rp 0'
-            },
-            { 
-                title: 'Stok', 
-                key: 'stok',
-                formatter: (value, row) => {
-                    // Jika stok NULL atau inventory nonaktif, tampilkan Unlimited
-                    if (value === null || value === undefined || !row.inventory) {
-                        return `
-                            <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800 border border-blue-200">
-                                📦 Unlimited
-                            </span>
-                        `;
-                    }
-                    return `
-                        <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800 border border-green-200">
-                            ${value || 0}
-                        </span>
-                    `;
-                }
-            },
-            { 
-                title: 'Inventory', 
-                key: 'inventory',
-                formatter: (value) => value ? 
-                    '<span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800 border border-green-200">✅ Aktif</span>' :
-                    '<span class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800 border border-gray-200">❌ Nonaktif</span>'
-            },
-            { 
-                title: 'Status', 
-                key: 'status',
-                formatter: (value) => {
-                    const isActive = value === 'active';
-                    return `
-                        <span class="px-2 py-1 text-xs rounded-full ${
-                            isActive 
-                                ? 'bg-green-100 text-green-800 border border-green-200' 
-                                : 'bg-red-100 text-red-800 border border-red-200'
-                        }">
-                            ${isActive ? '🟢 Aktif' : '🔴 Nonaktif'}
-                        </span>
-                    `;
-                }
-            },
-            {
-                title: 'Aksi',
-                key: 'id',
-                formatter: (id, row) => this.getActionButtons(id, row),
-                width: '150px'
-            }
-        ];
+    const user = Auth.getCurrentUser();
+    sidebar.classList.add('bg-blue-50');
 
-        // Cek jika DataTable class tersedia
-        if (typeof DataTable === 'undefined') {
-            console.error('DataTable class not found!');
-            this.renderFallbackTable();
-            return;
-        }
-
-        this.table = new DataTable('products-table', {
-            columns: columns,
-            searchable: true,
-            pagination: true,
-            pageSize: 10,
-            searchPlaceholder: 'Cari produk...'
-        });
-
-        this.table.init();
-        this.table.updateData(this.currentData);
-        console.log('Products table initialized');
-    }
-
-    // Fallback table jika DataTable tidak tersedia
-    renderFallbackTable() {
-        const container = document.getElementById('products-table');
-        if (!container) return;
-
-        if (this.currentData.length === 0) {
-            container.innerHTML = `
-                <div class="text-center py-8">
-                    <div class="text-gray-400 mb-2">
-                        <svg class="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
-                        </svg>
-                    </div>
-                    <p class="text-gray-500">Tidak ada data produk</p>
-                    <button onclick="window.products.showForm()" class="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
-                        Tambah Produk Pertama
-                    </button>
+    // Logo HTML
+    const logoHTML = `
+        <div class="flex items-center justify-between p-4 border-b border-gray-200">
+            <div class="flex items-center space-x-3">
+                <div class="logo-container">
+                    <img src="assets/logo.png" alt="Babeh Barbershop Logo" class="logo-img" 
+                         onerror="this.style.display='none'; this.parentElement.innerHTML='<span class=\\'logo-fallback\\'>B</span>';">
                 </div>
-            `;
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-800">Babeh Barbershop</h2>
+                    <p class="text-sm text-gray-600">Office</p>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Navigation menu - SEMUA MODUL DITAMPILKAN TANPA FILTER ROLE
+    const navHTML = `
+        <nav class="flex-1 px-4 py-6 space-y-2">
+            <!-- Semua menu ditampilkan untuk semua role -->
+            <a href="#" onclick="app.loadModule('dashboard')" class="sidebar-item ${this.currentModule === 'dashboard' ? 'active' : ''}">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                </svg>
+                <span>Dashboard</span>
+            </a>
+            
+            <a href="#" onclick="app.loadModule('group_products')" class="sidebar-item ${this.currentModule === 'group_products' ? 'active' : ''}">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+                </svg>
+                <span>Group Produk</span>
+            </a>
+            
+            <a href="#" onclick="app.loadModule('products')" class="sidebar-item ${this.currentModule === 'products' ? 'active' : ''}">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                </svg>
+                <span>Produk</span>
+            </a>
+
+            <a href="#" onclick="app.loadModule('stock_management')" class="sidebar-item ${this.currentModule === 'stock_management' ? 'active' : ''}">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+                <span>Manajemen Stok</span>
+            </a>
+
+            <a href="#" onclick="app.loadModule('employees')" class="sidebar-item ${this.currentModule === 'employees' ? 'active' : ''}">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"/>
+                </svg>
+                <span>Karyawan</span>
+            </a>
+
+            <a href="#" onclick="app.loadModule('members')" class="sidebar-item ${this.currentModule === 'members' ? 'active' : ''}">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+                </svg>
+                <span>Member</span>
+            </a>
+
+            <a href="#" onclick="app.loadModule('outlets')" class="sidebar-item ${this.currentModule === 'outlets' ? 'active' : ''}">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                </svg>
+                <span>Outlet</span>
+            </a>
+
+            <a href="#" onclick="app.loadModule('reports')" class="sidebar-item ${this.currentModule === 'reports' ? 'active' : ''}">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+                <span>Laporan</span>
+            </a>
+        </nav>
+    `;
+
+  // User profile section - DENGAN PHOTO_URL
+const userName = user ? (user.nama_karyawan || user.user_metadata?.display_name || user.email || 'User') : 'User';
+const userRole = user ? (user.role || 'User') : 'User';
+const userPhotoUrl = user?.photo_url; // Ambil photo_url dari user data
+const userInitial = userName.charAt(0).toUpperCase();
+
+const profileHTML = `
+    <div class="p-4 border-t border-gray-200">
+        <div class="flex items-center space-x-3 mb-4">
+            <div class="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center overflow-hidden">
+                ${userPhotoUrl ? 
+                    `<img src="${userPhotoUrl}" alt="${userName}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.parentElement.innerHTML='<span class=\\'text-gray-600 font-semibold\\'>${userInitial}</span>';" />` :
+                    `<span class="text-gray-600 font-semibold">${userInitial}</span>`
+                }
+            </div>
+            <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-gray-900 truncate">${userName}</p>
+                <p class="text-sm text-gray-500 truncate capitalize">${userRole}</p>
+            </div>
+        </div>
+        <button onclick="Auth.logout()" class="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-red-100 rounded-md transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+            </svg>
+            <span>Logout</span>
+        </button>
+    </div>
+`;
+    sidebar.innerHTML = logoHTML + navHTML + profileHTML;
+    
+    console.log('✅ Sidebar initialized - All modules displayed');
+}
+
+    // Initialize header
+    initHeader() {
+        const header = document.getElementById('header');
+        if (!header) {
+            console.error('Header element not found');
             return;
         }
 
-        let tableHTML = `
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Outlet</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama Produk</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Group</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Foto</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Harga Jual</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stok</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Inventory</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-        `;
-
-        this.currentData.forEach(item => {
-            tableHTML += `
-                <tr>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${item.outlet || '-'}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${item.nama_produk || '-'}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${item.group_produk || '-'}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm">
-                        ${item.foto_url ? 
-                            `<img src="${item.foto_url}" alt="Produk" class="w-10 h-10 object-cover rounded-md cursor-pointer border" onclick="window.products.showImagePreview('${item.foto_url}')">` : 
-                            '<span class="text-gray-400">-</span>'
-                        }
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">Rp ${Helpers.formatNumber(item.harga_jual) || '0'}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm">
-                        ${item.stok === null || !item.inventory ? 
-                            '<span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">Unlimited</span>' : 
-                            `<span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">${item.stok}</span>`
-                        }
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm">
-                        ${item.inventory ? 
-                            '<span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">Aktif</span>' : 
-                            '<span class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">Nonaktif</span>'
-                        }
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm">
-                        ${item.status === 'active' ? 
-                            '<span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">Aktif</span>' : 
-                            '<span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">Nonaktif</span>'
-                        }
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        ${this.getActionButtons(item.id, item)}
-                    </td>
-                </tr>
-            `;
-        });
-
-        tableHTML += `
-                    </tbody>
-                </table>
+        header.innerHTML = `
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900" id="page-title">Dashboard</h1>
+                    <p class="text-sm text-gray-600" id="page-description">Ringkasan aktivitas dan statistik</p>
+                </div>
+                <div class="text-right">
+                    <div class="text-lg font-semibold text-gray-900" id="current-datetime"></div>
+                    <div class="text-sm text-gray-600" id="current-date"></div>
+                </div>
             </div>
         `;
-
-        container.innerHTML = tableHTML;
-    }
-
-    // Get action buttons HTML
-    getActionButtons(id, row) {
-        return `
-            <div class="flex space-x-2">
-                <button 
-                    onclick="window.products.handleEdit('${id}')" 
-                    class="inline-flex items-center px-3 py-1.5 border border-blue-300 text-sm font-medium rounded-md text-blue-700 bg-blue-50 hover:bg-blue-100 hover:text-blue-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
-                    title="Edit Produk"
-                >
-                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                    </svg>
-                    Edit
-                </button>
-                <button 
-                    onclick="window.products.handleDelete('${id}')" 
-                    class="inline-flex items-center px-3 py-1.5 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-red-50 hover:bg-red-100 hover:text-red-800 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
-                    title="Hapus Produk"
-                >
-                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                    </svg>
-                    Hapus
-                </button>
-            </div>
-        `;
-    }
-
-    // Bind events dengan filter
-    bindEvents() {
-        console.log('Binding products events...');
         
-        // Add button event
-        const addBtn = document.getElementById('add-product');
-        if (addBtn) {
-            // Remove existing event listeners first
-            addBtn.replaceWith(addBtn.cloneNode(true));
-            const newAddBtn = document.getElementById('add-product');
-            
-            newAddBtn.addEventListener('click', () => {
-                console.log('Add product button clicked');
-                this.showForm();
+        console.log('Header initialized');
+    }
+
+    // Update date and time
+    updateDateTime() {
+        const now = new Date();
+        const datetimeEl = document.getElementById('current-datetime');
+        const dateEl = document.getElementById('current-date');
+
+        if (datetimeEl) {
+            datetimeEl.textContent = now.toLocaleTimeString('id-ID', {
+                timeZone: 'Asia/Jakarta',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
             });
-            console.log('Add button event bound');
-        } else {
-            console.error('Add product button not found!');
         }
 
-        // Filter events
-        const outletFilter = document.getElementById('outlet-filter');
-        const statusFilter = document.getElementById('status-filter');
-        const inventoryFilter = document.getElementById('inventory-filter');
-
-        if (outletFilter) {
-            outletFilter.addEventListener('change', () => this.applyFilters());
-        }
-        if (statusFilter) {
-            statusFilter.addEventListener('change', () => this.applyFilters());
-        }
-        if (inventoryFilter) {
-            inventoryFilter.addEventListener('change', () => this.applyFilters());
+        if (dateEl) {
+            dateEl.textContent = now.toLocaleDateString('id-ID', {
+                timeZone: 'Asia/Jakarta',
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
         }
     }
 
-    // Apply filters
-    applyFilters() {
-        const outletFilter = document.getElementById('outlet-filter');
-        const statusFilter = document.getElementById('status-filter');
-        const inventoryFilter = document.getElementById('inventory-filter');
-
-        const filters = {
-            outlet: outletFilter ? outletFilter.value : '',
-            status: statusFilter ? statusFilter.value : '',
-            inventory: inventoryFilter ? inventoryFilter.value : ''
-        };
-
-        console.log('Applying filters:', filters);
-        this.loadData(filters);
+    // Load module
+    async loadModule(moduleName) {
+        console.log('Loading module:', moduleName);
+        this.currentModule = moduleName;
+		
+		// Cleanup module sebelumnya jika perlu
+    if (moduleName !== 'reports' && window.reportsModule) {
+        window.reportsModule.cleanup();
     }
-
-    // Handle edit - PUBLIC METHOD
-    handleEdit(id) {
-        console.log('Edit handled for:', id);
-        this.edit(id);
-    }
-
-    // Handle delete - PUBLIC METHOD  
-    handleDelete(id) {
-        console.log('Delete handled for:', id);
-        this.delete(id);
-    }
-
-    // Upload image to Supabase Storage
-    async uploadImage(file) {
-        try {
-            if (!file) return null;
-
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
-            const filePath = `products/${fileName}`;
-
-            console.log('Uploading image to:', filePath);
-
-            const { data, error } = await supabase.storage
-                .from('produk')
-                .upload(filePath, file, {
-                    cacheControl: '3600',
-                    upsert: false
-                });
-
-            if (error) {
-                console.error('Upload error:', error);
-                throw error;
-            }
-
-            // Get public URL
-            const { data: { publicUrl } } = supabase.storage
-                .from('produk')
-                .getPublicUrl(filePath);
-
-            console.log('Image uploaded successfully:', publicUrl);
-            return publicUrl;
-        } catch (error) {
-            console.error('Error uploading image:', error);
-            throw new Error('Gagal mengupload gambar: ' + error.message);
-        }
-    }
-
-    // Delete image from Supabase Storage
-    async deleteImage(imageUrl) {
-        try {
-            if (!imageUrl) return;
-
-            // Extract file path from URL
-            const urlParts = imageUrl.split('/');
-            const fileName = urlParts[urlParts.length - 1];
-            const filePath = `products/${fileName}`;
-
-            console.log('Deleting image:', filePath);
-
-            const { error } = await supabase.storage
-                .from('produk')
-                .remove([filePath]);
-
-            if (error) {
-                console.error('Error deleting image:', error);
-            } else {
-                console.log('Image deleted successfully');
-            }
-        } catch (error) {
-            console.error('Error deleting image:', error);
-        }
-    }
-
-    // Handle file selection
-    handleFileSelect(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        // Validate file type
-        const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-        if (!validTypes.includes(file.type)) {
-            Notifications.error('Format file tidak didukung. Gunakan JPEG, PNG, GIF, atau WebP.');
-            event.target.value = '';
-            return;
-        }
-
-        // Validate file size (max 5MB)
-        if (file.size > 5 * 1024 * 1024) {
-            Notifications.error('Ukuran file maksimal 5MB.');
-            event.target.value = '';
-            return;
-        }
-
-        this.selectedFile = file;
-
-        // Show preview
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            this.imagePreviewUrl = e.target.result;
-            this.updateImagePreview();
-        };
-        reader.readAsDataURL(file);
-    }
-
-    // Update image preview
-    updateImagePreview() {
-        const previewContainer = document.getElementById('image-preview-container');
-        const previewImg = document.getElementById('image-preview');
-        const removeBtn = document.getElementById('remove-image-btn');
-
-        if (previewContainer && previewImg) {
-            if (this.imagePreviewUrl) {
-                previewImg.src = this.imagePreviewUrl;
-                previewContainer.classList.remove('hidden');
-                if (removeBtn) removeBtn.classList.remove('hidden');
-            } else {
-                previewContainer.classList.add('hidden');
-                if (removeBtn) removeBtn.classList.add('hidden');
-            }
-        }
-    }
-
-    // Remove selected image
-    removeImage() {
-        this.selectedFile = null;
-        this.imagePreviewUrl = null;
-        this.updateImagePreview();
         
-        // Reset file input
-        const fileInput = document.getElementById('foto_file');
-        if (fileInput) fileInput.value = '';
-    }
+        // Update active state in sidebar
+        document.querySelectorAll('.sidebar-item').forEach(item => {
+            item.classList.remove('active');
+        });
+        const activeItem = document.querySelector(`[onclick="app.loadModule('${moduleName}')"]`);
+        if (activeItem) {
+            activeItem.classList.add('active');
+        }
 
-    // Show image preview in modal
-    showImagePreview(imageUrl) {
-        const content = `
-            <div class="text-center">
-                <img src="${imageUrl}" alt="Preview Produk" class="max-w-full max-h-96 mx-auto rounded-lg shadow-lg">
-                <div class="mt-4">
-                    <a href="${imageUrl}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
-                        🔗 Buka gambar di tab baru
-                    </a>
+        const content = document.getElementById('content');
+        if (!content) {
+            console.error('Content element not found');
+            return;
+        }
+
+        Helpers.showLoading();
+
+        try {
+            let moduleHTML = '';
+            let pageTitle = '';
+            let pageDescription = '';
+
+            switch (moduleName) {
+                case 'dashboard':
+                    pageTitle = 'Dashboard';
+                    pageDescription = 'Ringkasan aktivitas dan statistik';
+                    moduleHTML = await this.loadDashboard();
+                    break;
+                case 'products':
+                    pageTitle = 'Manajemen Produk';
+                    pageDescription = 'Kelola data produk dan inventory';
+                    moduleHTML = this.loadProducts();
+                    break;
+                case 'group_products':
+                    pageTitle = 'Group Produk';
+                    pageDescription = 'Kelola kategori dan group produk';
+                    moduleHTML = this.loadGroupProducts();
+                    break;
+		 case 'stock_management':
+                pageTitle = 'Manajemen Stok';
+                pageDescription = 'Kelola stok masuk, keluar, dan pergerakan stok';
+                moduleHTML = this.loadStockManagement();
+                break;
+                case 'employees':
+                    pageTitle = 'Manajemen Karyawan';
+                    pageDescription = 'Kelola data karyawan dan akses';
+                    moduleHTML = this.loadEmployees();
+                    break;
+                case 'members':
+                    pageTitle = 'Manajemen Member';
+                    pageDescription = 'Kelola data member dan poin';
+                    moduleHTML = this.loadMembers();
+                    break;
+                case 'outlets':
+                    pageTitle = 'Manajemen Outlet';
+                    pageDescription = 'Kelola data outlet cabang';
+                    moduleHTML = this.loadOutlets();
+                    break;
+                case 'reports':
+                    pageTitle = 'Laporan';
+                    pageDescription = 'Laporan transaksi dan analisis';
+                    moduleHTML = this.loadReports();
+                    break;
+                default:
+                    moduleHTML = '<div class="text-center py-8"><p class="text-gray-500">Module tidak ditemukan</p></div>';
+            }
+
+            // Update page title
+            const pageTitleEl = document.getElementById('page-title');
+            const pageDescEl = document.getElementById('page-description');
+            if (pageTitleEl) pageTitleEl.textContent = pageTitle;
+            if (pageDescEl) pageDescEl.textContent = pageDescription;
+
+            content.innerHTML = moduleHTML;
+// Beri sedikit delay untuk memastikan DOM ter-render
+    setTimeout(() => {
+        this.initModule(moduleName);
+    }, 50);
+
+    console.log('Module loaded successfully:', moduleName);
+			
+            // Initialize module-specific JavaScript
+            this.initModule(moduleName);
+
+            console.log('Module loaded successfully:', moduleName);
+
+        } catch (error) {
+            console.error('Error loading module:', error);
+            content.innerHTML = `
+                <div class="text-center py-8">
+                    <p class="text-red-500">Gagal memuat module: ${error.message}</p>
                 </div>
-            </div>
-        `;
-
-        const buttons = [
-            {
-                text: 'Tutup',
-                onclick: () => modal.close(),
-                primary: false
-            }
-        ];
-
-        modal.createModal('Preview Foto Produk', content, buttons, { size: 'max-w-2xl' });
-    }
-
-    // Toggle stock input based on inventory checkbox
-    toggleStockInput() {
-        const inventoryCheckbox = document.getElementById('inventory-checkbox');
-        const stokInput = document.getElementById('stok-input');
-        const stokHelper = document.getElementById('stok-helper');
-        const stokRequired = document.getElementById('stok-required');
-
-        if (inventoryCheckbox && stokInput && stokHelper) {
-            if (inventoryCheckbox.checked) {
-                // Inventory AKTIF - Stok WAJIB diisi
-                stokInput.readOnly = false;
-                stokInput.required = true;
-                stokInput.classList.remove('bg-gray-100', 'cursor-not-allowed');
-                stokInput.classList.add('bg-white');
-                stokInput.value = stokInput.value || '0';
-                stokHelper.textContent = 'Wajib diisi ketika inventory aktif';
-                stokHelper.className = 'text-xs text-green-600 mt-1';
-                if (stokRequired) stokRequired.classList.remove('hidden');
-            } else {
-                // Inventory NONAKTIF - Stok Unlimited (NULL)
-                stokInput.readOnly = true;
-                stokInput.required = false;
-                stokInput.classList.add('bg-gray-100', 'cursor-not-allowed');
-                stokInput.classList.remove('bg-white');
-                stokInput.value = '';
-                stokHelper.textContent = 'Stok unlimited (inventory non-aktif)';
-                stokHelper.className = 'text-xs text-gray-500 mt-1';
-                if (stokRequired) stokRequired.classList.add('hidden');
-            }
+            `;
+        } finally {
+            Helpers.hideLoading();
         }
     }
 
-    // Validate form sebelum submit
-    validateForm() {
-        const form = document.getElementById('product-form');
-        const formData = new FormData(form);
-        
-        // Validasi mandatory fields
-        const outlet = formData.get('outlet');
-        const namaProduk = formData.get('nama_produk');
-        const groupProduk = formData.get('group_produk');
-        const hargaBeli = formData.get('harga_beli');
-        const hargaJual = formData.get('harga_jual');
-        const inventory = formData.get('inventory') === 'on';
-        const stok = formData.get('stok');
-
-        if (!outlet) {
-            Notifications.error('Outlet harus dipilih');
-            return false;
-        }
-
-        if (!namaProduk || namaProduk.trim() === '') {
-            Notifications.error('Nama produk harus diisi');
-            return false;
-        }
-
-        if (!groupProduk) {
-            Notifications.error('Group produk harus dipilih');
-            return false;
-        }
-
-        if (!hargaBeli || parseFloat(hargaBeli) < 0) {
-            Notifications.error('Harga beli harus diisi dan tidak boleh negatif');
-            return false;
-        }
-
-        if (!hargaJual || parseFloat(hargaJual) < 0) {
-            Notifications.error('Harga jual harus diisi dan tidak boleh negatif');
-            return false;
-        }
-
-        // Validasi stok khusus untuk inventory aktif
-        if (inventory) {
-            if (!stok || parseInt(stok) < 0) {
-                Notifications.error('Stok harus diisi dan tidak boleh negatif ketika inventory aktif');
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    // Show form for add/edit
-    showForm(item = null) {
-        const isEdit = !!item;
-        const title = isEdit ? 'Edit Produk' : 'Tambah Produk';
-        
-        // Reset file state
-        this.selectedFile = null;
-        this.imagePreviewUrl = item ? item.foto_url : null;
-        this.currentProductId = item ? item.id : null;
-
-        // Determine initial stock value and inventory status
-        const hasInventory = item ? item.inventory : false;
-        const stockValue = item ? (hasInventory ? item.stok : '') : 0;
-
-        const groupOptions = this.groupProducts.map(gp => 
-            `<option value="${this.escapeHtml(gp.group)}" ${item && item.group_produk === gp.group ? 'selected' : ''}>${this.escapeHtml(gp.group)}</option>`
-        ).join('');
-
+    // Load products module - TAMBAH FILTER OUTLET
+    loadProducts() {
         const outletOptions = this.outlets.map(outlet => 
-            `<option value="${this.escapeHtml(outlet.outlet)}" ${item && item.outlet === outlet.outlet ? 'selected' : ''}>${this.escapeHtml(outlet.outlet)}</option>`
+            `<option value="${outlet.outlet}">${outlet.outlet}</option>`
         ).join('');
 
-        const content = `
-            <div class="space-y-4">
-                <form id="product-form" class="space-y-4">
-                    <div class="grid grid-cols-2 gap-4">
+        console.log('Loading products module');
+        return `
+            <div class="bg-white rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">Daftar Produk</h3>
+                        <button id="add-product" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
+                            Tambah Produk
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">
-                                Outlet <span class="text-red-500">*</span>
-                            </label>
-                            <select 
-                                name="outlet" 
-                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                                required
-                            >
-                                <option value="">Pilih Outlet</option>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Filter Outlet</label>
+                            <select id="outlet-filter" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <option value="">Semua Outlet</option>
                                 ${outletOptions}
                             </select>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">
-                                Nama Produk <span class="text-red-500">*</span>
-                            </label>
-                            <input 
-                                type="text" 
-                                name="nama_produk" 
-                                value="${item ? this.escapeHtml(item.nama_produk) : ''}"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                                required
-                                placeholder="Masukkan nama produk"
-                                maxlength="100"
-                            >
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">
-                                Group Produk <span class="text-red-500">*</span>
-                            </label>
-                            <select 
-                                name="group_produk" 
-                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                                required
-                            >
-                                <option value="">Pilih Group</option>
-                                ${groupOptions}
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Filter Status</label>
+                            <select id="status-filter" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <option value="">Semua Status</option>
+                                <option value="active">Aktif</option>
+                                <option value="inactive">Nonaktif</option>
                             </select>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">
-                                Stok <span id="stok-required" class="text-red-500 ${!hasInventory ? 'hidden' : ''}">*</span>
-                            </label>
-                            <input 
-                                type="number" 
-                                name="stok" 
-                                value="${stockValue}"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${!hasInventory ? 'bg-gray-100 cursor-not-allowed' : ''}"
-                                ${!hasInventory ? 'readonly' : 'required'}
-                                id="stok-input"
-                                min="0"
-                                placeholder="${!hasInventory ? 'Unlimited' : 'Masukkan stok'}"
-                            >
-                            <p id="stok-helper" class="text-xs ${!hasInventory ? 'text-gray-500' : 'text-green-600'} mt-1">
-                                ${!hasInventory ? 'Stok unlimited (inventory non-aktif)' : 'Wajib diisi ketika inventory aktif'}
-                            </p>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Filter Inventory</label>
+                            <select id="inventory-filter" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <option value="">Semua</option>
+                                <option value="true">Aktif</option>
+                                <option value="false">Nonaktif</option>
+                            </select>
                         </div>
                     </div>
-
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">
-                                Harga Beli <span class="text-red-500">*</span>
-                            </label>
-                            <input 
-                                type="number" 
-                                name="harga_beli" 
-                                value="${item ? item.harga_beli : 0}"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                                required
-                                min="0"
-                                step="0.01"
-                                placeholder="0"
-                            >
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">
-                                Harga Jual <span class="text-red-500">*</span>
-                            </label>
-                            <input 
-                                type="number" 
-                                name="harga_jual" 
-                                value="${item ? item.harga_jual : 0}"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                                required
-                                min="0"
-                                step="0.01"
-                                placeholder="0"
-                            >
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Komisi</label>
-                            <input 
-                                type="number" 
-                                name="komisi" 
-                                value="${item ? item.komisi : 0}"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                                min="0"
-                                step="0.01"
-                                placeholder="0"
-                            >
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Point</label>
-                            <input 
-                                type="number" 
-                                name="point" 
-                                value="${item ? item.point : 0}"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                                min="0"
-                                placeholder="0"
-                            >
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="flex items-center">
-                                <input 
-                                    type="checkbox" 
-                                    name="inventory" 
-                                    ${hasInventory ? 'checked' : ''}
-                                    class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                    id="inventory-checkbox"
-                                    onchange="window.products.toggleStockInput()"
-                                >
-                                <span class="ml-2 text-sm text-gray-700">Inventory (Stock Management)</span>
-                            </label>
-                        </div>
-                        <div>
-                            <label class="flex items-center">
-                                <input 
-                                    type="checkbox" 
-                                    name="redeemable" 
-                                    ${item && item.redeemable ? 'checked' : ''}
-                                    class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                >
-                                <span class="ml-2 text-sm text-gray-700">Redeemable</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- File Upload Section -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Foto Produk</label>
-                        <div class="space-y-3">
-                            <!-- File Input -->
-                            <input 
-                                type="file" 
-                                id="foto_file"
-                                name="foto_file" 
-                                accept="image/*"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                                onchange="window.products.handleFileSelect(event)"
-                            >
-                            
-                            <!-- Image Preview -->
-                            <div id="image-preview-container" class="${this.imagePreviewUrl ? '' : 'hidden'}">
-                                <div class="border border-gray-300 rounded-md p-3 bg-gray-50">
-                                    <p class="text-sm text-gray-600 mb-2">Preview:</p>
-                                    <div class="flex items-center space-x-4">
-                                        <img id="image-preview" src="${this.imagePreviewUrl || ''}" 
-                                             alt="Preview" class="w-20 h-20 object-cover rounded-md border">
-                                        <div class="flex-1">
-                                            <p class="text-sm text-gray-600">File akan diupload ke Supabase Storage</p>
-                                            <button type="button" id="remove-image-btn" 
-                                                    onclick="window.products.removeImage()"
-                                                    class="mt-2 text-red-600 hover:text-red-800 text-sm font-medium transition-colors">
-                                                Hapus Gambar
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <p class="text-xs text-gray-500">
-                                Format yang didukung: JPEG, PNG, GIF, WebP. Maksimal 5MB.
-                            </p>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                        <select 
-                            name="status" 
-                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                        >
-                            <option value="active" ${item && item.status === 'active' ? 'selected' : ''}>🟢 Aktif</option>
-                            <option value="inactive" ${item && item.status === 'inactive' ? 'selected' : ''}>🔴 Nonaktif</option>
-                        </select>
-                    </div>
-
-                    <div class="pt-4 border-t border-gray-200">
-                        <p class="text-xs text-gray-500">
-                            <span class="text-red-500">*</span> Menandakan field yang wajib diisi
-                        </p>
-                    </div>
-                </form>
-            </div>
-        `;
-
-        const buttons = [
-            {
-                text: 'Batal',
-                onclick: () => {
-                    console.log('Cancel button clicked');
-                    modal.close();
-                },
-                primary: false
-            },
-            {
-                text: isEdit ? 'Update Data' : 'Simpan Data',
-                onclick: () => {
-                    console.log('Save button clicked');
-                    if (isEdit) {
-                        this.validateAndUpdate(item.id);
-                    } else {
-                        this.validateAndSave();
-                    }
-                },
-                primary: true
-            }
-        ];
-
-        modal.createModal(title, content, buttons, { 
-            size: 'max-w-2xl',
-            customClass: 'product-modal'
-        });
-        
-        // Update preview after modal is created
-        setTimeout(() => this.updateImagePreview(), 100);
-        
-        // Initialize stock input state
-        setTimeout(() => this.toggleStockInput(), 150);
-    }
-
-    // Escape HTML untuk prevent XSS
-    escapeHtml(text) {
-        if (!text) return '';
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    // Validate and save new product
-    async validateAndSave() {
-        if (!this.validateForm()) {
-            return;
-        }
-        await this.save();
-    }
-
-    // Validate and update product
-    async validateAndUpdate(id) {
-        if (!this.validateForm()) {
-            return;
-        }
-        await this.update(id);
-    }
-
-    // Save new product
-    async save() {
-        try {
-            const form = document.getElementById('product-form');
-            const formData = new FormData(form);
-            
-            // Create data object
-            const data = {
-                outlet: formData.get('outlet'),
-                nama_produk: formData.get('nama_produk'),
-                group_produk: formData.get('group_produk'),
-                stok: parseInt(formData.get('stok')) || 0,
-                harga_beli: parseFloat(formData.get('harga_beli')) || 0,
-                harga_jual: parseFloat(formData.get('harga_jual')) || 0,
-                komisi: parseFloat(formData.get('komisi')) || 0,
-                point: parseFloat(formData.get('point')) || 0,
-                inventory: formData.get('inventory') === 'on',
-                redeemable: formData.get('redeemable') === 'on',
-                status: formData.get('status')
-            };
-
-            // Handle inventory logic
-            if (data.inventory) {
-                // Inventory AKTIF - gunakan stok yang diinput user
-                if (data.stok <= 0) {
-                    Notifications.error('Stok harus diisi ketika inventory aktif');
-                    return;
-                }
-            } else {
-                // Inventory NONAKTIF - set stok NULL (unlimited)
-                data.stok = null;
-            }
-
-            console.log('Saving product data:', data);
-
-            // Upload image if selected
-            if (this.selectedFile) {
-                console.log('Uploading new image...');
-                const fotoUrl = await this.uploadImage(this.selectedFile);
-                data.foto_url = fotoUrl;
-                console.log('Image uploaded, URL:', fotoUrl);
-            }
-
-            Helpers.showLoading();
-
-            const { data: result, error } = await supabase
-                .from('produk')
-                .insert([data])
-                .select();
-
-            if (error) {
-                console.error('Supabase insert error:', error);
-                throw error;
-            }
-
-            modal.close();
-            await this.loadData();
-            Notifications.success('Produk berhasil ditambahkan!');
-
-        } catch (error) {
-            Helpers.hideLoading();
-            console.error('Save product error:', error);
-            Notifications.error('Gagal menambah produk: ' + error.message);
-        }
-    }
-
-    // Edit product
-    edit(id) {
-        console.log('Editing product:', id);
-        const item = this.currentData.find(d => d.id === id);
-        if (item) {
-            console.log('Found item for editing:', item);
-            this.showForm(item);
-        } else {
-            console.error('Item not found for editing:', id);
-            Notifications.error('Data tidak ditemukan untuk diedit');
-        }
-    }
-
-    // Update product
-    async update(id) {
-        try {
-            const form = document.getElementById('product-form');
-            const formData = new FormData(form);
-            
-            // Create data object
-            const data = {
-                outlet: formData.get('outlet'),
-                nama_produk: formData.get('nama_produk'),
-                group_produk: formData.get('group_produk'),
-                stok: parseInt(formData.get('stok')) || 0,
-                harga_beli: parseFloat(formData.get('harga_beli')) || 0,
-                harga_jual: parseFloat(formData.get('harga_jual')) || 0,
-                komisi: parseFloat(formData.get('komisi')) || 0,
-                point: parseFloat(formData.get('point')) || 0,
-                inventory: formData.get('inventory') === 'on',
-                redeemable: formData.get('redeemable') === 'on',
-                status: formData.get('status')
-            };
-
-            // Handle inventory logic
-            if (data.inventory) {
-                // Inventory AKTIF - gunakan stok yang diinput user
-                if (data.stok <= 0) {
-                    Notifications.error('Stok harus diisi ketika inventory aktif');
-                    return;
-                }
-            } else {
-                // Inventory NONAKTIF - set stok NULL (unlimited)
-                data.stok = null;
-            }
-
-            console.log('Updating product data:', data);
-
-            // Upload new image if selected
-            if (this.selectedFile) {
-                console.log('Uploading new image for update...');
-                
-                // Delete old image if exists
-                const oldItem = this.currentData.find(d => d.id === id);
-                if (oldItem && oldItem.foto_url) {
-                    await this.deleteImage(oldItem.foto_url);
-                }
-                
-                // Upload new image
-                const fotoUrl = await this.uploadImage(this.selectedFile);
-                data.foto_url = fotoUrl;
-                console.log('New image uploaded, URL:', fotoUrl);
-            }
-
-            Helpers.showLoading();
-
-            const { data: result, error } = await supabase
-                .from('produk')
-                .update(data)
-                .eq('id', id)
-                .select();
-
-            if (error) {
-                console.error('Supabase update error:', error);
-                throw error;
-            }
-
-            modal.close();
-            await this.loadData();
-            Notifications.success('Produk berhasil diupdate!');
-
-        } catch (error) {
-            Helpers.hideLoading();
-            console.error('Update product error:', error);
-            Notifications.error('Gagal mengupdate produk: ' + error.message);
-        }
-    }
-
-    // Delete product
-    delete(id) {
-        console.log('Delete button clicked for ID:', id);
-        
-        const item = this.currentData.find(d => d.id === id);
-        if (!item) {
-            console.error('Item not found for deletion:', id);
-            Notifications.error('Data tidak ditemukan');
-            return;
-        }
-
-        console.log('Showing confirmation for:', item);
-        
-        const confirmMessage = `
-            <div class="text-center">
-                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
-                    <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z"/>
-                    </svg>
                 </div>
-                <h3 class="text-lg font-medium text-gray-900 mb-2">Hapus Produk?</h3>
-                <p class="text-sm text-gray-500 mb-4">
-                    Anda akan menghapus produk <strong>"${this.escapeHtml(item.nama_produk)}"</strong> dari outlet <strong>"${this.escapeHtml(item.outlet)}"</strong>. 
-                    ${item.foto_url ? 'Foto produk juga akan dihapus dari storage.' : ''}
-                    Tindakan ini tidak dapat dibatalkan.
-                </p>
+                <div class="p-6">
+                    <div id="products-table"></div>
+                </div>
             </div>
         `;
-
-        modal.showConfirm(
-            confirmMessage,
-            () => this.confirmDelete(id),
-            () => console.log('Delete cancelled')
-        );
     }
 
-    async confirmDelete(id) {
-        try {
-            console.log('Confirming delete for:', id);
-            const item = this.currentData.find(d => d.id === id);
-            
-            Helpers.showLoading();
+    // Load group products module
+    loadGroupProducts() {
+        console.log('Loading group products module');
+        return `
+            <div class="bg-white rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                    <h3 class="text-lg font-semibold text-gray-800">Daftar Group Produk</h3>
+                    <button id="add-group-product" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
+                        Tambah Group
+                    </button>
+                </div>
+                <div class="p-6">
+                    <div id="group-products-table"></div>
+                </div>
+            </div>
+        `;
+    }
 
-            // Delete image from storage if exists
-            if (item && item.foto_url) {
-                await this.deleteImage(item.foto_url);
+
+// Load stock management module - TAMBAH TOMBOL RESET
+loadStockManagement() {
+    console.log('Loading stock management module');
+    return `
+        <div class="space-y-6">
+            <!-- Header dengan tombol reset -->
+            <div class="flex justify-between items-center">
+               
+                <div class="flex space-x-2">
+                    <button 
+                        onclick="stockManagement.exportBeforeReset()"
+                        class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors text-sm"
+                        title="Export Data Sebelum Reset"
+                    >
+                        <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        Export Data
+                    </button>
+                    <button 
+                        onclick="stockManagement.showResetOptions()"
+                        class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors text-sm"
+                        title="Reset Data Stok"
+                    >
+                        <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                        Reset Data
+                    </button>
+                </div>
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-green-100 text-green-600">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                            </svg>
+                        </div>
+                        <div class="ml-4">
+                            <h3 class="text-sm font-medium text-gray-500">Stok Masuk</h3>
+                            <button onclick="stockManagement.showStockInForm()" class="text-2xl font-semibold text-gray-900 hover:text-blue-600 transition-colors">
+                                Tambah Stok Masuk
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-red-100 text-red-600">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
+                            </svg>
+                        </div>
+                        <div class="ml-4">
+                            <h3 class="text-sm font-medium text-gray-500">Stok Keluar</h3>
+                            <button onclick="stockManagement.showStockOutForm()" class="text-2xl font-semibold text-gray-900 hover:text-blue-600 transition-colors">
+                                Tambah Stok Keluar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-blue-100 text-blue-600">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                            </svg>
+                        </div>
+                        <div class="ml-4">
+                            <h3 class="text-sm font-medium text-gray-500">Pergerakan Stok</h3>
+                            <button onclick="stockManagement.showStockMovement()" class="text-2xl font-semibold text-gray-900 hover:text-blue-600 transition-colors">
+                                Lihat Laporan
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Stock Movements -->
+            <div class="bg-white rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                    <h3 class="text-lg font-semibold text-gray-800">Pergerakan Stok Terbaru</h3>
+                    <span class="text-sm text-gray-500">
+                        Total: <span id="movement-count">${this.stockMovements ? this.stockMovements.length : 0}</span> records
+                    </span>
+                </div>
+                <div class="p-6">
+                    <div id="recent-stock-movements">
+                        <div class="text-center py-8">
+                            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                            <p class="mt-2 text-gray-500">Memuat data...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+    // Load employees module
+    loadEmployees() {
+        console.log('Loading employees module');
+        return `
+            <div class="bg-white rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                    <h3 class="text-lg font-semibold text-gray-800">Manajemen Karyawan</h3>
+                    <button id="add-employee" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
+                        Tambah Karyawan
+                    </button>
+                </div>
+                <div class="p-6">
+                    <div id="employees-table"></div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Load members module - TAMBAH FILTER OUTLET
+    loadMembers() {
+        const outletOptions = this.outlets.map(outlet => 
+            `<option value="${outlet.outlet}">${outlet.outlet}</option>`
+        ).join('');
+
+        console.log('Loading members module');
+        return `
+            <div class="bg-white rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">Manajemen Member</h3>
+                        <button id="add-member" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
+                            Tambah Member
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Filter Outlet</label>
+                            <select id="outlet-filter" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <option value="">Semua Outlet</option>
+                                ${outletOptions}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Filter Status</label>
+                            <select id="status-filter" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <option value="">Semua Status</option>
+                                <option value="active">Aktif</option>
+                                <option value="inactive">Nonaktif</option>
+                            </select>
+                        </div>
+                        <div class="flex items-end">
+                            <button id="clear-filters" class="w-full bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors">
+                                Reset Filter
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-6">
+                    <div id="members-table"></div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Load outlets module
+    loadOutlets() {
+        console.log('Loading outlets module');
+        return `
+            <div class="bg-white rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                    <h3 class="text-lg font-semibold text-gray-800">Manajemen Outlet</h3>
+                    <button id="add-outlet" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
+                        Tambah Outlet
+                    </button>
+                </div>
+                <div class="p-6">
+                    <div id="outlets-table"></div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Load reports module
+    loadReports() {
+        const outletOptions = this.outlets.map(outlet => 
+            `<option value="${outlet.outlet}">${outlet.outlet}</option>`
+        ).join('');
+
+        console.log('Loading reports module');
+        return `
+            <div class="space-y-6">
+                <!-- Summary Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <div class="flex items-center">
+                            <div class="p-3 rounded-full bg-green-100 text-green-600">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"/>
+                                </svg>
+                            </div>
+                            <div class="ml-4">
+                                <h3 class="text-sm font-medium text-gray-500">Total Penjualan</h3>
+                                <p class="text-2xl font-semibold text-gray-900" id="total-sales">Rp 0</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <div class="flex items-center">
+                            <div class="p-3 rounded-full bg-blue-100 text-blue-600">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                                </svg>
+                            </div>
+                            <div class="ml-4">
+                                <h3 class="text-sm font-medium text-gray-500">Total Transaksi</h3>
+                                <p class="text-2xl font-semibold text-gray-900" id="total-transactions">0</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <div class="flex items-center">
+                            <div class="p-3 rounded-full bg-purple-100 text-purple-600">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
+                                </svg>
+                            </div>
+                            <div class="ml-4">
+                                <h3 class="text-sm font-medium text-gray-500">Total Item Terjual</h3>
+                                <p class="text-2xl font-semibold text-gray-900" id="total-items">0</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <div class="flex items-center">
+                            <div class="p-3 rounded-full bg-yellow-100 text-yellow-600">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"/>
+                                </svg>
+                            </div>
+                            <div class="ml-4">
+                                <h3 class="text-sm font-medium text-gray-500">Total Profit</h3>
+                                <p class="text-2xl font-semibold text-gray-900" id="total-profit">Rp 0</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="bg-white rounded-lg shadow">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-lg font-semibold text-gray-800">Filter Laporan</h3>
+                    </div>
+                    <div class="p-6">
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Tanggal Mulai</label>
+                                <input type="date" id="start-date" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Tanggal Akhir</label>
+                                <input type="date" id="end-date" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Outlet</label>
+                                <select id="outlet-filter" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                    <option value="">Semua Outlet</option>
+                                    ${outletOptions}
+                                </select>
+                            </div>
+                            <div class="flex items-end">
+                                <button id="apply-filters" class="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
+                                    Terapkan Filter
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Export Button -->
+                <div class="flex justify-end">
+                    <button id="export-report" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors flex items-center">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        Export CSV
+                    </button>
+                </div>
+
+   <!-- TAB STRUCTURE - FLEX WRAP -->
+            <div class="bg-white rounded-lg shadow">
+                <div class="border-b border-gray-200">
+                    <nav class="flex flex-wrap gap-2 px-4 py-3" aria-label="Tabs">
+                        <button class="report-tab active whitespace-nowrap px-4 py-2 border-b-2 border-blue-500 font-medium text-sm text-blue-600 bg-blue-50 rounded-t" data-tab="detail-transaksi">
+                            📊 Detail Transaksi
+                        </button>
+                        <button class="report-tab whitespace-nowrap px-4 py-2 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50 rounded-t" data-tab="pembayaran">
+                            💳 Pembayaran
+                        </button>
+                        <button class="report-tab whitespace-nowrap px-4 py-2 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50 rounded-t" data-tab="komisi">
+                            💰 Komisi
+                        </button>
+                        <button class="report-tab whitespace-nowrap px-4 py-2 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50 rounded-t" data-tab="membercard">
+                            🎫 Membercard
+                        </button>
+                        <button class="report-tab whitespace-nowrap px-4 py-2 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50 rounded-t" data-tab="absen">
+                            👥 Absen
+                        </button>
+                        <button class="report-tab whitespace-nowrap px-4 py-2 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50 rounded-t" data-tab="omset">
+                            📈 Omset
+                        </button>
+                        <button class="report-tab whitespace-nowrap px-4 py-2 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50 rounded-t" data-tab="pemasukan-pengeluaran">
+                            💸 Pemasukan & Pengeluaran
+                        </button>
+						<button class="report-tab whitespace-nowrap px-4 py-2 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50 rounded-t" data-tab="order-transaksi">
+ 					   📋 Order Transaksi
+						</button>
+                        <button class="report-tab whitespace-nowrap px-4 py-2 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50 rounded-t" data-tab="transaksi-cancel">
+                            ❌ Transaksi Cancel
+                        </button>
+                    </nav>
+                </div>
+                   <!-- Report Title Section - DIBAWAH TAB -->
+                <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <h3 class="text-lg font-semibold text-gray-800" id="report-title">Detail Transaksi</h3>
+                    <p class="text-sm text-gray-600 mt-1" id="report-subtitle">Ringkasan lengkap semua transaksi</p>
+                </div>
+                <!-- Single Table Container -->
+                <div class="p-6">
+                    <div id="reports-table"></div>
+                </div>
+            </div>
+        </div>
+            <!-- END TAB STRUCTURE -->
+
+      <!-- Reports Table -->
+                <div class="bg-white rounded-lg shadow">
+                    
+                    <div class="p-6">
+                        <div id="reports-table"></div>
+                    </div>
+                </div>
+            </div>
+       `;
+    }
+
+    // Load dashboard module
+    async loadDashboard() {
+        console.log('Loading dashboard content');
+        return `
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <div class="p-3 rounded-full bg-blue-100 text-blue-600">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
+                                </svg>
+                            </div>
+                            <div class="ml-4">
+                                <h3 class="text-sm font-medium text-gray-500">Total Produk</h3>
+                                <p class="text-2xl font-semibold text-gray-900" id="total-products">0</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-green-100 text-green-600">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"/>
+                            </svg>
+                        </div>
+                        <div class="ml-4">
+                            <h3 class="text-sm font-medium text-gray-500">Total Karyawan</h3>
+                            <p class="text-2xl font-semibold text-gray-900" id="total-employees">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-purple-100 text-purple-600">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+                            </svg>
+                        </div>
+                        <div class="ml-4">
+                            <h3 class="text-sm font-medium text-gray-500">Total Member</h3>
+                            <p class="text-2xl font-semibold text-gray-900" id="total-members">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-yellow-100 text-yellow-600">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                            </svg>
+                        </div>
+                        <div class="ml-4">
+                            <h3 class="text-sm font-medium text-gray-500">Total Outlet</h3>
+                            <p class="text-2xl font-semibold text-gray-900" id="total-outlets">0</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">Penjualan Hari Ini</h3>
+                        <span class="text-2xl font-bold text-green-600" id="today-sales">Rp 0</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-lg font-semibold text-gray-800">Penjualan Bulan Ini</h3>
+                        <span class="text-2xl font-bold text-blue-600" id="monthly-sales">Rp 0</span>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">Aksi Cepat</h3>
+                        <button id="refresh-dashboard" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm">
+                            Refresh Data
+                        </button>
+                    </div>
+                    <div class="space-y-3">
+                        <button onclick="app.loadModule('products')" class="w-full flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                            <span class="text-gray-700">Tambah Produk Baru</span>
+                            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                            </svg>
+                        </button>
+                        <button onclick="app.loadModule('employees')" class="w-full flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                            <span class="text-gray-700">Kelola Karyawan</span>
+                            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                            </svg>
+                        </button>
+                        <button onclick="app.loadModule('reports')" class="w-full flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                            <span class="text-gray-700">Lihat Laporan</span>
+                            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                    <h3 class="text-lg font-semibold text-gray-800">Transaksi Terbaru</h3>
+                    <button onclick="app.loadModule('reports')" class="text-blue-600 hover:text-blue-700 text-sm font-medium">
+                        Lihat Semua
+                    </button>
+                </div>
+                <div class="p-6">
+                    <div id="recent-transactions">
+                        <div class="text-center py-8">
+                            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                            <p class="mt-2 text-gray-500">Memuat transaksi...</p>
+                        </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+   // Update initModule method - FIXED VERSION
+initModule(moduleName) {
+    console.log('Initializing module JS:', moduleName);
+    console.log('Available modules:', {
+        GroupProducts: typeof GroupProducts,
+        groupProducts: typeof groupProducts,
+        products: typeof products,
+        dashboard: typeof dashboard
+    });
+    
+    // Beri timeout untuk memastikan DOM ter-render sepenuhnya
+    setTimeout(() => {
+        try {
+            switch (moduleName) {
+                case 'dashboard':
+                    if (typeof dashboard !== 'undefined' && dashboard !== null) {
+                        dashboard.init();
+                        console.log('✅ Dashboard module initialized');
+                    } else {
+                        console.error('❌ Dashboard module not available');
+                    }
+                    break;
+                    
+                case 'products':
+                    if (typeof products !== 'undefined' && products !== null) {
+                        products.init();
+                        console.log('✅ Products module initialized');
+                    } else {
+                        console.error('❌ Products module not available');
+                    }
+                    break;
+                    
+                case 'group_products':
+                    console.log('🔄 Initializing group_products module...');
+                    // Coba multiple approaches
+                    if (typeof GroupProducts !== 'undefined') {
+                        console.log('📦 Using GroupProducts class constructor');
+                        window.groupProducts = new GroupProducts();
+                        window.groupProducts.init();
+                        console.log('✅ Group products module initialized via constructor');
+                    } 
+                    else if (typeof groupProducts !== 'undefined' && groupProducts !== null) {
+                        console.log('📦 Using existing groupProducts instance');
+                        if (typeof groupProducts.init === 'function') {
+                            groupProducts.init();
+                            console.log('✅ Group products module initialized (existing instance)');
+                        } else {
+                            console.error('❌ groupProducts.init is not a function');
+                        }
+                    }
+                    else {
+                        console.error('❌ GroupProducts class not defined, attempting dynamic load...');
+                        this.loadModuleScript('group_products');
+                    }
+                    break;
+                    
+                case 'stock_management':
+                    if (typeof stockManagement !== 'undefined' && stockManagement !== null) {
+                        stockManagement.init();
+                        console.log('✅ Stock Management module initialized');
+                    } else {
+                        console.error('❌ Stock Management module not available');
+                    }
+                    break;
+                    
+                case 'employees':
+                    if (typeof employees !== 'undefined' && employees !== null) {
+                        employees.init();
+                        console.log('✅ Employees module initialized');
+                    } else {
+                        console.error('❌ Employees module not available');
+                    }
+                    break;
+                    
+                case 'members':
+                    if (typeof members !== 'undefined' && members !== null) {
+                        members.init();
+                        console.log('✅ Members module initialized');
+                    } else {
+                        console.error('❌ Members module not available');
+                    }
+                    break;
+                    
+                case 'outlets':
+                    if (typeof outlets !== 'undefined' && outlets !== null) {
+                        outlets.init();
+                        console.log('✅ Outlets module initialized');
+                    } else {
+                        console.error('❌ Outlets module not available');
+                    }
+                    break;
+                    
+                case 'reports':
+                    if (typeof reports !== 'undefined' && reports !== null) {
+                        reports.init();
+                        console.log('✅ Reports module initialized');
+                    } else {
+                        console.error('❌ Reports module not available');
+                    }
+                    break;
+                    
+                default:
+                    console.log('ℹ️ No specific JS for module:', moduleName);
+            }
+        } catch (error) {
+            console.error('💥 Error initializing module:', moduleName, error);
+        }
+    }, 300); // Increased delay untuk pastikan semua script terload
+}
+    // Load dashboard statistics
+    async loadDashboardStats() {
+        console.log('Loading dashboard statistics');
+        try {
+            // Load total products
+            const { data: products, error: productsError } = await supabase
+                .from('produk')
+                .select('*', { count: 'exact' });
+
+            if (!productsError && products) {
+                const totalProductsEl = document.getElementById('total-products');
+                if (totalProductsEl) totalProductsEl.textContent = products.length;
+                console.log('Total products:', products.length);
             }
 
-            const { error } = await supabase
-                .from('produk')
-                .delete()
-                .eq('id', id);
+            // Load total employees
+            const { data: employees, error: employeesError } = await supabase
+                .from('karyawan')
+                .select('*', { count: 'exact' });
 
-            if (error) throw error;
+            if (!employeesError && employees) {
+                const totalEmployeesEl = document.getElementById('total-employees');
+                if (totalEmployeesEl) totalEmployeesEl.textContent = employees.length;
+                console.log('Total employees:', employees.length);
+            }
 
-            console.log('Delete successful');
-            await this.loadData();
-            Notifications.success('Produk berhasil dihapus!');
+            // Load total members
+            const { data: members, error: membersError } = await supabase
+                .from('membercard')
+                .select('*', { count: 'exact' });
+
+            if (!membersError && members) {
+                const totalMembersEl = document.getElementById('total-members');
+                if (totalMembersEl) totalMembersEl.textContent = members.length;
+                console.log('Total members:', members.length);
+            }
+
+            // Load total outlets
+            const { data: outlets, error: outletsError } = await supabase
+                .from('outlet')
+                .select('*', { count: 'exact' });
+
+            if (!outletsError && outlets) {
+                const totalOutletsEl = document.getElementById('total-outlets');
+                if (totalOutletsEl) totalOutletsEl.textContent = outlets.length;
+                console.log('Total outlets:', outlets.length);
+            }
 
         } catch (error) {
-            Helpers.hideLoading();
-            console.error('Error deleting product:', error);
-            
-            if (error.code === '23503') {
-                Notifications.error('Tidak dapat menghapus produk karena masih digunakan di transaksi lain');
-            } else {
-                Notifications.error('Gagal menghapus produk: ' + error.message);
-            }
+            console.error('Error loading dashboard stats:', error);
         }
     }
-
-    // Refresh data
-    async refresh() {
-        console.log('Refreshing products data...');
-        await this.loadData();
-    }
-
-    // Cleanup
-    cleanup() {
-        console.log('Cleaning up products module...');
-        this.isInitialized = false;
-        this.table = null;
-    }
 }
 
-// Initialize products globally - FIXED VERSION
-let products = null;
-
+// Initialize app globally
+let app = null;
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM loaded, checking for products module...');
-    
-    // Hanya inisialisasi jika di halaman yang memiliki products
-    if (document.getElementById('products-table')) {
-        console.log('🔄 Initializing products module from DOM...');
-        products = new Products();
-        window.products = products;
-        
-        // Tunggu app.js selesai inisialisasi
-        setTimeout(() => {
-            if (window.app && typeof window.app.initModule === 'function') {
-                console.log('✅ App ready, products module registered');
-            }
-        }, 100);
-    }
+    app = new App();
+    window.app = app;
 });
-
-// Export untuk compatibility
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = Products;
-}
