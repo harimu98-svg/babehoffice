@@ -54,68 +54,45 @@ class Members {
 
     // Load data from Supabase dengan pagination
     async loadData(filters = {}) {
-        try {
-            Helpers.showLoading();
-            console.log('Loading members data...', filters);
-            
-            const allData = [];
-            let page = 1;
-            const pageSize = 1000;
-            let hasMore = true;
+    try {
+        Helpers.showLoading();
+        console.log('Loading members data...', filters);
+        
+        let query = supabase
+            .from('membercard')
+            .select('*');
 
-            while (hasMore) {
-                const from = (page - 1) * pageSize;
-                const to = from + pageSize - 1;
-                
-                let query = supabase
-                    .from('membercard')
-                    .select('*')
-                    .range(from, to);
-
-                // Apply filters
-                if (filters.outlet) {
-                    query = query.eq('outlet', filters.outlet);
-                }
-                if (filters.status) {
-                    query = query.eq('status', filters.status);
-                }
-
-                const { data, error } = await query.order('nama', { ascending: true });
-
-                if (error) throw error;
-
-                if (data && data.length > 0) {
-                    allData.push(...data);
-                    
-                    if (data.length < pageSize) {
-                        hasMore = false;
-                    } else {
-                        page++;
-                    }
-                } else {
-                    hasMore = false;
-                }
-            }
-
-            console.log('✅ Finished loading members:', {
-                totalLoaded: allData.length,
-                pages: page
-            });
-
-            this.currentData = allData;
-            if (this.table) {
-                this.table.updateData(this.currentData);
-            }
-
-            Helpers.hideLoading();
-            return this.currentData;
-        } catch (error) {
-            Helpers.hideLoading();
-            console.error('Error loading members:', error);
-            Notifications.error('Gagal memuat data member: ' + error.message);
-            return [];
+        // Apply filters
+        if (filters.outlet) {
+            query = query.eq('outlet', filters.outlet);
         }
+        if (filters.status) {
+            query = query.eq('status', filters.status);
+        }
+
+        const { data, error } = await query.order('nama', { ascending: true });
+
+        if (error) throw error;
+
+        // PERBAIKAN: Pastikan currentData selalu ter-update
+        this.currentData = data || [];
+        console.log('✅ Finished loading members:', this.currentData.length, 'items');
+        console.log('Member IDs:', this.currentData.map(m => m.id));
+        
+        if (this.table) {
+            this.table.updateData(this.currentData);
+        }
+
+        Helpers.hideLoading();
+        return this.currentData;
+    } catch (error) {
+        Helpers.hideLoading();
+        console.error('Error loading members data:', error);
+        Notifications.error('Gagal memuat data member: ' + error.message);
+        return [];
     }
+}
+
 
     // Initialize table
     initTable() {
@@ -615,67 +592,74 @@ class Members {
 
     // Save new member
     async save() {
-        try {
-            console.log('Saving new member...');
-            
-            if (!this.validateForm()) {
-                return;
-            }
+    try {
+        const form = document.getElementById('member-form');
+        const formData = new FormData(form);
+        
+        // Create data object
+        const data = {
+            nama: formData.get('nama'),
+            telepon: formData.get('telepon'),
+            email: formData.get('email'),
+            outlet: formData.get('outlet'),
+            alamat: formData.get('alamat'),
+            status: formData.get('status') || 'active'
+        };
 
-            const form = document.getElementById('member-form');
-            const formData = new FormData(form);
-            
-            const data = {
-                nama: formData.get('nama').trim(),
-                nomorWA: formData.get('nomorWA').trim(),
-                id_member: formData.get('id_member')?.trim() || null,
-                outlet: formData.get('outlet'),
-                tanggal_lahir: formData.get('tanggal_lahir') || null,
-                alamat: formData.get('alamat')?.trim() || null,
-                berlaku: formData.get('berlaku') || null,
-                point: parseInt(formData.get('point')) || 0,
-                status: formData.get('status') || 'active'
-            };
+        console.log('Member data to save:', data);
 
-            console.log('Member data to save:', data);
+        Helpers.showLoading();
 
-            Helpers.showLoading();
+        const { data: result, error } = await supabase
+            .from('membercard')
+            .insert([data])
+            .select();
 
-            const { data: result, error } = await supabase
-                .from('membercard')
-                .insert([data])
-                .select();
-
-            if (error) {
-                console.error('Supabase error:', error);
-                throw error;
-            }
-
-            console.log('Save successful:', result);
-
-            modal.close();
-            await this.loadData();
-            Notifications.success('Member berhasil ditambahkan!');
-
-        } catch (error) {
-            Helpers.hideLoading();
-            console.error('Error saving member:', error);
-            Notifications.error('Gagal menambah member: ' + error.message);
+        if (error) {
+            console.error('Supabase insert error:', error);
+            throw error;
         }
-    }
 
+        console.log('Save successful:', result);
+
+        modal.close();
+        
+        // PERBAIKAN: Refresh data dan update currentData
+        await this.loadData();
+        Notifications.success('Member berhasil ditambahkan!');
+
+    } catch (error) {
+        Helpers.hideLoading();
+        console.error('Save member error:', error);
+        Notifications.error('Gagal menambah member: ' + error.message);
+    }
+}
     // Edit member
     edit(id) {
-        console.log('Editing member:', id);
-        const item = this.currentData.find(d => d.id === id);
-        if (item) {
-            console.log('Found item for editing:', item);
-            this.showForm(item);
-        } else {
-            console.error('Item not found for editing:', id);
-            Notifications.error('Data tidak ditemukan untuk diedit');
-        }
+    console.log('Editing member:', id);
+    console.log('Current data:', this.currentData);
+    
+    const item = this.currentData.find(d => d.id == id);
+    if (item) {
+        console.log('Found item for editing:', item);
+        this.showForm(item);
+    } else {
+        console.error('Item not found for editing:', id);
+        console.log('Available IDs:', this.currentData.map(d => d.id));
+        Notifications.error('Data tidak ditemukan untuk diedit');
+        
+        // Refresh data dan coba lagi
+        this.loadData().then(() => {
+            const refreshedItem = this.currentData.find(d => d.id == id);
+            if (refreshedItem) {
+                console.log('Found after refresh:', refreshedItem);
+                this.showForm(refreshedItem);
+            } else {
+                Notifications.error('Data masih tidak ditemukan setelah refresh');
+            }
+        });
     }
+}
 
     // Update member
     async update(id) {
