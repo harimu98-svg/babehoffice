@@ -147,12 +147,23 @@ class Members {
                 key: 'point',
                 formatter: (value) => value || 0
             },
-            { 
-                title: 'Berlaku', 
-                key: 'berlaku',
-                type: 'date',
-                formatter: (value) => value ? Helpers.formatDate(value) : '-'
-            },
+           { 
+    title: 'Tanggal Daftar', 
+    key: 'created_at',
+    formatter: (value) => {
+        if (!value) return '-';
+        try {
+            const date = new Date(value);
+            return date.toLocaleDateString('id-ID', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            });
+        } catch (error) {
+            return '-';
+        }
+    }
+},
             { 
                 title: 'Status', 
                 key: 'status',
