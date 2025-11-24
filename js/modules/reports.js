@@ -8,6 +8,7 @@ class Reports {
         
         this.currentData = [];
         this.currentTab = 'detail-transaksi';
+        this.currentTab = 'order-transaksi';
         this.table = null;
         this.filters = {
             startDate: '',
@@ -134,6 +135,7 @@ class Reports {
             'absen': 'Laporan Absensi Karyawan',
             'omset': 'Laporan Omset',
             'pemasukan-pengeluaran': 'Laporan Pemasukan & Pengeluaran',
+            'order-transaksi': 'Laporan Order Transaksi',
             'transaksi-cancel': 'Laporan Transaksi Cancel'
         };
 
@@ -230,6 +232,9 @@ class Reports {
                     break;
                 case 'transaksi-cancel':
                     data = await this.loadLaporanTransaksiCancel();
+                    break;
+                case 'order-transaksi':
+                    data = await this.loadOrderTransaksi();
                     break;
                 default:
                     console.warn('Unknown tab, loading detail transaksi');
@@ -864,7 +869,81 @@ extractDateFromTimestamp(timestamp) {
         
         return data;
     }
+async loadOrderTransaksi() {
+    console.log('Loading laporan order transaksi');
+    
+    let query = supabase
+        .from('transaksi_order')
+        .select('*')
+        .order('order_date', { ascending: false });
 
+    // Apply filters
+    if (this.filters.startDate) {
+        query = query.gte('order_date', this.filters.startDate);
+    }
+    if (this.filters.endDate) {
+        query = query.lte('order_date', this.filters.endDate);
+    }
+    if (this.filters.outlet) {
+        query = query.eq('outlet', this.filters.outlet);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    return this.processOrderTransaksiData(data || []);
+}
+
+processOrderTransaksiData(data) {
+    return data.map(item => {
+        // Format tanggal dan waktu
+        let orderDate = 'Unknown';
+        let orderTime = 'Unknown';
+        
+        if (item.order_date) {
+            if (item.order_date.includes(' ')) {
+                // Format: "24/11/2025 11:14:12"
+                const [datePart, timePart] = item.order_date.split(' ');
+                orderDate = datePart;
+                orderTime = timePart;
+            } else if (item.order_date.includes('T')) {
+                // Format ISO
+                orderDate = item.order_date.split('T')[0];
+                orderTime = item.order_date.split('T')[1].split('.')[0];
+            } else {
+                orderDate = item.order_date;
+            }
+        }
+
+        return {
+            outlet: item.outlet || 'Unknown',
+            order_no: item.order_no || '',
+            order_date: orderDate,
+            order_time: orderTime,
+            serve_by: item.serve_by || '',
+            kasir: item.kasir || '',
+            customer_id: item.customer_id || '',
+            customer_name: item.customer_name || 'Umum',
+            harga_beli: parseFloat(item.harga_beli) || 0,
+            harga_jual: parseFloat(item.harga_jual) || 0,
+            discount_percent: parseFloat(item.discount_percent) || 0,
+            discount_amount: parseFloat(item.discount_amount) || 0,
+            redeem_qty: parseInt(item.redeem_qty) || 0,
+            subtotal_amount: parseFloat(item.subtotal_amount) || 0,
+            profit: parseFloat(item.profit) || 0,
+            comission: parseFloat(item.comission) || 0,
+            payment_type: item.payment_type || 'cash',
+            status: item.status || '',
+            point: parseInt(item.point) || 0,
+            redeem_amount: parseFloat(item.redeem_amount) || 0,
+            total_amount: parseFloat(item.total_amount) || 0,
+            cash_change: parseFloat(item.cash_change) || 0,
+            cash_received: parseFloat(item.cash_received) || 0,
+            ipaymu_reference_id: item.ipaymu_reference_id || ''
+        };
+    });
+}
+    
     async loadLaporanTransaksiCancel() {
         console.log('Loading laporan transaksi cancel');
         
@@ -954,6 +1033,7 @@ extractDateFromTimestamp(timestamp) {
             'absen': this.getAbsenColumns(),
             'omset': this.getOmsetColumns(),
             'pemasukan-pengeluaran': this.getPemasukanPengeluaranColumns(),
+            'order-transaksi': this.getOrderTransaksiColumns(),
             'transaksi-cancel': this.getTransaksiCancelColumns()
         };
 
@@ -1221,6 +1301,115 @@ extractDateFromTimestamp(timestamp) {
     ];
 }
 
+    getOrderTransaksiColumns() {
+    return [
+        { title: 'Outlet', key: 'outlet' },
+        { title: 'Order No', key: 'order_no' },
+        { 
+            title: 'Tanggal', 
+            key: 'order_date',
+            type: 'date'
+        },
+        { title: 'Waktu', key: 'order_time' },
+        { title: 'Serve By', key: 'serve_by' },
+        { title: 'Kasir', key: 'kasir' },
+        { title: 'Customer ID', key: 'customer_id' },
+        { title: 'Customer Name', key: 'customer_name' },
+        { 
+            title: 'Harga Beli', 
+            key: 'harga_beli',
+            type: 'currency'
+        },
+        { 
+            title: 'Harga Jual', 
+            key: 'harga_jual',
+            type: 'currency'
+        },
+        { 
+            title: 'Discount %', 
+            key: 'discount_percent',
+            formatter: (value) => `${value}%`
+        },
+        { 
+            title: 'Discount Amount', 
+            key: 'discount_amount',
+            type: 'currency'
+        },
+        { title: 'Redeem Qty', key: 'redeem_qty' },
+        { 
+            title: 'Subtotal', 
+            key: 'subtotal_amount',
+            type: 'currency'
+        },
+        { 
+            title: 'Profit', 
+            key: 'profit',
+            type: 'currency'
+        },
+        { 
+            title: 'Komisi', 
+            key: 'comission',
+            type: 'currency'
+        },
+        { 
+            title: 'Payment Type', 
+            key: 'payment_type',
+            formatter: (value) => {
+                const types = {
+                    'cash': 'Cash',
+                    'transfer': 'Transfer',
+                    'debit_card': 'Debit Card',
+                    'credit_card': 'Credit Card'
+                };
+                return types[value] || value;
+            }
+        },
+        { 
+            title: 'Status', 
+            key: 'status',
+            formatter: (value) => {
+                const statusMap = {
+                    'completed': 'Selesai',
+                    'pending': 'Pending',
+                    'canceled': 'Cancel',
+                    'cancelled': 'Cancel'
+                };
+                const statusText = statusMap[value] || value;
+                const bgColor = value === 'completed' ? 'bg-green-100 text-green-800' : 
+                               value === 'canceled' || value === 'cancelled' ? 'bg-red-100 text-red-800' : 
+                               'bg-yellow-100 text-yellow-800';
+                
+                return `
+                    <span class="px-2 py-1 text-xs rounded-full ${bgColor}">
+                        ${statusText}
+                    </span>
+                `;
+            }
+        },
+        { title: 'Point', key: 'point' },
+        { 
+            title: 'Redeem Amount', 
+            key: 'redeem_amount',
+            type: 'currency'
+        },
+        { 
+            title: 'Total Amount', 
+            key: 'total_amount',
+            type: 'currency'
+        },
+        { 
+            title: 'Cash Received', 
+            key: 'cash_received',
+            type: 'currency'
+        },
+        { 
+            title: 'Cash Change', 
+            key: 'cash_change',
+            type: 'currency'
+        },
+        { title: 'iPaymu Reference', key: 'ipaymu_reference_id' }
+    ];
+}
     getTransaksiCancelColumns() {
         return [
             { 
@@ -1378,7 +1567,12 @@ extractDateFromTimestamp(timestamp) {
                 totalItems = new Set(this.currentData.map(item => item.order_no)).size;
                 totalProfit = -totalSales;
                 break;
-            
+            case 'order-transaksi':
+            totalSales = this.currentData.reduce((sum, item) => sum + (parseFloat(item.total_amount) || 0), 0);
+            totalTransactions = this.currentData.length;
+            totalItems = this.currentData.reduce((sum, item) => sum + (parseInt(item.redeem_qty) || 0), 0);
+            totalProfit = this.currentData.reduce((sum, item) => sum + (parseFloat(item.profit) || 0), 0);
+            break;
             default:
                 totalSales = this.currentData.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
                 totalTransactions = new Set(this.currentData.map(item => item.order_no)).size;
@@ -1435,6 +1629,10 @@ extractDateFromTimestamp(timestamp) {
                     csvContent = this.generatePemasukanPengeluaranCSV();
                     filename = `laporan-pemasukan-pengeluaran-${new Date().toISOString().split('T')[0]}.csv`;
                 },
+                'order-transaksi': () => {
+                csvContent = this.generateOrderTransaksiCSV();
+                filename = `laporan-order-transaksi-${new Date().toISOString().split('T')[0]}.csv`;
+            },
                 'transaksi-cancel': () => {
                     csvContent = this.generateTransaksiCancelCSV();
                     filename = `laporan-transaksi-cancel-${new Date().toISOString().split('T')[0]}.csv`;
@@ -1648,7 +1846,42 @@ formatDateForCSV(dateString) {
 
     return csvContent;
 }
+generateOrderTransaksiCSV() {
+    let csvContent = "Outlet,Order No,Tanggal,Waktu,Serve By,Kasir,Customer ID,Customer Name,Harga Beli,Harga Jual,Discount %,Discount Amount,Redeem Qty,Subtotal,Profit,Komisi,Payment Type,Status,Point,Redeem Amount,Total Amount,Cash Received,Cash Change,iPaymu Reference\n";
+    
+    this.currentData.forEach(item => {
+        const row = [
+            item.outlet,
+            item.order_no,
+            item.order_date,
+            item.order_time,
+            item.serve_by,
+            item.kasir,
+            item.customer_id,
+            item.customer_name,
+            item.harga_beli,
+            item.harga_jual,
+            item.discount_percent,
+            item.discount_amount,
+            item.redeem_qty,
+            item.subtotal_amount,
+            item.profit,
+            item.comission,
+            item.payment_type,
+            item.status,
+            item.point,
+            item.redeem_amount,
+            item.total_amount,
+            item.cash_received,
+            item.cash_change,
+            item.ipaymu_reference_id
+        ].map(field => `"${field}"`).join(',');
+        
+        csvContent += row + '\n';
+    });
 
+    return csvContent;
+}
     generateTransaksiCancelCSV() {
         let csvContent = "Tanggal,Order No,Outlet,Kasir,Customer,Amount,Alasan Cancel\n";
         
