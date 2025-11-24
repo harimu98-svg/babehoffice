@@ -16,9 +16,36 @@ class App {
         this.init();
     }
 
+    // Load module script dynamically dengan path yang benar
+    async loadModuleScript(moduleName) {
+        // Jika sudah diload, return langsung
+        if (this.moduleScriptsLoaded[moduleName]) {
+            console.log(`📦 ${moduleName}.js already loaded`);
+            return true;
+        }
 
-    console.log('🔄 App constructor called');
-    
+        // Dapatkan path dari mapping
+        const modulePath = this.modulePaths[moduleName] || `js/modules/${moduleName}.js`;
+        
+        console.log(`🔄 Loading ${moduleName} from: ${modulePath}`);
+        
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = modulePath;
+            script.onload = () => {
+                console.log(`✅ ${moduleName}.js loaded successfully`);
+                this.moduleScriptsLoaded[moduleName] = true;
+                resolve(true);
+            };
+            script.onerror = () => {
+                console.error(`❌ Failed to load ${modulePath}`);
+                this.moduleScriptsLoaded[moduleName] = false;
+                reject(new Error(`Failed to load ${modulePath}`));
+            };
+            document.head.appendChild(script);
+        });
+    }
+
     // Tunggu sampai DOM fully ready
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
