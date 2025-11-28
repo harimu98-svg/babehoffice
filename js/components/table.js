@@ -1,4 +1,4 @@
-// Table component - ENTER KEY SEARCH ONLY dengan FOOTER SUPPORT
+// Table component - ENTER KEY SEARCH ONLY WITH FOOTER SUPPORT
 class DataTable {
     constructor(containerId, options = {}) {
         this.container = document.getElementById(containerId);
@@ -9,7 +9,7 @@ class DataTable {
             searchable: true,
             pagination: true,
             pageSize: 10,
-            footerCallback: null,
+            footerData: null,
             ...options
         };
         this.currentPage = 1;
@@ -41,123 +41,121 @@ class DataTable {
     }
 
     // Render table
-    // Render table - STRUCTURE CLEANUP
-render() {
-    if (!this.container) return;
+    render() {
+        if (!this.container) return;
 
-    let html = '';
+        let html = '';
 
-    // Search box - HANYA ENTER KEY
-    if (this.options.searchable) {
-        const searchId = `${this.container.id}-search`;
-        
-        html += `
-            <div class="mb-4 data-table-search">
-                <div class="w-full">
-                    <label for="${searchId}" class="block text-sm font-medium text-gray-700 mb-1">
-                        Cari Data
-                    </label>
-                    <input 
-                        type="text" 
-                        id="${searchId}" 
-                        placeholder="Ketik kata kunci lalu tekan Enter..." 
-                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                        value=""
-                    >
+        // Search box - HANYA ENTER KEY
+        if (this.options.searchable) {
+            const searchId = `${this.container.id}-search`;
+            
+            html += `
+                <div class="mb-4 data-table-search">
+                    <div class="w-full">
+                        <label for="${searchId}" class="block text-sm font-medium text-gray-700 mb-1">
+                            Cari Data
+                        </label>
+                        <input 
+                            type="text" 
+                            id="${searchId}" 
+                            placeholder="Ketik kata kunci lalu tekan Enter..." 
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                            value=""
+                        >
+                    </div>
+                    <div class="mt-2 flex items-center text-sm text-gray-500">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        Tekan Enter untuk memulai pencarian
+                    </div>
                 </div>
-                <div class="mt-2 flex items-center text-sm text-gray-500">
-                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                    Tekan Enter untuk memulai pencarian
+            `;
+        }
+
+        // Table
+        html += `
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                ${this.options.columns.map(col => `
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        ${col.title}
+                                    </th>
+                                `).join('')}
+                                ${this.options.actions.length > 0 ? `
+                                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Aksi
+                                    </th>
+                                ` : ''}
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            ${this.renderRows()}
+                        </tbody>
+                        ${this.renderFooter()}
+                    </table>
                 </div>
             </div>
         `;
+
+        // Pagination
+        if (this.options.pagination) {
+            html += this.renderPagination();
+        }
+
+        this.container.innerHTML = html;
+
+        // Setup search handler dengan delay
+        setTimeout(() => {
+            this.setupSearchHandler();
+        }, 100);
     }
 
-    // Table dengan structure yang clean
-    html += `
-        <div class="bg-white rounded-lg shadow overflow-hidden">
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            ${this.options.columns.map(col => `
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    ${col.title}
-                                </th>
-                            `).join('')}
-                            ${this.options.actions.length > 0 ? `
-                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Aksi
-                                </th>
-                            ` : ''}
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-                        ${this.renderRows()}
-                    </tbody>
-                    ${this.renderFooter()}
-                </table>
-            </div>
-        </div>
-    `;
-
-    // Pagination
-    if (this.options.pagination) {
-        html += this.renderPagination();
-    }
-
-    this.container.innerHTML = html;
-
-    // Setup search handler dengan delay
-    setTimeout(() => {
-        this.setupSearchHandler();
-    }, 100);
-}
-    // Render footer - PERBAIKAN STRUKTUR
+    // Render footer
     renderFooter() {
-    if (!this.options.footerCallback) return '';
-    
-    try {
-        const currentData = this.filteredData.length > 0 ? this.filteredData : this.options.data;
-        
-        // Check jika ada data sebelum render footer
-        if (currentData.length === 0) return '';
-        
-        const footerContent = this.options.footerCallback(currentData);
-        
-        if (!footerContent || footerContent.trim() === '') return '';
-        
-        // HILANGKAN BARIS KOSONG - langsung render tfoot tanpa wrapper tambahan
+        if (!this.options.footerData) return '';
+
+        const dataToShow = this.filteredData.length > 0 ? this.filteredData : this.options.data;
+        if (dataToShow.length === 0) return '';
+
         return `
-            <tfoot>
-                ${footerContent}
+            <tfoot class="bg-blue-50">
+                <tr class="border-t-2 border-blue-200">
+                    ${this.options.columns.map(col => {
+                        const value = this.options.footerData[col.key];
+                        const isNumeric = col.type === 'currency' || 
+                                        typeof value === 'number' || 
+                                        this.isNumericValue(value);
+                        
+                        const cellClass = `px-6 py-4 whitespace-nowrap text-sm font-semibold ${isNumeric ? 'text-right' : 'text-left'}`;
+                        const displayValue = isNumeric && typeof value === 'number' ? 
+                            this.formatCell(value, col) : 
+                            value;
+
+                        return `
+                            <td class="${cellClass}">
+                                ${displayValue}
+                            </td>
+                        `;
+                    }).join('')}
+                    ${this.options.actions.length > 0 ? `
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-semibold">
+                            &nbsp;
+                        </td>
+                    ` : ''}
+                </tr>
             </tfoot>
         `;
-        
-    } catch (error) {
-        console.error('Error rendering footer:', error);
-        return '';
     }
-}
 
-            
-            // Fallback: render langsung sebagai row di tfoot
-            return `
-                <tfoot class="bg-gray-50 border-t-2 border-gray-300">
-                    <tr>
-                        <td colspan="${this.options.columns.length + (this.options.actions.length > 0 ? 1 : 0)}" class="px-6 py-4">
-                            ${footerContent}
-                        </td>
-                    </tr>
-                </tfoot>
-            `;
-            
-        } catch (error) {
-            console.error('Error rendering footer:', error);
-            return '';
-        }
+    // Helper untuk cek nilai numeric
+    isNumericValue(value) {
+        if (value === 'TOTAL') return false;
+        return !isNaN(parseFloat(value)) && isFinite(value);
     }
 
     // Setup search handler - HANYA ENTER KEY
@@ -255,11 +253,17 @@ render() {
             
             return `
                 <tr class="hover:bg-gray-50">
-                    ${this.options.columns.map(col => `
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            ${this.formatCell(row[col.key], col, row)}
-                        </td>
-                    `).join('')}
+                    ${this.options.columns.map(col => {
+                        const value = row[col.key];
+                        const isNumeric = col.type === 'currency' || this.isNumericColumn(col.key);
+                        const cellClass = `px-6 py-4 whitespace-nowrap text-sm text-gray-900 ${isNumeric ? 'text-right' : 'text-left'}`;
+                        
+                        return `
+                            <td class="${cellClass}">
+                                ${this.formatCell(value, col, row)}
+                            </td>
+                        `;
+                    }).join('')}
                     ${this.options.actions.length > 0 ? `
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             ${this.options.actions.map(action => `
@@ -275,6 +279,18 @@ render() {
                 </tr>
             `;
         }).join('');
+    }
+
+    // Helper untuk cek kolom numeric
+    isNumericColumn(key) {
+        const numericColumns = [
+            'qty', 'jumlah_membercard', 'jumlah_transaksi', 'point', 'redeem_qty',
+            'discount_percent', 'total_amount', 'amount', 'harga_jual', 'harga_beli',
+            'profit', 'comission', 'total_omset', 'total_modal', 'total_discount',
+            'total_redeem', 'omset_bersih', 'net_profit', 'rata_rata_transaksi',
+            'totalAmount', 'totalAmountCancel', 'total_komisi', 'total_uop'
+        ];
+        return numericColumns.includes(key);
     }
 
     // Helper untuk mencari ID row
@@ -481,6 +497,18 @@ render() {
         this.options.data = newData;
         this.filteredData = [];
         this.currentPage = 1;
+        
+        // Update footer data
+        if (this.options.onUpdateFooter) {
+            this.options.footerData = this.options.onUpdateFooter(newData);
+        }
+        
+        this.render();
+    }
+
+    // Update footer data
+    updateFooter(footerData) {
+        this.options.footerData = footerData;
         this.render();
     }
 
@@ -494,18 +522,6 @@ render() {
             searchInput.value = '';
         }
         
-        this.render();
-    }
-
-    // Set footer callback
-    setFooterCallback(callback) {
-        this.options.footerCallback = callback;
-        return this;
-    }
-
-    // Update options
-    updateOptions(newOptions) {
-        this.options = { ...this.options, ...newOptions };
         this.render();
     }
 
