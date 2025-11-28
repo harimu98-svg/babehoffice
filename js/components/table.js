@@ -1,4 +1,4 @@
-// Table component - ENTER KEY SEARCH ONLY
+// Table component - ENTER KEY SEARCH ONLY dengan FOOTER SUPPORT
 class DataTable {
     constructor(containerId, options = {}) {
         this.container = document.getElementById(containerId);
@@ -9,6 +9,7 @@ class DataTable {
             searchable: true,
             pagination: true,
             pageSize: 10,
+            footerCallback: null, // TAMBAHKAN FOOTER CALLBACK
             ...options
         };
         this.currentPage = 1;
@@ -95,6 +96,7 @@ class DataTable {
                         <tbody class="bg-white divide-y divide-gray-200">
                             ${this.renderRows()}
                         </tbody>
+                        ${this.renderFooter()} <!-- TAMBAHKAN FOOTER -->
                     </table>
                 </div>
             </div>
@@ -111,6 +113,24 @@ class DataTable {
         setTimeout(() => {
             this.setupSearchHandler();
         }, 100);
+    }
+
+    // Render footer - METHOD BARU
+    renderFooter() {
+        if (!this.options.footerCallback) return '';
+        
+        try {
+            const currentData = this.filteredData.length > 0 ? this.filteredData : this.options.data;
+            const footerHTML = this.options.footerCallback(currentData);
+            
+            if (footerHTML && footerHTML.trim() !== '') {
+                return footerHTML;
+            }
+        } catch (error) {
+            console.error('Error rendering footer:', error);
+        }
+        
+        return '';
     }
 
     // Setup search handler - HANYA ENTER KEY
@@ -447,6 +467,18 @@ class DataTable {
             searchInput.value = '';
         }
         
+        this.render();
+    }
+
+    // Set footer callback - METHOD BARU
+    setFooterCallback(callback) {
+        this.options.footerCallback = callback;
+        return this;
+    }
+
+    // Update options - METHOD BARU
+    updateOptions(newOptions) {
+        this.options = { ...this.options, ...newOptions };
         this.render();
     }
 
