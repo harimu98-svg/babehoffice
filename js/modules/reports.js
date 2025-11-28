@@ -1,4 +1,4 @@
-// Reports Module dengan 8 Tab Laporan - FINAL VERSION dengan Footer TOTAL
+// Reports Module dengan 8 Tab Laporan - FINAL VERSION WITH FOOTER
 class Reports {
     constructor() {
         // Cek apakah instance sudah ada
@@ -31,8 +31,7 @@ class Reports {
         this.updateTableForCurrentTab = this.updateTableForCurrentTab.bind(this);
         this.cleanup = this.cleanup.bind(this);
         this.setDefaultDateFilter = this.setDefaultDateFilter.bind(this);
-        this.renderFooter = this.renderFooter.bind(this);
-        this.calculateFooterTotals = this.calculateFooterTotals.bind(this);
+        this.getFooterData = this.getFooterData.bind(this);
 
         window.reportsInstance = this;
     }
@@ -70,6 +69,46 @@ class Reports {
             console.error('Failed to initialize Reports module:', error);
             Notifications.error('Gagal menginisialisasi modul laporan: ' + error.message);
         }
+    }
+
+    // ==================== FOOTER METHODS ====================
+
+    getFooterData() {
+        if (!this.currentData || this.currentData.length === 0) {
+            return null;
+        }
+
+        const footerData = {};
+        const columns = this.getTableColumns();
+        
+        columns.forEach(col => {
+            if (col.type === 'currency' || this.isNumericColumn(col.key)) {
+                footerData[col.key] = this.currentData.reduce((sum, item) => {
+                    const value = parseFloat(item[col.key]) || 0;
+                    return sum + value;
+                }, 0);
+            } else {
+                footerData[col.key] = 'TOTAL';
+            }
+        });
+
+        return footerData;
+    }
+
+    isNumericColumn(key) {
+        const numericColumns = [
+            'qty', 'jumlah_membercard', 'jumlah_transaksi', 'point', 'redeem_qty',
+            'discount_percent', 'total_amount', 'amount', 'harga_jual', 'harga_beli',
+            'profit', 'comission', 'total_omset', 'total_modal', 'total_discount',
+            'total_redeem', 'omset_bersih', 'net_profit', 'rata_rata_transaksi',
+            'totalAmount', 'totalAmountCancel', 'total_komisi', 'total_uop',
+            'omset_cash', 'top_up_kas', 'sisa_setoran', 'hutang_komisi', 
+            'pemasukan_lain_lain', 'uop', 'tips_qris', 'bayar_hutang_komisi',
+            'iuran_rt', 'sumbangan', 'iuran_sampah', 'galon', 'biaya_admin_setoran',
+            'yakult', 'pengeluaran_lain_lain', 'pemasukan', 'pengeluaran', 'saldo'
+        ];
+        
+        return numericColumns.includes(key);
     }
 
     // Set default date filter (hari ini)
@@ -412,12 +451,10 @@ class Reports {
             
             result[key].total_amount += amount;
             
-            // Hitung UOP jika item_group = UOP
             if (isUOP) {
                 result[key].total_uop += amount;
             }
             
-            // Hitung komisi (10% dari total amount, kecuali UOP)
             if (!isUOP) {
                 const komisi = amount * 0.1;
                 result[key].total_komisi += komisi;
@@ -453,7 +490,6 @@ class Reports {
         const groupedData = {};
         
         data.forEach(item => {
-            // Extract tanggal dari created_at
             const tanggal = this.extractDateFromTimestamp(item.created_at);
             const outlet = item.outlet || 'Unknown';
             const kasir = item.kasir_create || item.kasir || item.created_by || 'Unknown';
@@ -475,7 +511,6 @@ class Reports {
         return Object.values(groupedData);
     }
 
-    // Helper method untuk extract tanggal dari berbagai format timestamp
     extractDateFromTimestamp(timestamp) {
         if (!timestamp) return 'Unknown';
         
@@ -488,28 +523,6 @@ class Reports {
         }
     }
 
-    generateFallbackMembercardData() {
-        const outlets = ['Rempoa', 'Ciputat', 'Pondok Cabe'];
-        const kasirs = ['Devi Siska Sari', 'Hari Suryono', 'Echwan Abdillah'];
-        
-        const data = [];
-        const today = new Date();
-        
-        for (let i = 0; i < 10; i++) {
-            const date = new Date();
-            date.setDate(today.getDate() - i);
-            
-            data.push({
-                tanggal: date.toISOString().split('T')[0],
-                outlet: outlets[Math.floor(Math.random() * outlets.length)],
-                kasir: kasirs[Math.floor(Math.random() * kasirs.length)],
-                jumlah_membercard: Math.floor(Math.random() * 5) + 1
-            });
-        }
-        
-        return data;
-    }
-
     async loadLaporanAbsen() {
         console.log('Loading laporan absen');
         
@@ -519,19 +532,15 @@ class Reports {
                 .select('*')
                 .order('tanggal', { ascending: false });
 
-            // FILTER KHUSUS UNTUK ABSEN (DD/MM/YYYY)
             if (this.filters.startDate) {
-                // Convert YYYY-MM-DD ke DD/MM/YYYY untuk table absen
                 const [year, month, day] = this.filters.startDate.split('-');
                 const startDateAbsenFormat = `${day}/${month}/${year}`;
                 query = query.gte('tanggal', startDateAbsenFormat);
-                console.log('⏰ Filter start date (absen):', startDateAbsenFormat);
             }
             if (this.filters.endDate) {
                 const [year, month, day] = this.filters.endDate.split('-');
                 const endDateAbsenFormat = `${day}/${month}/${year}`;
                 query = query.lte('tanggal', endDateAbsenFormat);
-                console.log('⏰ Filter end date (absen):', endDateAbsenFormat);
             }
             if (this.filters.outlet) {
                 query = query.eq('outlet', this.filters.outlet);
@@ -550,10 +559,8 @@ class Reports {
 
     processAbsenData(data) {
         return data.map(item => {
-            // Handle format tanggal dari kolom 'tanggal' (08/10/2025)
             let tanggal = 'Unknown';
             if (item.tanggal) {
-                // Format: DD/MM/YYYY -> YYYY-MM-DD
                 const parts = item.tanggal.split('/');
                 if (parts.length === 3) {
                     const day = parts[0].padStart(2, '0');
@@ -563,28 +570,22 @@ class Reports {
                 }
             }
             
-            // Gunakan 'nama' sebagai karyawan
             const karyawan = item.nama || 'Unknown';
-            
-            // Default jadwal
             const jadwalMasuk = '09:00';
             const jadwalPulang = '21:00';
             
-            // Handle clockin (format: "11:10")
             let clockinTime = item.clockin || '';
             let clockinFull = '';
             if (clockinTime && tanggal !== 'Unknown') {
                 clockinFull = `${tanggal}T${clockinTime.padStart(5, '0')}:00`;
             }
             
-            // Handle clockout (format: "17:30")
             let clockoutTime = item.clockout || '';
             let clockoutFull = '';
             if (clockoutTime && tanggal !== 'Unknown') {
                 clockoutFull = `${tanggal}T${clockoutTime.padStart(5, '0')}:00`;
             }
             
-            // Hitung jam kerja dari clockout - clockin
             let jamKerja = 'Masih bekerja';
             if (clockinFull && clockoutFull) {
                 try {
@@ -603,14 +604,12 @@ class Reports {
                 }
             }
             
-            // Hitung keterangan
             let keterangan = '';
             
             if (clockinTime) {
                 const [clockinHours, clockinMinutes] = clockinTime.split(':').map(Number);
                 const [jadwalMasukHours, jadwalMasukMinutes] = jadwalMasuk.split(':').map(Number);
                 
-                // Terlambat masuk jika clockin > jadwal masuk
                 if (clockinHours > jadwalMasukHours || 
                     (clockinHours === jadwalMasukHours && clockinMinutes > jadwalMasukMinutes)) {
                     const telatMenit = (clockinHours - jadwalMasukHours) * 60 + (clockinMinutes - jadwalMasukMinutes);
@@ -622,7 +621,6 @@ class Reports {
                 const [clockoutHours, clockoutMinutes] = clockoutTime.split(':').map(Number);
                 const [jadwalPulangHours, jadwalPulangMinutes] = jadwalPulang.split(':').map(Number);
                 
-                // Pulang cepat jika clockout < jadwal pulang
                 if (clockoutHours < jadwalPulangHours || 
                     (clockoutHours === jadwalPulangHours && clockoutMinutes < jadwalPulangMinutes)) {
                     const cepatMenit = (jadwalPulangHours - clockoutHours) * 60 + (jadwalPulangMinutes - clockoutMinutes);
@@ -630,7 +628,6 @@ class Reports {
                 }
             }
             
-            // Jika tidak ada keterangan khusus
             if (keterangan === '' && clockinTime) {
                 keterangan = 'Tepat waktu';
             }
@@ -755,7 +752,6 @@ class Reports {
                 };
             }
             
-            // Hitung semua komponen
             const subtotal = parseFloat(item.subtotal_amount) || 0;
             const modal = parseFloat(item.harga_beli) || 0;
             const discount = parseFloat(item.discount_amount) || 0;
@@ -770,7 +766,6 @@ class Reports {
             result[key].jumlah_transaksi += 1;
         });
         
-        // Hitung omset bersih dan net profit
         const tableData = Object.values(result).map(item => {
             const omsetBersih = item.total_omset - item.total_modal - item.total_discount - item.total_redeem;
             const netProfit = omsetBersih - item.total_komisi;
@@ -869,7 +864,6 @@ class Reports {
             .select('*')
             .order('order_date', { ascending: false });
 
-        // Apply filters
         if (this.filters.startDate) {
             query = query.gte('order_date', this.filters.startDate);
         }
@@ -957,12 +951,11 @@ class Reports {
             return;
         }
 
-        // Bersihkan container terlebih dahulu
         tableContainer.innerHTML = '';
 
         const columns = this.getTableColumns();
+        const footerData = this.getFooterData();
         
-        // Destroy table lama jika ada
         if (this.table && typeof this.table.destroy === 'function') {
             this.table.destroy();
         }
@@ -972,95 +965,28 @@ class Reports {
             searchable: true,
             pagination: true,
             pageSize: 15,
-            // TAMBAHKAN FOOTER CALLBACK
-            footerCallback: (data) => this.renderFooter(data)
+            footerData: footerData
         });
 
         this.table.init();
         this.table.updateData(this.currentData);
         this.tableInitialized = true;
         
-        console.log('Table initialized successfully');
-    }
-
-    // Method untuk render footer dengan total
-    // Method untuk render footer dengan total - PERBAIKAN STYLING
-renderFooter(data) {
-    if (!data || data.length === 0) return '';
-    
-    const totals = this.calculateFooterTotals(data);
-    const columns = this.getTableColumns();
-    
-    let footerHTML = '<tr class="bg-blue-50 font-semibold border-t-2 border-blue-300">';
-    
-    columns.forEach((column, index) => {
-        const totalValue = totals[column.key] !== undefined ? totals[column.key] : '';
-        let displayValue = '';
-        
-        if (totalValue !== '') {
-            if (column.type === 'currency') {
-                displayValue = Helpers.formatCurrency(totalValue);
-            } else if (column.type === 'number') {
-                displayValue = totalValue.toLocaleString();
-            } else {
-                displayValue = totalValue;
-            }
-        }
-        
-        // Untuk kolom pertama, tampilkan text "TOTAL"
-        if (index === 0) {
-            footerHTML += `<td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-800 bg-blue-100">TOTAL</td>`;
-        } else {
-            footerHTML += `<td class="px-6 py-4 whitespace-nowrap text-sm text-blue-700">${displayValue}</td>`;
-        }
-    });
-    
-    footerHTML += '</tr>';
-    
-    return footerHTML;
-}
-
-
-    // Method untuk menghitung total per kolom
-    calculateFooterTotals(data) {
-        const totals = {};
-        const columns = this.getTableColumns();
-        
-        // Inisialisasi totals berdasarkan tipe kolom
-        columns.forEach(column => {
-            if (column.type === 'currency' || column.type === 'number') {
-                totals[column.key] = 0;
-            } else if (column.key === 'qty' || column.key === 'jumlah_transaksi' || 
-                       column.key === 'jumlah_membercard' || column.key === 'point' || 
-                       column.key === 'redeem_qty') {
-                totals[column.key] = 0;
-            }
-        });
-        
-        // Hitung totals dari data
-        data.forEach(item => {
-            columns.forEach(column => {
-                if (totals[column.key] !== undefined) {
-                    const value = parseFloat(item[column.key]) || 0;
-                    totals[column.key] += value;
-                }
-            });
-        });
-        
-        return totals;
+        console.log('Table initialized successfully with footer');
     }
 
     updateTableForCurrentTab() {
         console.log('Updating table for tab:', this.currentTab);
         
         if (this.table && this.tableInitialized) {
-            // Gunakan metode update yang ada
             const columns = this.getTableColumns();
+            const footerData = this.getFooterData();
+            
             this.table.options.columns = columns;
+            this.table.options.footerData = footerData;
             this.table.updateData(this.currentData);
-            console.log('Table updated with new data');
+            console.log('Table updated with new data and footer');
         } else {
-            // Jika table belum ada, initialize baru
             this.initTable();
         }
     }
@@ -1095,11 +1021,7 @@ renderFooter(data) {
             { title: 'Served By', key: 'serve_by' },
             { title: 'Customer', key: 'customer_name' },
             { title: 'Item', key: 'item_name' },
-            { 
-                title: 'Qty', 
-                key: 'qty',
-                type: 'number'
-            },
+            { title: 'Qty', key: 'qty' },
             { 
                 title: 'Harga Jual', 
                 key: 'harga_jual',
@@ -1232,11 +1154,7 @@ renderFooter(data) {
             },
             { title: 'Outlet', key: 'outlet' },
             { title: 'Kasir', key: 'kasir' },
-            { 
-                title: 'Jumlah Membercard', 
-                key: 'jumlah_membercard',
-                type: 'number'
-            }
+            { title: 'Jumlah Membercard', key: 'jumlah_membercard' }
         ];
     }
 
@@ -1309,11 +1227,7 @@ renderFooter(data) {
                 key: 'net_profit',
                 type: 'currency'
             },
-            { 
-                title: 'Jumlah Transaksi', 
-                key: 'jumlah_transaksi',
-                type: 'number'
-            },
+            { title: 'Jumlah Transaksi', key: 'jumlah_transaksi' },
             { 
                 title: 'Rata-rata Transaksi', 
                 key: 'rata_rata_transaksi',
@@ -1324,20 +1238,15 @@ renderFooter(data) {
 
     getPemasukanPengeluaranColumns() {
         return [
-            // Kolom Informasi Dasar
             { title: '📅 Tanggal', key: 'tanggal', type: 'date' },
             { title: '🏪 Outlet', key: 'outlet' },
             { title: '👤 Kasir', key: 'kasir' },
-            
-            // PEMASUKAN - Biru (hanya emoji)
             { title: '💵 Omset Cash', key: 'omset_cash', type: 'currency' },
             { title: '💰 Top Up Kas', key: 'top_up_kas', type: 'currency' },
             { title: '🔄 Sisa Setoran', key: 'sisa_setoran', type: 'currency' },
             { title: '🏦 Hutang Komisi', key: 'hutang_komisi', type: 'currency' },
             { title: '📥 Pemasukan Lain', key: 'pemasukan_lain_lain', type: 'currency' },
             { title: '📝 Note Pemasukan', key: 'note_pemasukan_lain' },
-            
-            // PENGELUARAN - Merah (hanya emoji)
             { title: '💸 Komisi', key: 'komisi', type: 'currency' },
             { title: '👥 UOP', key: 'uop', type: 'currency' },
             { title: '💳 Tips QRIS', key: 'tips_qris', type: 'currency' },
@@ -1350,8 +1259,6 @@ renderFooter(data) {
             { title: '🥤 Yakult', key: 'yakult', type: 'currency' },
             { title: '📤 Pengeluaran Lain', key: 'pengeluaran_lain_lain', type: 'currency' },
             { title: '📝 Note Pengeluaran', key: 'note_pengeluaran_lain' },
-            
-            // TOTAL - Hijau (hanya emoji)
             { title: '✅ Total Pemasukan', key: 'pemasukan', type: 'currency' },
             { title: '❌ Total Pengeluaran', key: 'pengeluaran', type: 'currency' },
             { title: '💰 Saldo', key: 'saldo', type: 'currency' }
@@ -1392,11 +1299,7 @@ renderFooter(data) {
                 key: 'discount_amount',
                 type: 'currency'
             },
-            { 
-                title: 'Redeem Qty', 
-                key: 'redeem_qty',
-                type: 'number'
-            },
+            { title: 'Redeem Qty', key: 'redeem_qty' },
             { 
                 title: 'Subtotal', 
                 key: 'subtotal_amount',
@@ -1447,11 +1350,7 @@ renderFooter(data) {
                     `;
                 }
             },
-            { 
-                title: 'Point', 
-                key: 'point',
-                type: 'number'
-            },
+            { title: 'Point', key: 'point' },
             { 
                 title: 'Redeem Amount', 
                 key: 'redeem_amount',
@@ -1505,7 +1404,6 @@ renderFooter(data) {
     bindEvents() {
         console.log('Binding events');
         
-        // Hapus event listeners lama
         const oldFilterBtn = document.getElementById('apply-filters');
         const oldExportBtn = document.getElementById('export-report');
         
@@ -1519,7 +1417,6 @@ renderFooter(data) {
             oldExportBtn.parentNode.replaceChild(newExportBtn, oldExportBtn);
         }
 
-        // Filter button
         const filterBtn = document.getElementById('apply-filters');
         if (filterBtn) {
             filterBtn.addEventListener('click', () => this.applyFilters());
@@ -1527,7 +1424,6 @@ renderFooter(data) {
             console.warn('Filter button not found');
         }
         
-        // Export button
         const exportBtn = document.getElementById('export-report');
         if (exportBtn) {
             exportBtn.addEventListener('click', () => this.exportReport());
@@ -1535,10 +1431,8 @@ renderFooter(data) {
             console.warn('Export button not found');
         }
 
-        // Enter key untuk filters
         const filterInputs = document.querySelectorAll('#start-date, #end-date, #outlet-filter');
         filterInputs.forEach(input => {
-            // Clone dan replace untuk menghapus event listeners lama
             const newInput = input.cloneNode(true);
             input.parentNode.replaceChild(newInput, input);
             
@@ -1708,7 +1602,6 @@ renderFooter(data) {
             const exportMethod = exportMethods[this.currentTab] || exportMethods['detail-transaksi'];
             exportMethod();
 
-            // Create and download file
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             const url = URL.createObjectURL(blob);
@@ -1730,7 +1623,7 @@ renderFooter(data) {
         }
     }
 
-    // CSV generation methods
+    // CSV generation methods (tetap sama seperti sebelumnya)
     generateDetailTransaksiCSV() {
         let csvContent = "Tanggal,Order No,Outlet,Kasir,Served By,Customer,Item,Qty,Harga Jual,Amount,Payment Type,Status\n";
         
@@ -1799,7 +1692,6 @@ renderFooter(data) {
         let csvContent = "Tanggal,Outlet,Kasir,Jumlah Membercard\n";
         
         this.currentData.forEach(item => {
-            // Pastikan format tanggal konsisten untuk CSV
             const tanggal = this.formatDateForCSV(item.tanggal);
             const outlet = item.outlet || 'Unknown';
             const kasir = item.kasir || 'Unknown';
@@ -1818,7 +1710,6 @@ renderFooter(data) {
         return csvContent;
     }
 
-    // Helper method untuk format tanggal CSV
     formatDateForCSV(dateString) {
         if (!dateString || dateString === 'Unknown') return 'Unknown';
         
@@ -1981,7 +1872,6 @@ renderFooter(data) {
             this.tableInitialized = false;
         }
         
-        // Reset state tapi pertahankan instance
         this.currentData = [];
         this.currentTab = 'detail-transaksi';
         this.isInitialized = false;
@@ -2000,7 +1890,6 @@ renderFooter(data) {
 let reports = null;
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Gunakan singleton pattern
     if (!window.reportsInstance) {
         reports = new Reports();
         window.reportsModule = reports;
@@ -2008,9 +1897,7 @@ document.addEventListener('DOMContentLoaded', () => {
         reports = window.reportsInstance;
     }
     
-    // Auto-initialize jika element exists
     if (document.getElementById('reports-table')) {
-        // Delay sedikit untuk memastikan DOM siap
         setTimeout(() => {
             reports.init();
         }, 100);
