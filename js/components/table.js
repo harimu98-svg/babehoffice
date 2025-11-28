@@ -41,106 +41,107 @@ class DataTable {
     }
 
     // Render table
-    render() {
-        if (!this.container) return;
+    // Render table - STRUCTURE CLEANUP
+render() {
+    if (!this.container) return;
 
-        let html = '';
+    let html = '';
 
-        // Search box - HANYA ENTER KEY
-        if (this.options.searchable) {
-            const searchId = `${this.container.id}-search`;
-            
-            html += `
-                <div class="mb-4 data-table-search">
-                    <div class="w-full">
-                        <label for="${searchId}" class="block text-sm font-medium text-gray-700 mb-1">
-                            Cari Data
-                        </label>
-                        <input 
-                            type="text" 
-                            id="${searchId}" 
-                            placeholder="Ketik kata kunci lalu tekan Enter..." 
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                            value=""
-                        >
-                    </div>
-                    <div class="mt-2 flex items-center text-sm text-gray-500">
-                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                        Tekan Enter untuk memulai pencarian
-                    </div>
-                </div>
-            `;
-        }
-
-        // Table dengan footer terintegrasi
+    // Search box - HANYA ENTER KEY
+    if (this.options.searchable) {
+        const searchId = `${this.container.id}-search`;
+        
         html += `
-            <div class="bg-white rounded-lg shadow overflow-hidden">
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                ${this.options.columns.map(col => `
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        ${col.title}
-                                    </th>
-                                `).join('')}
-                                ${this.options.actions.length > 0 ? `
-                                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Aksi
-                                    </th>
-                                ` : ''}
-                            </tr>
-                        </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">
-                            ${this.renderRows()}
-                        </tbody>
-                        ${this.renderFooter()} <!-- FOOTER TERINTEGRASI -->
-                    </table>
+            <div class="mb-4 data-table-search">
+                <div class="w-full">
+                    <label for="${searchId}" class="block text-sm font-medium text-gray-700 mb-1">
+                        Cari Data
+                    </label>
+                    <input 
+                        type="text" 
+                        id="${searchId}" 
+                        placeholder="Ketik kata kunci lalu tekan Enter..." 
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                        value=""
+                    >
+                </div>
+                <div class="mt-2 flex items-center text-sm text-gray-500">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Tekan Enter untuk memulai pencarian
                 </div>
             </div>
         `;
-
-        // Pagination
-        if (this.options.pagination) {
-            html += this.renderPagination();
-        }
-
-        this.container.innerHTML = html;
-
-        // Setup search handler dengan delay
-        setTimeout(() => {
-            this.setupSearchHandler();
-        }, 100);
     }
 
+    // Table dengan structure yang clean
+    html += `
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            ${this.options.columns.map(col => `
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    ${col.title}
+                                </th>
+                            `).join('')}
+                            ${this.options.actions.length > 0 ? `
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Aksi
+                                </th>
+                            ` : ''}
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        ${this.renderRows()}
+                    </tbody>
+                    ${this.renderFooter()}
+                </table>
+            </div>
+        </div>
+    `;
+
+    // Pagination
+    if (this.options.pagination) {
+        html += this.renderPagination();
+    }
+
+    this.container.innerHTML = html;
+
+    // Setup search handler dengan delay
+    setTimeout(() => {
+        this.setupSearchHandler();
+    }, 100);
+}
     // Render footer - PERBAIKAN STRUKTUR
     renderFooter() {
-        if (!this.options.footerCallback) return '';
+    if (!this.options.footerCallback) return '';
+    
+    try {
+        const currentData = this.filteredData.length > 0 ? this.filteredData : this.options.data;
         
-        try {
-            const currentData = this.filteredData.length > 0 ? this.filteredData : this.options.data;
-            const footerContent = this.options.footerCallback(currentData);
-            
-            if (!footerContent || footerContent.trim() === '') return '';
-            
-            // Parse footer HTML untuk mengambil konten sebenarnya
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = footerContent;
-            
-            const footerTable = tempDiv.querySelector('table');
-            if (footerTable) {
-                // Extract hanya tbody content dari footer
-                const footerTbody = footerTable.querySelector('tbody');
-                if (footerTbody) {
-                    return `
-                        <tfoot class="bg-gray-50 border-t-2 border-gray-300">
-                            ${footerTbody.innerHTML}
-                        </tfoot>
-                    `;
-                }
-            }
+        // Check jika ada data sebelum render footer
+        if (currentData.length === 0) return '';
+        
+        const footerContent = this.options.footerCallback(currentData);
+        
+        if (!footerContent || footerContent.trim() === '') return '';
+        
+        // HILANGKAN BARIS KOSONG - langsung render tfoot tanpa wrapper tambahan
+        return `
+            <tfoot>
+                ${footerContent}
+            </tfoot>
+        `;
+        
+    } catch (error) {
+        console.error('Error rendering footer:', error);
+        return '';
+    }
+}
+
             
             // Fallback: render langsung sebagai row di tfoot
             return `
