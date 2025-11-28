@@ -341,7 +341,7 @@ class Reports {
         console.log('Loading laporan pembayaran');
         
         let query = supabase
-            .from('transaksi_detail')
+            .from('transaksi_order')
             .select('*')
             .order('order_date', { ascending: false });
 
@@ -370,7 +370,7 @@ class Reports {
             const paymentType = item.payment_type || 'cash';
             const kasir = item.kasir || 'Unknown';
             const tanggal = item.order_date ? item.order_date.split('T')[0] : 'Unknown';
-            const amount = parseFloat(item.amount) || 0;
+            const amount = parseFloat(item.total_amount) || 0;
             const isCancel = item.status === 'canceled' || item.status === 'cancelled';
             
             const key = `${outlet}-${paymentType}-${kasir}-${tanggal}`;
