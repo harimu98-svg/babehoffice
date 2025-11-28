@@ -1008,17 +1008,13 @@ class Reports {
         
         // Untuk kolom pertama, tampilkan text "TOTAL"
         if (index === 0) {
-            footerHTML += `<td class="px-6 py-3 text-right font-bold bg-blue-50 text-blue-800 border border-gray-200">TOTAL</td>`;
+            footerHTML += `<td class="px-6 py-3 text-right font-bold bg-blue-50 text-blue-800">TOTAL</td>`;
         } else {
-            footerHTML += `<td class="px-6 py-3 text-right bg-gray-50 border border-gray-200">${displayValue}</td>`;
+            footerHTML += `<td class="px-6 py-3 text-right">${displayValue}</td>`;
         }
     });
     
-    // Handle action column jika ada
-    if (this.options.actions && this.options.actions.length > 0) {
-        footerHTML += `<td class="px-6 py-3 bg-gray-50 border border-gray-200"></td>`;
-    }
-    
+    // FIX: Skip action column untuk reports - tidak perlu actions di footer
     footerHTML += '</tr>';
     
     return footerHTML;
