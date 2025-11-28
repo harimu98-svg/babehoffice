@@ -985,41 +985,45 @@ class Reports {
 
     // Method untuk render footer dengan total
     renderFooter(data) {
-        if (!data || data.length === 0) return '';
+    if (!data || data.length === 0) return '';
+    
+    const totals = this.calculateFooterTotals(data);
+    const columns = this.getTableColumns();
+    
+    let footerHTML = '<tr class="bg-gray-50 font-semibold border-t-2 border-gray-300">';
+    
+    columns.forEach((column, index) => {
+        const totalValue = totals[column.key] !== undefined ? totals[column.key] : '';
+        let displayValue = '';
         
-        const totals = this.calculateFooterTotals(data);
-        const columns = this.getTableColumns();
-        
-        let footerHTML = '<div class="table-footer bg-gray-50 border-t-2 border-gray-300 font-semibold mt-4">';
-        footerHTML += '<table class="w-full"><tbody><tr>';
-        
-        columns.forEach((column, index) => {
-            const totalValue = totals[column.key] !== undefined ? totals[column.key] : '';
-            let displayValue = '';
-            
-            if (totalValue !== '') {
-                if (column.type === 'currency') {
-                    displayValue = Helpers.formatCurrency(totalValue);
-                } else if (column.type === 'number') {
-                    displayValue = totalValue.toLocaleString();
-                } else {
-                    displayValue = totalValue;
-                }
-            }
-            
-            // Untuk kolom pertama, tampilkan text "TOTAL"
-            if (index === 0) {
-                footerHTML += `<td class="p-3 border text-right font-bold bg-blue-50 text-blue-800">TOTAL</td>`;
+        if (totalValue !== '') {
+            if (column.type === 'currency') {
+                displayValue = Helpers.formatCurrency(totalValue);
+            } else if (column.type === 'number') {
+                displayValue = totalValue.toLocaleString();
             } else {
-                footerHTML += `<td class="p-3 border text-right bg-gray-50">${displayValue}</td>`;
+                displayValue = totalValue;
             }
-        });
+        }
         
-        footerHTML += '</tr></tbody></table>';
-        footerHTML += '</div>';
-        
-        return footerHTML;
+        // Untuk kolom pertama, tampilkan text "TOTAL"
+        if (index === 0) {
+            footerHTML += `<td class="px-6 py-3 text-right font-bold bg-blue-50 text-blue-800 border border-gray-200">TOTAL</td>`;
+        } else {
+            footerHTML += `<td class="px-6 py-3 text-right bg-gray-50 border border-gray-200">${displayValue}</td>`;
+        }
+    });
+    
+    // Handle action column jika ada
+    if (this.options.actions && this.options.actions.length > 0) {
+        footerHTML += `<td class="px-6 py-3 bg-gray-50 border border-gray-200"></td>`;
     }
+    
+    footerHTML += '</tr>';
+    
+    return footerHTML;
+}
+
 
     // Method untuk menghitung total per kolom
     calculateFooterTotals(data) {
