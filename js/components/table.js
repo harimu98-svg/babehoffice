@@ -9,7 +9,7 @@ class DataTable {
             searchable: true,
             pagination: true,
             pageSize: 10,
-            footerCallback: null, // TAMBAHKAN FOOTER CALLBACK
+            footerCallback: null,
             ...options
         };
         this.currentPage = 1;
@@ -74,7 +74,7 @@ class DataTable {
             `;
         }
 
-        // Table
+        // Table dengan footer terintegrasi
         html += `
             <div class="bg-white rounded-lg shadow overflow-hidden">
                 <div class="overflow-x-auto">
@@ -96,7 +96,7 @@ class DataTable {
                         <tbody class="bg-white divide-y divide-gray-200">
                             ${this.renderRows()}
                         </tbody>
-                        ${this.renderFooter()} <!-- TAMBAHKAN FOOTER -->
+                        ${this.renderFooter()} <!-- FOOTER TERINTEGRASI -->
                     </table>
                 </div>
             </div>
@@ -115,22 +115,48 @@ class DataTable {
         }, 100);
     }
 
-    // Render footer - METHOD BARU
+    // Render footer - PERBAIKAN STRUKTUR
     renderFooter() {
         if (!this.options.footerCallback) return '';
         
         try {
             const currentData = this.filteredData.length > 0 ? this.filteredData : this.options.data;
-            const footerHTML = this.options.footerCallback(currentData);
+            const footerContent = this.options.footerCallback(currentData);
             
-            if (footerHTML && footerHTML.trim() !== '') {
-                return footerHTML;
+            if (!footerContent || footerContent.trim() === '') return '';
+            
+            // Parse footer HTML untuk mengambil konten sebenarnya
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = footerContent;
+            
+            const footerTable = tempDiv.querySelector('table');
+            if (footerTable) {
+                // Extract hanya tbody content dari footer
+                const footerTbody = footerTable.querySelector('tbody');
+                if (footerTbody) {
+                    return `
+                        <tfoot class="bg-gray-50 border-t-2 border-gray-300">
+                            ${footerTbody.innerHTML}
+                        </tfoot>
+                    `;
+                }
             }
+            
+            // Fallback: render langsung sebagai row di tfoot
+            return `
+                <tfoot class="bg-gray-50 border-t-2 border-gray-300">
+                    <tr>
+                        <td colspan="${this.options.columns.length + (this.options.actions.length > 0 ? 1 : 0)}" class="px-6 py-4">
+                            ${footerContent}
+                        </td>
+                    </tr>
+                </tfoot>
+            `;
+            
         } catch (error) {
             console.error('Error rendering footer:', error);
+            return '';
         }
-        
-        return '';
     }
 
     // Setup search handler - HANYA ENTER KEY
@@ -470,13 +496,13 @@ class DataTable {
         this.render();
     }
 
-    // Set footer callback - METHOD BARU
+    // Set footer callback
     setFooterCallback(callback) {
         this.options.footerCallback = callback;
         return this;
     }
 
-    // Update options - METHOD BARU
+    // Update options
     updateOptions(newOptions) {
         this.options = { ...this.options, ...newOptions };
         this.render();
