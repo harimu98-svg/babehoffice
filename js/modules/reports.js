@@ -728,59 +728,71 @@ class Reports {
     }
 
     processOmsetData(data) {
-        const result = {};
+    const result = {};
+    
+    data.forEach(item => {
+        const outlet = item.outlet || 'Unknown';
+        const orderDate = item.order_date ? item.order_date.split('T')[0] : 'Unknown';
+        const isCompleted = item.status === 'completed';
         
-        data.forEach(item => {
-            const outlet = item.outlet || 'Unknown';
-            const orderDate = item.order_date ? item.order_date.split('T')[0] : 'Unknown';
-            const isCompleted = item.status === 'completed';
-            
-            if (!isCompleted) return;
-            
-            const key = `${outlet}-${orderDate}`;
-            
-            if (!result[key]) {
-                result[key] = {
-                    outlet: outlet,
-                    tanggal: orderDate,
-                    total_omset: 0,
-                    total_modal: 0,
-                    total_discount: 0,
-                    total_redeem: 0,
-                    total_komisi: 0,
-                    jumlah_transaksi: 0
-                };
-            }
-            
-            const subtotal = parseFloat(item.subtotal_amount) || 0;
-            const modal = parseFloat(item.harga_beli) || 0;
-            const discount = parseFloat(item.discount_amount) || 0;
-            const redeem = parseFloat(item.redeem_amount) || 0;
-            const komisi = parseFloat(item.comission) || 0;
-            
-            result[key].total_omset += subtotal;
-            result[key].total_modal += modal;
-            result[key].total_discount += discount;
-            result[key].total_redeem += redeem;
-            result[key].total_komisi += komisi;
-            result[key].jumlah_transaksi += 1;
-        });
+        if (!isCompleted) return;
         
-        const tableData = Object.values(result).map(item => {
-            const omsetBersih = item.total_omset - item.total_modal - item.total_discount - item.total_redeem;
-            const netProfit = omsetBersih - item.total_komisi;
-            const rataTransaksi = item.jumlah_transaksi > 0 ? item.total_omset / item.jumlah_transaksi : 0;
-            
-            return {
-                ...item,
-                omset_bersih: omsetBersih,
-                net_profit: netProfit,
-                rata_rata_transaksi: rataTransaksi
+        const key = `${outlet}-${orderDate}`;
+        
+        if (!result[key]) {
+            result[key] = {
+                outlet: outlet,
+                tanggal: orderDate,
+                total_omset: 0,
+                total_modal: 0,
+                total_discount: 0,
+                total_redeem: 0,
+                total_komisi: 0,
+                jumlah_transaksi: 0
             };
-        });
+        }
         
-        return tableData;
-    }
+        const subtotal = parseFloat(item.subtotal_amount) || 0;
+        const modal = parseFloat(item.harga_beli) || 0;
+        const discount = parseFloat(item.discount_amount) || 0;
+        const redeem = parseFloat(item.redeem_amount) || 0;
+        const komisi = parseFloat(item.comission) || 0;
+        
+        result[key].total_omset += subtotal;
+        result[key].total_modal += modal;
+        result[key].total_discount += discount;
+        result[key].total_redeem += redeem;
+        result[key].total_komisi += komisi;
+        result[key].jumlah_transaksi += 1;
+    });
+    
+    // PERBAIKAN FORMULA DAN URUTAN
+    const tableData = Object.values(result).map(item => {
+        // Formula baru
+        const omset_kotor = item.total_omset - item.total_discount - item.total_redeem;
+        const omset_bersih = omset_kotor - item.total_modal;
+        const net_profit = omset_bersih - item.total_komisi;
+        const rata_transaksi = item.jumlah_transaksi > 0 ? item.total_omset / item.jumlah_transaksi : 0;
+        
+        return {
+            outlet: item.outlet,
+            tanggal: item.tanggal,
+            total_omset: item.total_omset,
+            total_discount: item.total_discount,
+            total_redeem: item.total_redeem,
+            omset_kotor: omset_kotor,           // TAMBAH KOLOM BARU
+            total_modal: item.total_modal,
+            omset_bersih: omset_bersih,
+            total_komisi: item.total_komisi,
+            net_profit: net_profit,
+            jumlah_transaksi: item.jumlah_transaksi,
+            rata_rata_transaksi: rata_transaksi
+        };
+    });
+    
+    return tableData;
+}
+
 
     async loadLaporanPemasukanPengeluaran() {
         console.log('Loading laporan pemasukan pengeluaran');
@@ -1185,56 +1197,62 @@ class Reports {
     }
 
     getOmsetColumns() {
-        return [
-            { title: 'Outlet', key: 'outlet' },
-            { 
-                title: 'Tanggal', 
-                key: 'tanggal',
-                type: 'date'
-            },
-            { 
-                title: 'Total Omset', 
-                key: 'total_omset',
-                type: 'currency'
-            },
-            { 
-                title: 'Modal', 
-                key: 'total_modal',
-                type: 'currency'
-            },
-            { 
-                title: 'Discount', 
-                key: 'total_discount',
-                type: 'currency'
-            },
-            { 
-                title: 'Redeem', 
-                key: 'total_redeem',
-                type: 'currency'
-            },
-            { 
-                title: 'Omset Bersih', 
-                key: 'omset_bersih',
-                type: 'currency'
-            },
-            { 
-                title: 'Komisi', 
-                key: 'total_komisi',
-                type: 'currency'
-            },
-            { 
-                title: 'Net Profit', 
-                key: 'net_profit',
-                type: 'currency'
-            },
-            { title: 'Jumlah Transaksi', key: 'jumlah_transaksi' },
-            { 
-                title: 'Rata-rata Transaksi', 
-                key: 'rata_rata_transaksi',
-                type: 'currency'
-            }
-        ];
-    }
+    return [
+        { title: 'Outlet', key: 'outlet' },
+        { 
+            title: 'Tanggal', 
+            key: 'tanggal',
+            type: 'date'
+        },
+        { 
+            title: 'Total Omset', 
+            key: 'total_omset',
+            type: 'currency'
+        },
+        { 
+            title: 'Discount', 
+            key: 'total_discount',
+            type: 'currency'
+        },
+        { 
+            title: 'Redeem', 
+            key: 'total_redeem',
+            type: 'currency'
+        },
+        { 
+            title: 'Omset Kotor', 
+            key: 'omset_kotor',
+            type: 'currency'
+        },
+        { 
+            title: 'Modal', 
+            key: 'total_modal',
+            type: 'currency'
+        },
+        { 
+            title: 'Omset Bersih', 
+            key: 'omset_bersih',
+            type: 'currency'
+        },
+        { 
+            title: 'Komisi', 
+            key: 'total_komisi',
+            type: 'currency'
+        },
+        { 
+            title: 'Net Profit', 
+            key: 'net_profit',
+            type: 'currency'
+        },
+        { title: 'Jumlah Transaksi', key: 'jumlah_transaksi' },
+        { 
+            title: 'Rata-rata Transaksi', 
+            key: 'rata_rata_transaksi',
+            type: 'currency'
+        }
+    ];
+}
+
 
     getPemasukanPengeluaranColumns() {
         return [
@@ -1745,28 +1763,31 @@ class Reports {
     }
 
     generateOmsetCSV() {
-        let csvContent = "Outlet,Tanggal,Total Omset,Modal,Discount,Redeem,Omset Bersih,Komisi,Net Profit,Jumlah Transaksi,Rata-rata Transaksi\n";
+    // PERBAIKAN URUTAN KOLOM CSV
+    let csvContent = "Outlet,Tanggal,Total Omset,Discount,Redeem,Omset Kotor,Modal,Omset Bersih,Komisi,Net Profit,Jumlah Transaksi,Rata-rata Transaksi\n";
+    
+    this.currentData.forEach(item => {
+        const row = [
+            item.outlet,
+            item.tanggal,
+            item.total_omset,
+            item.total_discount,
+            item.total_redeem,
+            item.omset_kotor,           // TAMBAH KOLOM BARU
+            item.total_modal,
+            item.omset_bersih,
+            item.total_komisi,
+            item.net_profit,
+            item.jumlah_transaksi,
+            item.rata_rata_transaksi
+        ].map(field => `"${field}"`).join(',');
         
-        this.currentData.forEach(item => {
-            const row = [
-                item.outlet,
-                item.tanggal,
-                item.total_omset,
-                item.total_modal,
-                item.total_discount,
-                item.total_redeem,
-                item.omset_bersih,
-                item.total_komisi,
-                item.net_profit,
-                item.jumlah_transaksi,
-                item.rata_rata_transaksi
-            ].map(field => `"${field}"`).join(',');
-            
-            csvContent += row + '\n';
-        });
+        csvContent += row + '\n';
+    });
 
-        return csvContent;
-    }
+    return csvContent;
+}
+
 
     generatePemasukanPengeluaranCSV() {
         let csvContent = "Tanggal,Outlet,Kasir,Omset Cash,Top Up Kas,Sisa Setoran,Hutang Komisi,Pemasukan Lain,Note Pemasukan,Komisi,UOP,Tips QRIS,Bayar Hutang Komisi,Iuran RT,Sumbangan,Iuran Sampah,Galon,Biaya Admin Setoran,Yakult,Pengeluaran Lain,Note Pengeluaran,Total Pemasukan,Total Pengeluaran,Saldo\n";
