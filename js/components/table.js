@@ -106,45 +106,51 @@ class DataTable {
         if (this.options.pagination) {
             html += this.renderPagination();
         }
-renderFooter() {
-    if (!this.options.footerData) return '';
 
-    const dataToShow = this.filteredData.length > 0 ? this.filteredData : this.options.data;
-    if (dataToShow.length === 0) return '';
+        this.container.innerHTML = html;
 
-    return `
-        <tfoot class="bg-blue-50">
-            <tr class="border-t-2 border-blue-200">
-                ${this.options.columns.map((col, index) => {
-                    const value = this.options.footerData[col.key];
-                    const isNumeric = col.type === 'currency' || 
-                                    typeof value === 'number' || 
-                                    this.isNumericValue(value);
-                    
-                    const cellClass = `px-6 py-4 whitespace-nowrap text-sm font-semibold ${isNumeric ? 'text-right' : 'text-left'}`;
-                    
-                    // PERBAIKAN: Hanya kolom pertama yang menampilkan "TOTAL"
-                    const displayValue = index === 0 ? 'TOTAL' : 
-                                       (isNumeric && typeof value === 'number' ? 
-                                        this.formatCell(value, col) : 
-                                        '');
+        // Setup search handler dengan delay
+        setTimeout(() => {
+            this.setupSearchHandler();
+        }, 100);
+    }
 
-                    return `
-                        <td class="${cellClass}">
-                            ${displayValue}
+    // Render footer
+    renderFooter() {
+        if (!this.options.footerData) return '';
+
+        const dataToShow = this.filteredData.length > 0 ? this.filteredData : this.options.data;
+        if (dataToShow.length === 0) return '';
+
+        return `
+            <tfoot class="bg-blue-50">
+                <tr class="border-t-2 border-blue-200">
+                    ${this.options.columns.map(col => {
+                        const value = this.options.footerData[col.key];
+                        const isNumeric = col.type === 'currency' || 
+                                        typeof value === 'number' || 
+                                        this.isNumericValue(value);
+                        
+                        const cellClass = `px-6 py-4 whitespace-nowrap text-sm font-semibold ${isNumeric ? 'text-right' : 'text-left'}`;
+                        const displayValue = isNumeric && typeof value === 'number' ? 
+                            this.formatCell(value, col) : 
+                            value;
+
+                        return `
+                            <td class="${cellClass}">
+                                ${displayValue}
+                            </td>
+                        `;
+                    }).join('')}
+                    ${this.options.actions.length > 0 ? `
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-semibold">
+                            &nbsp;
                         </td>
-                    `;
-                }).join('')}
-                ${this.options.actions.length > 0 ? `
-                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-semibold">
-                        &nbsp;
-                    </td>
-                ` : ''}
-            </tr>
-        </tfoot>
-    `;
-}
-
+                    ` : ''}
+                </tr>
+            </tfoot>
+        `;
+    }
 
     // Helper untuk cek nilai numeric
     isNumericValue(value) {
