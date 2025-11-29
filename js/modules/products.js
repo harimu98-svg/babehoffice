@@ -418,66 +418,64 @@ class Products {
 
     // Upload image to Supabase Storage
     async uploadImage(file) {
-        try {
-            if (!file) return null;
+    try {
+        if (!file) return null;
 
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
-            const filePath = `products/${fileName}`;
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
+        const filePath = `${fileName}`; // ✅ LANGSUNG DI ROOT BUCKET
 
-            console.log('Uploading image to:', filePath);
+        console.log('Uploading image to:', filePath);
 
-            const { data, error } = await supabase.storage
-                .from('produk')
-                .upload(filePath, file, {
-                    cacheControl: '3600',
-                    upsert: false
-                });
+        const { data, error } = await supabase.storage
+            .from('produk')
+            .upload(filePath, file, {
+                cacheControl: '3600',
+                upsert: false
+            });
 
-            if (error) {
-                console.error('Upload error:', error);
-                throw error;
-            }
-
-            // Get public URL
-            const { data: { publicUrl } } = supabase.storage
-                .from('produk')
-                .getPublicUrl(filePath);
-
-            console.log('Image uploaded successfully:', publicUrl);
-            return publicUrl;
-        } catch (error) {
-            console.error('Error uploading image:', error);
-            throw new Error('Gagal mengupload gambar: ' + error.message);
+        if (error) {
+            console.error('Upload error:', error);
+            throw error;
         }
-    }
 
+        // Get public URL
+        const { data: { publicUrl } } = supabase.storage
+            .from('produk')
+            .getPublicUrl(filePath);
+
+        console.log('Image uploaded successfully:', publicUrl);
+        return publicUrl;
+    } catch (error) {
+        console.error('Error uploading image:', error);
+        throw new Error('Gagal mengupload gambar: ' + error.message);
+    }
+}
     // Delete image from Supabase Storage
     async deleteImage(imageUrl) {
-        try {
-            if (!imageUrl) return;
+    try {
+        if (!imageUrl) return;
 
-            // Extract file path from URL
-            const urlParts = imageUrl.split('/');
-            const fileName = urlParts[urlParts.length - 1];
-            const filePath = `products/${fileName}`;
+        // Extract file name from URL
+        const urlParts = imageUrl.split('/');
+        const fileName = urlParts[urlParts.length - 1];
+        const filePath = `${fileName}`; // ✅ LANGSUNG DI ROOT BUCKET
 
-            console.log('Deleting image:', filePath);
+        console.log('Deleting image:', filePath);
 
-            const { error } = await supabase.storage
-                .from('produk')
-                .remove([filePath]);
+        const { error } = await supabase.storage
+            .from('produk')
+            .remove([filePath]);
 
-            if (error) {
-                console.error('Error deleting image:', error);
-            } else {
-                console.log('Image deleted successfully');
-            }
-        } catch (error) {
+        if (error) {
             console.error('Error deleting image:', error);
+        } else {
+            console.log('Image deleted successfully');
         }
+    } catch (error) {
+        console.error('Error deleting image:', error);
     }
-
+}
     // Handle file selection
     handleFileSelect(event) {
         const file = event.target.files[0];
