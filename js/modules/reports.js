@@ -74,26 +74,29 @@ class Reports {
     // ==================== FOOTER METHODS ====================
 
     getFooterData() {
-        if (!this.currentData || this.currentData.length === 0) {
-            return null;
-        }
-
-        const footerData = {};
-        const columns = this.getTableColumns();
-        
-        columns.forEach(col => {
-            if (col.type === 'currency' || this.isNumericColumn(col.key)) {
-                footerData[col.key] = this.currentData.reduce((sum, item) => {
-                    const value = parseFloat(item[col.key]) || 0;
-                    return sum + value;
-                }, 0);
-            } else {
-                footerData[col.key] = 'TOTAL';
-            }
-        });
-
-        return footerData;
+    if (!this.currentData || this.currentData.length === 0) {
+        return null;
     }
+
+    const footerData = {};
+    const columns = this.getTableColumns();
+    
+    columns.forEach(col => {
+        if (col.type === 'currency' || this.isNumericColumn(col.key)) {
+            footerData[col.key] = this.currentData.reduce((sum, item) => {
+                const value = parseFloat(item[col.key]) || 0;
+                return sum + value;
+            }, 0);
+        } else {
+            // PERBAIKAN: Kosongkan nilai untuk kolom non-numeric
+            // Kecuali kolom pertama yang akan menampilkan "TOTAL"
+            footerData[col.key] = '';
+        }
+    });
+
+    return footerData;
+}
+
 
     isNumericColumn(key) {
         const numericColumns = [
