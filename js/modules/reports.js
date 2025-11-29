@@ -81,14 +81,15 @@ class Reports {
         const footerData = {};
         const columns = this.getTableColumns();
         
-        columns.forEach(col => {
+        columns.forEach((col, index) => {
             if (col.type === 'currency' || this.isNumericColumn(col.key)) {
                 footerData[col.key] = this.currentData.reduce((sum, item) => {
                     const value = parseFloat(item[col.key]) || 0;
                     return sum + value;
                 }, 0);
             } else {
-                footerData[col.key] = 'TOTAL';
+                // Hanya kolom pertama yang menampilkan "TOTAL", lainnya kosong
+                footerData[col.key] = index === 0 ? 'TOTAL' : '';
             }
         });
 
@@ -574,21 +575,44 @@ class Reports {
             const jadwalMasuk = '09:00';
             const jadwalPulang = '21:00';
             
+            // FORMAT BARU: Clock In dan Clock Out hanya jam:menit
             let clockinTime = item.clockin || '';
-            let clockinFull = '';
-            if (clockinTime && tanggal !== 'Unknown') {
-                clockinFull = `${tanggal}T${clockinTime.padStart(5, '0')}:00`;
+            let clockinDisplay = '';
+            if (clockinTime) {
+                // Format jam:menit saja
+                if (clockinTime.includes(':')) {
+                    const timeParts = clockinTime.split(':');
+                    if (timeParts.length >= 2) {
+                        clockinDisplay = `${timeParts[0].padStart(2, '0')}:${timeParts[1].padStart(2, '0')}`;
+                    }
+                } else if (clockinTime.length >= 4) {
+                    // Format HHMM
+                    clockinDisplay = `${clockinTime.substring(0, 2)}:${clockinTime.substring(2, 4)}`;
+                }
             }
             
             let clockoutTime = item.clockout || '';
-            let clockoutFull = '';
-            if (clockoutTime && tanggal !== 'Unknown') {
-                clockoutFull = `${tanggal}T${clockoutTime.padStart(5, '0')}:00`;
+            let clockoutDisplay = '';
+            if (clockoutTime) {
+                // Format jam:menit saja
+                if (clockoutTime.includes(':')) {
+                    const timeParts = clockoutTime.split(':');
+                    if (timeParts.length >= 2) {
+                        clockoutDisplay = `${timeParts[0].padStart(2, '0')}:${timeParts[1].padStart(2, '0')}`;
+                    }
+                } else if (clockoutTime.length >= 4) {
+                    // Format HHMM
+                    clockoutDisplay = `${clockoutTime.substring(0, 2)}:${clockoutTime.substring(2, 4)}`;
+                }
             }
             
             let jamKerja = 'Masih bekerja';
-            if (clockinFull && clockoutFull) {
+            if (clockinTime && clockoutTime) {
                 try {
+                    // Buat tanggal lengkap untuk perhitungan
+                    const clockinFull = `${tanggal}T${clockinDisplay}:00`;
+                    const clockoutFull = `${tanggal}T${clockoutDisplay}:00`;
+                    
                     const clockin = new Date(clockinFull);
                     const clockout = new Date(clockoutFull);
                     
@@ -606,8 +630,8 @@ class Reports {
             
             let keterangan = '';
             
-            if (clockinTime) {
-                const [clockinHours, clockinMinutes] = clockinTime.split(':').map(Number);
+            if (clockinDisplay) {
+                const [clockinHours, clockinMinutes] = clockinDisplay.split(':').map(Number);
                 const [jadwalMasukHours, jadwalMasukMinutes] = jadwalMasuk.split(':').map(Number);
                 
                 if (clockinHours > jadwalMasukHours || 
@@ -617,8 +641,8 @@ class Reports {
                 }
             }
             
-            if (clockoutTime && keterangan === '') {
-                const [clockoutHours, clockoutMinutes] = clockoutTime.split(':').map(Number);
+            if (clockoutDisplay && keterangan === '') {
+                const [clockoutHours, clockoutMinutes] = clockoutDisplay.split(':').map(Number);
                 const [jadwalPulangHours, jadwalPulangMinutes] = jadwalPulang.split(':').map(Number);
                 
                 if (clockoutHours < jadwalPulangHours || 
@@ -628,7 +652,7 @@ class Reports {
                 }
             }
             
-            if (keterangan === '' && clockinTime) {
+            if (keterangan === '' && clockinDisplay) {
                 keterangan = 'Tepat waktu';
             }
             
@@ -638,8 +662,8 @@ class Reports {
                 tanggal: tanggal,
                 jadwal_masuk: jadwalMasuk,
                 jadwal_pulang: jadwalPulang,
-                clockin: clockinFull,
-                clockout: clockoutFull,
+                clockin: clockinDisplay, // Hanya jam:menit
+                clockout: clockoutDisplay, // Hanya jam:menit
                 jam_kerja: jamKerja,
                 keterangan: keterangan
             };
@@ -662,26 +686,19 @@ class Reports {
             
             const clockinHour = 7 + Math.floor(Math.random() * 3);
             const clockinMinute = Math.floor(Math.random() * 60);
-            const clockin = new Date(date);
-            clockin.setHours(clockinHour, clockinMinute, 0);
+            const clockin = `${clockinHour.toString().padStart(2, '0')}:${clockinMinute.toString().padStart(2, '0')}`;
             
             const clockoutHour = 16 + Math.floor(Math.random() * 4);
             const clockoutMinute = Math.floor(Math.random() * 60);
-            const clockout = new Date(date);
-            clockout.setHours(clockoutHour, clockoutMinute, 0);
+            const clockout = `${clockoutHour.toString().padStart(2, '0')}:${clockoutMinute.toString().padStart(2, '0')}`;
             
-            const diffMs = clockout - clockin;
-            const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-            const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-            const jamKerja = `${diffHours} jam ${diffMinutes} menit`;
+            const diffHours = clockoutHour - clockinHour;
+            const diffMinutes = clockoutMinute - clockinMinute;
+            const jamKerja = `${diffHours} jam ${Math.abs(diffMinutes)} menit`;
             
             let keterangan = '';
-            const jadwalMasuk = new Date(date);
-            jadwalMasuk.setHours(8, 0, 0, 0);
-            
-            if (clockin > jadwalMasuk) {
-                const telatMs = clockin - jadwalMasuk;
-                const telatMenit = Math.floor(telatMs / (1000 * 60));
+            if (clockinHour > 8 || (clockinHour === 8 && clockinMinute > 0)) {
+                const telatMenit = (clockinHour - 8) * 60 + clockinMinute;
                 keterangan = `Terlambat ${telatMenit} menit`;
             } else {
                 keterangan = 'Tepat waktu';
@@ -693,8 +710,8 @@ class Reports {
                 tanggal: date.toISOString().split('T')[0],
                 jadwal_masuk: '08:00',
                 jadwal_pulang: '17:00',
-                clockin: clockin.toISOString(),
-                clockout: clockout.toISOString(),
+                clockin: clockin,
+                clockout: clockout,
                 jam_kerja: jamKerja,
                 keterangan: keterangan
             });
@@ -1184,12 +1201,12 @@ class Reports {
             { 
                 title: 'Clock In', 
                 key: 'clockin',
-                type: 'datetime'
+                formatter: (value) => value || '-'
             },
             { 
                 title: 'Clock Out', 
                 key: 'clockout',
-                type: 'datetime'
+                formatter: (value) => value || '-'
             },
             { title: 'Jam Kerja', key: 'jam_kerja' },
             { title: 'Keterangan', key: 'keterangan' }
@@ -1750,8 +1767,8 @@ class Reports {
                 item.karyawan,
                 item.jadwal_masuk,
                 item.jadwal_pulang,
-                Helpers.formatDateWIB(item.clockin),
-                Helpers.formatDateWIB(item.clockout),
+                item.clockin || '-',
+                item.clockout || '-',
                 item.jam_kerja,
                 item.keterangan
             ].map(field => `"${field}"`).join(',');
