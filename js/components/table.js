@@ -115,7 +115,7 @@ class DataTable {
         }, 100);
     }
 
-    // Render footer
+    // Render footer - PERBAIKAN: Hanya kolom pertama yang menampilkan "TOTAL"
     renderFooter() {
         if (!this.options.footerData) return '';
 
@@ -125,16 +125,26 @@ class DataTable {
         return `
             <tfoot class="bg-blue-50">
                 <tr class="border-t-2 border-blue-200">
-                    ${this.options.columns.map(col => {
+                    ${this.options.columns.map((col, index) => {
                         const value = this.options.footerData[col.key];
                         const isNumeric = col.type === 'currency' || 
                                         typeof value === 'number' || 
                                         this.isNumericValue(value);
                         
                         const cellClass = `px-6 py-4 whitespace-nowrap text-sm font-semibold ${isNumeric ? 'text-right' : 'text-left'}`;
-                        const displayValue = isNumeric && typeof value === 'number' ? 
-                            this.formatCell(value, col) : 
-                            value;
+                        
+                        // PERBAIKAN: Hanya kolom pertama yang menampilkan "TOTAL", lainnya kosong
+                        let displayValue = '';
+                        if (index === 0) {
+                            displayValue = 'TOTAL';
+                        } else if (isNumeric && typeof value === 'number') {
+                            displayValue = this.formatCell(value, col);
+                        }
+                        
+                        // Untuk kolom non-numeric selain pertama, kosongkan
+                        if (index > 0 && !isNumeric) {
+                            displayValue = '';
+                        }
 
                         return `
                             <td class="${cellClass}">
