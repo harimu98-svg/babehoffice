@@ -309,7 +309,7 @@ class Employees {
 
             const fileExt = file.name.split('.').pop();
             const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
-            const filePath = `employees/${fileName}`;
+            const filePath = `${fileName}`;
 
             console.log('Uploading employee image to:', filePath);
 
@@ -346,7 +346,7 @@ class Employees {
             // Extract file path from URL
             const urlParts = imageUrl.split('/');
             const fileName = urlParts[urlParts.length - 1];
-            const filePath = `employees/${fileName}`;
+           const filePath = `${fileName}`;
 
             console.log('Deleting employee image:', filePath);
 
