@@ -198,21 +198,16 @@ class StockManagement {
         ).join('');
 
         // Product options - COMPACT 2 LINES
-        const productOptions = this.products
-            .filter(product => product.inventory)
-            .map(product => 
-                `<option value="${product.id}" 
-                         data-stock="${product.stok || 0}" 
-                         data-outlet="${product.outlet}"
-                         class="py-2">
-                    <div class="flex flex-col">
-                        <span class="font-medium truncate">${product.nama_produk}</span>
-                        <span class="text-xs text-gray-500 mt-0.5">
-                            Outlet: ${product.outlet} | Stok: ${product.stok || 0}
-                        </span>
-                    </div>
-                </option>`
-            ).join('');
+      const productOptions = this.products
+    .filter(product => product.inventory)
+    .map(product => 
+        `<option value="${product.id}" 
+                 data-stock="${product.stok || 0}" 
+                 data-outlet="${product.outlet}"
+                 title="${product.nama_produk} | Outlet: ${product.outlet} | Stok: ${product.stok || 0}">
+            ${product.nama_produk}
+        </option>`
+    ).join('');
 
         const content = `
             <form id="stock-form" class="space-y-4" data-transaction-type="${type}">
