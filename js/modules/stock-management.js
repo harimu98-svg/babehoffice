@@ -365,50 +365,41 @@ class StockManagement {
         }
     }
 
-    // Filter products by selected outlet
     filterProductsByOutlet() {
-        const outletSelect = document.getElementById('outlet-select');
-        const productSelect = document.getElementById('product-select');
+    const outletSelect = document.getElementById('outlet-select');
+    const productSelect = document.getElementById('product-select');
+    
+    if (!outletSelect || !productSelect) return;
+    
+    const selectedOutlet = outletSelect.value;
+    
+    // Reset to show all products initially
+    const options = productSelect.querySelectorAll('option');
+    
+    options.forEach(option => {
+        if (option.value === "") return; // Skip "Pilih Produk"
         
-        if (!outletSelect || !productSelect) return;
+        const productOutlet = option.getAttribute('data-outlet');
+        const isVisible = !selectedOutlet || productOutlet === selectedOutlet;
         
-        const selectedOutlet = outletSelect.value;
+        option.style.display = isVisible ? '' : 'none';
         
-        // Reset to show all products initially
-        const options = productSelect.querySelectorAll('option');
-        
-        options.forEach(option => {
-            if (option.value === "") return; // Skip "Pilih Produk"
-            
-            const productOutlet = option.getAttribute('data-outlet');
-            const isVisible = !selectedOutlet || productOutlet === selectedOutlet;
-            
-            option.style.display = isVisible ? '' : 'none';
-            
-            // Update display text to be compact
-            if (option.value && option.textContent.includes('Outlet:')) {
-                // Already formatted
-            } else if (option.value) {
-                const product = this.products.find(p => p.id == option.value);
-                if (product) {
-                    option.innerHTML = `
-                        <div class="flex flex-col">
-                            <span class="font-medium truncate">${product.nama_produk}</span>
-                            <span class="text-xs text-gray-500 mt-0.5">
-                                Outlet: ${product.outlet} | Stok: ${product.stok || 0}
-                            </span>
-                        </div>
-                    `;
-                    option.setAttribute('data-stock', product.stok || 0);
-                    option.setAttribute('data-outlet', product.outlet);
-                }
+        // Format teks yang ditampilkan
+        if (option.value) {
+            const product = this.products.find(p => p.id == option.value);
+            if (product) {
+                // Nama produk saja, info outlet dan stok di title
+                option.textContent = this.getProductDisplayText(product);
+                option.setAttribute('data-stock', product.stok || 0);
+                option.setAttribute('data-outlet', product.outlet);
+                option.title = `${product.nama_produk} | Outlet: ${product.outlet} | Stok: ${product.stok || 0}`;
             }
-        });
-        
-        // Reset selection
-        productSelect.value = "";
-    }
-
+        }
+    });
+    
+    // Reset selection
+    productSelect.value = "";
+}
     // Add product to form - FIXED VERSION
     addProductToForm() {
         const productSelect = document.getElementById('product-select');
