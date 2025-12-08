@@ -213,45 +213,7 @@ modal.createModal(title, content, buttons, {
     size: 'max-w-lg',
 });
 
-// Tambahkan style untuk select setelah modal dibuat
-setTimeout(() => {
-    const style = document.createElement('style');
-    style.textContent = `
-        #product-select {
-            min-height: 42px;
-            line-height: 1.4;
-        }
-        
-        #product-select option {
-            padding: 8px 12px;
-            border-bottom: 1px solid #f1f1f1;
-            font-size: 14px;
-        }
-        
-        #selected-products-list tr td:first-child {
-            max-width: 150px;
-        }
-        
-        .compact-product-info {
-            display: flex;
-            flex-direction: column;
-            line-height: 1.3;
-        }
-        
-        .product-name {
-            font-weight: 500;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        
-        .product-details {
-            font-size: 11px;
-            color: #666;
-        }
-    `;
-    document.head.appendChild(style);
-}, 100);
+
         const content = `
             <form id="stock-form" class="space-y-4" data-transaction-type="${type}">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
