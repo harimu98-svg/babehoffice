@@ -455,42 +455,46 @@ class StockManagement {
         quantityInput.focus();
     }
 
-    // Update selected products list - FIXED
     updateSelectedProductsList() {
-        const container = document.getElementById('selected-products-container');
-        const list = document.getElementById('selected-products-list');
+    const container = document.getElementById('selected-products-container');
+    const list = document.getElementById('selected-products-list');
 
-        if (this.selectedProducts.length === 0) {
-            container.classList.add('hidden');
-            return;
-        }
-
-        container.classList.remove('hidden');
-
-        // Get transaction type for display
-        const form = document.getElementById('stock-form');
-        const transactionType = form ? form.getAttribute('data-transaction-type') : 'in';
-        const isStockOut = transactionType === 'out';
-
-        list.innerHTML = this.selectedProducts.map((product, index) => `
-            <tr class="border-b border-gray-200">
-                <td class="py-2 px-1 text-xs text-gray-900">${product.nama_produk}</td>
-                <td class="py-2 px-1 text-xs text-gray-600 text-center">${product.current_stock}</td>
-                <td class="py-2 px-1 text-xs font-medium ${isStockOut ? 'text-red-600' : 'text-green-600'} text-center">
-                    ${isStockOut ? '-' : '+'}${product.quantity}
-                </td>
-                <td class="py-2 px-1 text-xs font-medium text-blue-600 text-center">${product.new_stock}</td>
-                <td class="py-2 px-1 text-center">
-                    <button 
-                        onclick="stockManagement.removeProductFromForm(${index})"
-                        class="text-xs text-red-600 hover:text-red-800 font-medium"
-                    >
-                        Hapus
-                    </button>
-                </td>
-            </tr>
-        `).join('');
+    if (this.selectedProducts.length === 0) {
+        container.classList.add('hidden');
+        return;
     }
+
+    container.classList.remove('hidden');
+
+    // Get transaction type for display
+    const form = document.getElementById('stock-form');
+    const transactionType = form ? form.getAttribute('data-transaction-type') : 'in';
+    const isStockOut = transactionType === 'out';
+
+    list.innerHTML = this.selectedProducts.map((product, index) => `
+        <tr class="border-b border-gray-200">
+            <td class="py-2 px-1 text-xs text-gray-900">
+                <div class="flex flex-col">
+                    <span class="font-medium">${this.getProductDisplayText(product)}</span>
+                    <span class="text-xs text-gray-500">Outlet: ${product.outlet}</span>
+                </div>
+            </td>
+            <td class="py-2 px-1 text-xs text-gray-600 text-center">${product.current_stock}</td>
+            <td class="py-2 px-1 text-xs font-medium ${isStockOut ? 'text-red-600' : 'text-green-600'} text-center">
+                ${isStockOut ? '-' : '+'}${product.quantity}
+            </td>
+            <td class="py-2 px-1 text-xs font-medium text-blue-600 text-center">${product.new_stock}</td>
+            <td class="py-2 px-1 text-center">
+                <button 
+                    onclick="stockManagement.removeProductFromForm(${index})"
+                    class="text-xs text-red-600 hover:text-red-800 font-medium"
+                >
+                    Hapus
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
 
     // Remove product from form
     removeProductFromForm(index) {
