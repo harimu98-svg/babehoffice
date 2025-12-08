@@ -81,37 +81,39 @@
             font-size: 18px;
         }
 /* ===== GLOBAL FIX FOR MODAL & SEARCH ===== */
-/* ===== FIX UTAMA ===== */
 #modal-backdrop {
-    pointer-events: auto !important; /* LINE INI SAJA YANG PERLU DIUBAH */
+    pointer-events: auto !important;    /* ← PERBAIKAN: auto bukan none */
+    cursor: default;
+    z-index: 9999 !important;
+}
+
+/* Modal content */
+#modal-backdrop > div {
+    pointer-events: auto !important;
+    cursor: default;
+}
+
+/* FIX KHUSUS untuk search input di TABLE SAJA (bukan modal) */
+main#content .data-table-search input,
+.data-table-container:not(.modal-content) input[type="text"]:not(.modal-content *) {
+    position: relative !important;
+    z-index: 10 !important;
+    background: white !important;
+}
+
+/* Pastikan input dalam modal TIDAK kena effect */
+.modal-content * {
+    z-index: auto !important;
+    position: static !important;
 }
 
 /* Untuk option produk 2 baris */
 select option {
     white-space: normal !important;
-    padding: 6px 8px !important;
-    line-height: 1.4;
-    font-size: 14px;
-}
-
-/* Product info dalam option */
-.option-product {
-    display: block;
+    padding: 8px 4px !important;
+    min-height: 40px;
     line-height: 1.3;
-}
-.option-name {
-    font-weight: 500;
-    display: block;
-}
-.option-details {
-    font-size: 12px;
-    color: #666;
-    display: block;
-}
-
-.modal-content {
-    pointer-events: auto !important;
-    z-index: 51 !important;
+    font-size: 14px;
 }
 
 /* Pastikan semua search input tetap accessible */
