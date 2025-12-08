@@ -1293,23 +1293,176 @@ class StockManagement {
         Notifications.info('Filter telah direset');
     }
 
-    // Generate stock report
-    generateStockReport(movements) {
-        const container = document.getElementById('movement-report-results');
-        if (!container) return;
+    // Generate stock report - COMPLETE VERSION
+generateStockReport(movements) {
+    const container = document.getElementById('movement-report-results');
+    if (!container) return;
 
-        if (movements.length === 0) {
-            container.innerHTML = `
-                <div class="text-center py-8">
-                    <p class="text-gray-500">Tidak ada data pergerakan stok untuk periode yang dipilih</p>
-                </div>
-            `;
+    if (movements.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-8">
+                <p class="text-gray-500">Tidak ada data pergerakan stok untuk periode yang dipilih</p>
+            </div>
+        `;
+        return;
+    }
+
+    // Get filter dates
+    const startDate = document.getElementById('start-date').value;
+    const endDate = document.getElementById('end-date').value;
+    const startDateTime = new Date(startDate + 'T00:00:00');
+
+    // Get product filter value
+    const productFilterValue = document.getElementById('product-filter').value.toLowerCase().trim();
+
+    // Group by product and outlet
+    const productSummary = {};
+    
+    // Process each product
+    this.products.forEach(product => {
+        if (!product.inventory) return;
+        
+        // Filter by product name
+        if (productFilterValue && !product.nama_produk.toLowerCase().includes(productFilterValue)) {
             return;
         }
+        
+        const key = `${product.id}-${product.outlet}`;
+        
+        // Calculate initial stock
+        let initialStock = product.stok || 0;
+        
+        // Subtract movements in period
+        movements.forEach(movement => {
+            if (movement.product_id === product.id && movement.outlet === product.outlet) {
+                if (movement.type === 'in') {
+                    initialStock -= movement.quantity;
+                } else if (movement.type === 'out') {
+                    initialStock += movement.quantity;
+                }
+            }
+        });
 
-        // ... [rest of generateStockReport method remains the same] ...
-        // (Copy from previous version)
-    }
+        // Calculate movements in period
+        let periodMasuk = 0;
+        let periodKeluar = 0;
+
+        movements.forEach(movement => {
+            if (movement.product_id === product.id && movement.outlet === product.outlet) {
+                if (movement.type === 'in') {
+                    periodMasuk += movement.quantity;
+                } else if (movement.type === 'out') {
+                    periodKeluar += movement.quantity;
+                }
+            }
+        });
+
+        // Validation: initial stock should not be negative
+        initialStock = Math.max(0, initialStock);
+
+        const sisa = initialStock + periodMasuk - periodKeluar;
+
+        productSummary[key] = {
+            group_produk: product.group_produk || '-',
+            product: product.nama_produk,
+            outlet: product.outlet,
+            awal: initialStock,
+            masuk: periodMasuk,
+            pengembalian: 0,
+            penjualan: 0,
+            keluar: periodKeluar,
+            sisa: sisa
+        };
+    });
+
+    // Convert to array
+    const summaryArray = Object.values(productSummary).filter(summary => 
+        summary.masuk > 0 || summary.keluar > 0 || summary.awal > 0
+    );
+
+    // Sort by group and product name
+    summaryArray.sort((a, b) => {
+        if (a.group_produk !== b.group_produk) {
+            return a.group_produk.localeCompare(b.group_produk);
+        }
+        return a.product.localeCompare(b.product);
+    });
+
+    // Calculate totals
+    const totals = {
+        awal: summaryArray.reduce((sum, item) => sum + item.awal, 0),
+        masuk: summaryArray.reduce((sum, item) => sum + item.masuk, 0),
+        keluar: summaryArray.reduce((sum, item) => sum + item.keluar, 0),
+        sisa: summaryArray.reduce((sum, item) => sum + item.sisa, 0)
+    };
+
+    const html = `
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Group Produk</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Outlet</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Awal</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Masuk</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pengembalian</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Penjualan</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Keluar</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sisa</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    ${summaryArray.map(summary => `
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${summary.group_produk}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${summary.product}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${summary.outlet}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">${summary.awal}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">+${summary.masuk}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-medium">${summary.pengembalian}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-orange-600 font-medium">${summary.penjualan}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-medium">-${summary.keluar}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-bold ${
+                                summary.sisa > 0 ? 'text-green-600' : summary.sisa < 0 ? 'text-red-600' : 'text-gray-600'
+                            }">
+                                ${summary.sisa}
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+                <tfoot class="bg-gray-50">
+                    <tr class="font-semibold">
+                        <td class="px-6 py-4 text-sm text-gray-900" colspan="3">TOTAL</td>
+                        <td class="px-6 py-4 text-sm text-gray-900">${totals.awal}</td>
+                        <td class="px-6 py-4 text-sm text-green-600">+${totals.masuk}</td>
+                        <td class="px-6 py-4 text-sm text-blue-600">0</td>
+                        <td class="px-6 py-4 text-sm text-orange-600">0</td>
+                        <td class="px-6 py-4 text-sm text-red-600">-${totals.keluar}</td>
+                        <td class="px-6 py-4 text-sm font-bold ${
+                            totals.sisa > 0 ? 'text-green-600' : totals.sisa < 0 ? 'text-red-600' : 'text-gray-600'
+                        }">
+                            ${totals.sisa}
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        <div class="mt-4 text-sm text-gray-500">
+            Menampilkan ${summaryArray.length} produk dari ${movements.length} pergerakan stok
+            <br>
+            <span class="text-xs">* Periode: ${startDate} sampai ${endDate}</span>
+            <br>
+            <span class="text-xs">* Filter produk: "${document.getElementById('product-filter').value || 'Semua produk'}"</span>
+            <br>
+            <span class="text-xs">* Nilai Awal: Stok pada tanggal ${startDate}</span>
+            <br>
+            <span class="text-xs">* Rumus: Awal + Masuk - Keluar = Sisa</span>
+        </div>
+    `;
+
+    container.innerHTML = html;
+}
 
     // Check if initialized
     ensureInitialized() {
