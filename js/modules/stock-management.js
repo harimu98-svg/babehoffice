@@ -306,7 +306,50 @@ async showStockForm(type, title) {
         }
     ];
 
-    modal.createModal(title, content, buttons);
+   modal.createModal(title, content, buttons, {
+        size: 'max-w-lg', // Lebih kecil dari sebelumnya
+    });
+    // TAMBAHKAN event listener untuk filter produk:
+    setTimeout(() => {
+        const outletSelect = document.getElementById('outlet-select');
+        if (outletSelect) {
+            outletSelect.addEventListener('change', () => {
+                this.filterProductsByOutlet();
+            });
+        }
+    }, 100);
+}
+
+// TAMBAHKAN method filter:
+filterProductsByOutlet() {
+    const outletSelect = document.getElementById('outlet-select');
+    const productSelect = document.getElementById('product-select');
+    if (!outletSelect || !productSelect) return;
+    
+    const selectedOutlet = outletSelect.value;
+    const allOptions = productSelect.querySelectorAll('option');
+    
+    // Tampilkan/sembunyikan berdasarkan outlet
+    allOptions.forEach(option => {
+        if (option.value === "") {
+            option.style.display = ''; // "Pilih Produk" tetap tampil
+            return;
+        }
+        
+        const product = this.products.find(p => p.id == option.value);
+        if (product) {
+            // Tampilkan hanya jika outlet cocok atau belum pilih outlet
+            const shouldShow = !selectedOutlet || product.outlet === selectedOutlet;
+            option.style.display = shouldShow ? '' : 'none';
+            
+            // Update text dengan info outlet
+            option.textContent = `${product.nama_produk} (Outlet: ${product.outlet}, Stok: ${product.stok || 0})`;
+        }
+    });
+    
+    // Reset ke pilihan pertama
+    productSelect.value = "";
+}
     
     // ✅ SIMPAN transaction type dengan benar
     this.currentTransactionType = type;
