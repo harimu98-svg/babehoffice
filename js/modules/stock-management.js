@@ -198,21 +198,21 @@ class StockManagement {
         ).join('');
 
         // Product options - COMPACT 2 LINES
-      const productOptions = this.products
-    .filter(product => product.inventory)
-    .map(product => 
-        `<option value="${product.id}" 
-                 data-stock="${product.stok || 0}" 
-                 data-outlet="${product.outlet}"
-                 title="${product.nama_produk} | Outlet: ${product.outlet} | Stok: ${product.stok || 0}">
-            ${product.nama_produk}
-        </option>`
-    ).join('');
-// Di dalam showStockForm(), tambahkan style untuk select:
-modal.createModal(title, content, buttons, {
-    size: 'max-w-lg',
-});
-
+        const productOptions = this.products
+            .filter(product => product.inventory)
+            .map(product => 
+                `<option value="${product.id}" 
+                         data-stock="${product.stok || 0}" 
+                         data-outlet="${product.outlet}"
+                         class="py-2">
+                    <div class="flex flex-col">
+                        <span class="font-medium truncate">${product.nama_produk}</span>
+                        <span class="text-xs text-gray-500 mt-0.5">
+                            Outlet: ${product.outlet} | Stok: ${product.stok || 0}
+                        </span>
+                    </div>
+                </option>`
+            ).join('');
 
         const content = `
             <form id="stock-form" class="space-y-4" data-transaction-type="${type}">
@@ -370,41 +370,50 @@ modal.createModal(title, content, buttons, {
         }
     }
 
+    // Filter products by selected outlet
     filterProductsByOutlet() {
-    const outletSelect = document.getElementById('outlet-select');
-    const productSelect = document.getElementById('product-select');
-    
-    if (!outletSelect || !productSelect) return;
-    
-    const selectedOutlet = outletSelect.value;
-    
-    // Reset to show all products initially
-    const options = productSelect.querySelectorAll('option');
-    
-    options.forEach(option => {
-        if (option.value === "") return; // Skip "Pilih Produk"
+        const outletSelect = document.getElementById('outlet-select');
+        const productSelect = document.getElementById('product-select');
         
-        const productOutlet = option.getAttribute('data-outlet');
-        const isVisible = !selectedOutlet || productOutlet === selectedOutlet;
+        if (!outletSelect || !productSelect) return;
         
-        option.style.display = isVisible ? '' : 'none';
+        const selectedOutlet = outletSelect.value;
         
-        // Format teks yang ditampilkan
-        if (option.value) {
-            const product = this.products.find(p => p.id == option.value);
-            if (product) {
-                // Nama produk saja, info outlet dan stok di title
-                option.textContent = this.getProductDisplayText(product);
-                option.setAttribute('data-stock', product.stok || 0);
-                option.setAttribute('data-outlet', product.outlet);
-                option.title = `${product.nama_produk} | Outlet: ${product.outlet} | Stok: ${product.stok || 0}`;
+        // Reset to show all products initially
+        const options = productSelect.querySelectorAll('option');
+        
+        options.forEach(option => {
+            if (option.value === "") return; // Skip "Pilih Produk"
+            
+            const productOutlet = option.getAttribute('data-outlet');
+            const isVisible = !selectedOutlet || productOutlet === selectedOutlet;
+            
+            option.style.display = isVisible ? '' : 'none';
+            
+            // Update display text to be compact
+            if (option.value && option.textContent.includes('Outlet:')) {
+                // Already formatted
+            } else if (option.value) {
+                const product = this.products.find(p => p.id == option.value);
+                if (product) {
+                    option.innerHTML = `
+                        <div class="flex flex-col">
+                            <span class="font-medium truncate">${product.nama_produk}</span>
+                            <span class="text-xs text-gray-500 mt-0.5">
+                                Outlet: ${product.outlet} | Stok: ${product.stok || 0}
+                            </span>
+                        </div>
+                    `;
+                    option.setAttribute('data-stock', product.stok || 0);
+                    option.setAttribute('data-outlet', product.outlet);
+                }
             }
-        }
-    });
-    
-    // Reset selection
-    productSelect.value = "";
-}
+        });
+        
+        // Reset selection
+        productSelect.value = "";
+    }
+
     // Add product to form - FIXED VERSION
     addProductToForm() {
         const productSelect = document.getElementById('product-select');
@@ -460,46 +469,42 @@ modal.createModal(title, content, buttons, {
         quantityInput.focus();
     }
 
+    // Update selected products list - FIXED
     updateSelectedProductsList() {
-    const container = document.getElementById('selected-products-container');
-    const list = document.getElementById('selected-products-list');
+        const container = document.getElementById('selected-products-container');
+        const list = document.getElementById('selected-products-list');
 
-    if (this.selectedProducts.length === 0) {
-        container.classList.add('hidden');
-        return;
+        if (this.selectedProducts.length === 0) {
+            container.classList.add('hidden');
+            return;
+        }
+
+        container.classList.remove('hidden');
+
+        // Get transaction type for display
+        const form = document.getElementById('stock-form');
+        const transactionType = form ? form.getAttribute('data-transaction-type') : 'in';
+        const isStockOut = transactionType === 'out';
+
+        list.innerHTML = this.selectedProducts.map((product, index) => `
+            <tr class="border-b border-gray-200">
+                <td class="py-2 px-1 text-xs text-gray-900">${product.nama_produk}</td>
+                <td class="py-2 px-1 text-xs text-gray-600 text-center">${product.current_stock}</td>
+                <td class="py-2 px-1 text-xs font-medium ${isStockOut ? 'text-red-600' : 'text-green-600'} text-center">
+                    ${isStockOut ? '-' : '+'}${product.quantity}
+                </td>
+                <td class="py-2 px-1 text-xs font-medium text-blue-600 text-center">${product.new_stock}</td>
+                <td class="py-2 px-1 text-center">
+                    <button 
+                        onclick="stockManagement.removeProductFromForm(${index})"
+                        class="text-xs text-red-600 hover:text-red-800 font-medium"
+                    >
+                        Hapus
+                    </button>
+                </td>
+            </tr>
+        `).join('');
     }
-
-    container.classList.remove('hidden');
-
-    // Get transaction type for display
-    const form = document.getElementById('stock-form');
-    const transactionType = form ? form.getAttribute('data-transaction-type') : 'in';
-    const isStockOut = transactionType === 'out';
-
-    list.innerHTML = this.selectedProducts.map((product, index) => `
-        <tr class="border-b border-gray-200">
-            <td class="py-2 px-1 text-xs text-gray-900">
-                <div class="flex flex-col">
-                    <span class="font-medium">${this.getProductDisplayText(product)}</span>
-                    <span class="text-xs text-gray-500">Outlet: ${product.outlet}</span>
-                </div>
-            </td>
-            <td class="py-2 px-1 text-xs text-gray-600 text-center">${product.current_stock}</td>
-            <td class="py-2 px-1 text-xs font-medium ${isStockOut ? 'text-red-600' : 'text-green-600'} text-center">
-                ${isStockOut ? '-' : '+'}${product.quantity}
-            </td>
-            <td class="py-2 px-1 text-xs font-medium text-blue-600 text-center">${product.new_stock}</td>
-            <td class="py-2 px-1 text-center">
-                <button 
-                    onclick="stockManagement.removeProductFromForm(${index})"
-                    class="text-xs text-red-600 hover:text-red-800 font-medium"
-                >
-                    Hapus
-                </button>
-            </td>
-        </tr>
-    `).join('');
-}
 
     // Remove product from form
     removeProductFromForm(index) {
