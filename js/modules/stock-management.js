@@ -1,4 +1,4 @@
-// Stock Management Module - Complete Version
+// Stock Management Module - COMPLETE FIXED VERSION
 class StockManagement {
     constructor() {
         this.outlets = [];
@@ -7,6 +7,7 @@ class StockManagement {
         this.selectedProducts = [];
         this.stockMovements = [];
         this.isInitialized = false;
+        this.currentTransactionType = 'in'; // Default
     }
 
     // Initialize module
@@ -190,296 +191,320 @@ class StockManagement {
         await this.showStockForm('out', 'Stok Keluar');
     }
 
-    // Show stock form - COMPLETE VERSION
-async showStockForm(type, title) {
-    const outletOptions = this.outlets.map(outlet => 
-        `<option value="${outlet.outlet}">${outlet.outlet}</option>`
-    ).join('');
-
-    const productOptions = this.products
-        .filter(product => product.inventory)
-        .map(product => 
-            `<option value="${product.id}" data-stock="${product.stok || 0}">
-                ${product.nama_produk} (Stok: ${product.stok || 0})
-            </option>`
+    // Show stock form - FIXED VERSION
+    async showStockForm(type, title) {
+        const outletOptions = this.outlets.map(outlet => 
+            `<option value="${outlet.outlet}">${outlet.outlet}</option>`
         ).join('');
 
-    const content = `
-        <form id="stock-form" class="space-y-4" data-transaction-type="${type}">
-            <div class="grid grid-cols-2 gap-4">
+        // Product options - COMPACT 2 LINES
+        const productOptions = this.products
+            .filter(product => product.inventory)
+            .map(product => 
+                `<option value="${product.id}" 
+                         data-stock="${product.stok || 0}" 
+                         data-outlet="${product.outlet}"
+                         class="py-2">
+                    <div class="flex flex-col">
+                        <span class="font-medium truncate">${product.nama_produk}</span>
+                        <span class="text-xs text-gray-500 mt-0.5">
+                            Outlet: ${product.outlet} | Stok: ${product.stok || 0}
+                        </span>
+                    </div>
+                </option>`
+            ).join('');
+
+        const content = `
+            <form id="stock-form" class="space-y-4" data-transaction-type="${type}">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Outlet *</label>
+                        <select 
+                            id="outlet-select"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            required
+                        >
+                            <option value="">Pilih Outlet</option>
+                            ${outletOptions}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Tanggal *</label>
+                        <input 
+                            type="datetime-local" 
+                            id="movement-date"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            required
+                        >
+                    </div>
+                </div>
+
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Outlet *</label>
-                    <select 
-                        id="outlet-select"
-                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        required
-                    >
-                        <option value="">Pilih Outlet</option>
-                        ${outletOptions}
-                    </select>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Tambah Produk *</label>
+                    <div class="flex flex-col sm:flex-row gap-2">
+                        <select 
+                            id="product-select"
+                            class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                            <option value="">Pilih Produk</option>
+                            ${productOptions}
+                        </select>
+                        <div class="flex gap-2">
+                            <input 
+                                type="number" 
+                                id="quantity-input"
+                                placeholder="Jumlah"
+                                min="1"
+                                class="w-24 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            >
+                            <button 
+                                type="button"
+                                class="w-10 h-10 flex items-center justify-center bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                                id="add-product-btn"
+                                title="Tambah Produk"
+                            >
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">* Hanya produk dengan inventory aktif</p>
                 </div>
+
+                <!-- Selected Products Table -->
+                <div id="selected-products-container" class="hidden">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Produk Dipilih</label>
+                    <div class="bg-gray-50 rounded-lg p-3 border">
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full">
+                                <thead>
+                                    <tr class="border-b">
+                                        <th class="text-left text-xs font-medium text-gray-500 pb-2">Produk</th>
+                                        <th class="text-left text-xs font-medium text-gray-500 pb-2">Stok Saat Ini</th>
+                                        <th class="text-left text-xs font-medium text-gray-500 pb-2">Jumlah ${type === 'in' ? 'Masuk' : 'Keluar'}</th>
+                                        <th class="text-left text-xs font-medium text-gray-500 pb-2">Stok Baru</th>
+                                        <th class="text-left text-xs font-medium text-gray-500 pb-2">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="selected-products-list">
+                                    <!-- Products will be added here dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Tanggal *</label>
-                    <input 
-                        type="datetime-local" 
-                        id="movement-date"
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Keterangan</label>
+                    <textarea 
+                        id="notes-input"
+                        rows="2"
+                        placeholder="Catatan untuk pergerakan stok ini..."
                         class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        required
-                    >
+                    ></textarea>
                 </div>
-            </div>
+            </form>
+        `;
 
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Tambah Produk *</label>
-                <div class="flex space-x-2">
-                    <select 
-                        id="product-select"
-                        class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                        <option value="">Pilih Produk</option>
-                        ${productOptions}
-                    </select>
-                    <input 
-                        type="number" 
-                        id="quantity-input"
-                        placeholder="Jumlah"
-                        min="1"
-                        class="w-24 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                    <button 
-                        type="button"
-                        onclick="stockManagement.addProductToForm()"
-                        class="w-10 h-10 flex items-center justify-center bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors"
-                        title="Tambah Produk"
-                    >
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                        </svg>
-                    </button>
-                </div>
-                <p class="text-xs text-gray-500 mt-1">* Hanya produk dengan inventory aktif</p>
-            </div>
+        const buttons = [
+            {
+                text: 'Batal',
+                onclick: () => modal.close(),  // FIX: Gunakan fungsi
+                primary: false
+            },
+            {
+                text: 'Simpan',
+                onclick: () => this.saveStockMovement(type),  // FIX: Gunakan fungsi
+                primary: true
+            }
+        ];
 
-            <!-- Selected Products Table -->
-            <div id="selected-products-container" class="hidden">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Produk Dipilih</label>
-                <div class="bg-gray-50 rounded-lg p-4 border">
-                    <table class="min-w-full">
-                        <thead>
-                            <tr class="border-b">
-                                <th class="text-left text-sm font-medium text-gray-500 pb-2">Produk</th>
-                                <th class="text-left text-sm font-medium text-gray-500 pb-2">Stok Saat Ini</th>
-                                <th class="text-left text-sm font-medium text-gray-500 pb-2">Jumlah ${type === 'in' ? 'Masuk' : 'Keluar'}</th>
-                                <th class="text-left text-sm font-medium text-gray-500 pb-2">Stok Baru</th>
-                                <th class="text-left text-sm font-medium text-gray-500 pb-2">Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody id="selected-products-list">
-                            <!-- Products will be added here dynamically -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+        // Modal lebih kecil (max-w-lg)
+        modal.createModal(title, content, buttons, {
+            size: 'max-w-lg',
+        });
+        
+        // Set current transaction type
+        this.currentTransactionType = type;
+        
+        // Set current datetime
+        const now = new Date();
+        const localDateTime = now.toISOString().slice(0, 16);
+        document.getElementById('movement-date').value = localDateTime;
 
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Keterangan</label>
-                <textarea 
-                    id="notes-input"
-                    rows="3"
-                    placeholder="Catatan untuk pergerakan stok ini..."
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                ></textarea>
-            </div>
-        </form>
-    `;
+        // Reset selected products
+        this.selectedProducts = [];
+        
+        // Setup event listeners
+        setTimeout(() => {
+            this.setupFormEventListeners();
+        }, 100);
+    }
 
-    const buttons = [
-        {
-            text: 'Batal',
-            onclick: 'modal.close()',
-            primary: false
-        },
-        {
-            text: 'Simpan',
-            onclick: `stockManagement.saveStockMovement('${type}')`,
-            primary: true
+    // Setup form event listeners
+    setupFormEventListeners() {
+        // Add product button
+        const addBtn = document.getElementById('add-product-btn');
+        if (addBtn) {
+            addBtn.onclick = () => this.addProductToForm();
         }
-    ];
-
-   modal.createModal(title, content, buttons, {
-        size: 'max-w-lg', // Lebih kecil dari sebelumnya
-    });
-    // TAMBAHKAN event listener untuk filter produk:
-    setTimeout(() => {
+        
+        // Filter products when outlet changes
         const outletSelect = document.getElementById('outlet-select');
         if (outletSelect) {
             outletSelect.addEventListener('change', () => {
                 this.filterProductsByOutlet();
             });
         }
-    }, 100);
-}
+        
+        // Add Enter key support for quantity input
+        const quantityInput = document.getElementById('quantity-input');
+        if (quantityInput) {
+            quantityInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.addProductToForm();
+                }
+            });
+        }
+    }
 
-// TAMBAHKAN method filter:
-filterProductsByOutlet() {
-    const outletSelect = document.getElementById('outlet-select');
-    const productSelect = document.getElementById('product-select');
-    if (!outletSelect || !productSelect) return;
-    
-    const selectedOutlet = outletSelect.value;
-    const allOptions = productSelect.querySelectorAll('option');
-    
-    // Tampilkan/sembunyikan berdasarkan outlet
-    allOptions.forEach(option => {
-        if (option.value === "") {
-            option.style.display = ''; // "Pilih Produk" tetap tampil
+    // Filter products by selected outlet
+    filterProductsByOutlet() {
+        const outletSelect = document.getElementById('outlet-select');
+        const productSelect = document.getElementById('product-select');
+        
+        if (!outletSelect || !productSelect) return;
+        
+        const selectedOutlet = outletSelect.value;
+        
+        // Reset to show all products initially
+        const options = productSelect.querySelectorAll('option');
+        
+        options.forEach(option => {
+            if (option.value === "") return; // Skip "Pilih Produk"
+            
+            const productOutlet = option.getAttribute('data-outlet');
+            const isVisible = !selectedOutlet || productOutlet === selectedOutlet;
+            
+            option.style.display = isVisible ? '' : 'none';
+            
+            // Update display text to be compact
+            if (option.value && option.textContent.includes('Outlet:')) {
+                // Already formatted
+            } else if (option.value) {
+                const product = this.products.find(p => p.id == option.value);
+                if (product) {
+                    option.innerHTML = `
+                        <div class="flex flex-col">
+                            <span class="font-medium truncate">${product.nama_produk}</span>
+                            <span class="text-xs text-gray-500 mt-0.5">
+                                Outlet: ${product.outlet} | Stok: ${product.stok || 0}
+                            </span>
+                        </div>
+                    `;
+                    option.setAttribute('data-stock', product.stok || 0);
+                    option.setAttribute('data-outlet', product.outlet);
+                }
+            }
+        });
+        
+        // Reset selection
+        productSelect.value = "";
+    }
+
+    // Add product to form - FIXED VERSION
+    addProductToForm() {
+        const productSelect = document.getElementById('product-select');
+        const quantityInput = document.getElementById('quantity-input');
+        const productId = productSelect.value;
+        const quantity = parseInt(quantityInput.value);
+
+        if (!productId || !quantity || quantity <= 0) {
+            Notifications.error('Pilih produk dan masukkan jumlah yang valid');
             return;
         }
+
+        const product = this.products.find(p => p.id == productId);
+        if (!product) return;
+
+        // Get transaction type from form
+        const form = document.getElementById('stock-form');
+        const transactionType = form ? form.getAttribute('data-transaction-type') : this.currentTransactionType;
+        const isStockOut = transactionType === 'out';
+
+        // Check stock availability for stock out
+        if (isStockOut && (product.stok === null || product.stok < quantity)) {
+            Notifications.error(`Stok ${product.nama_produk} tidak mencukupi. Stok saat ini: ${product.stok || 0}`);
+            return;
+        }
+
+        // Calculate new stock
+        let newStock;
+        if (isStockOut) {
+            newStock = product.stok - quantity;
+        } else {
+            newStock = product.stok + quantity;
+        }
+
+        // Remove existing and add new
+        this.selectedProducts = this.selectedProducts.filter(p => p.id != productId);
         
-        const product = this.products.find(p => p.id == option.value);
-        if (product) {
-            // Tampilkan hanya jika outlet cocok atau belum pilih outlet
-            const shouldShow = !selectedOutlet || product.outlet === selectedOutlet;
-            option.style.display = shouldShow ? '' : 'none';
-            
-            // Update text dengan info outlet
-            option.textContent = `${product.nama_produk} (Outlet: ${product.outlet}, Stok: ${product.stok || 0})`;
+        this.selectedProducts.push({
+            id: product.id,
+            nama_produk: product.nama_produk,
+            group_produk: product.group_produk,
+            outlet: product.outlet,
+            current_stock: product.stok,
+            quantity: quantity,
+            new_stock: newStock
+        });
+
+        this.updateSelectedProductsList();
+        
+        // Reset inputs
+        productSelect.value = '';
+        quantityInput.value = '';
+        quantityInput.focus();
+    }
+
+    // Update selected products list - FIXED
+    updateSelectedProductsList() {
+        const container = document.getElementById('selected-products-container');
+        const list = document.getElementById('selected-products-list');
+
+        if (this.selectedProducts.length === 0) {
+            container.classList.add('hidden');
+            return;
         }
-    });
-    
-    // Reset ke pilihan pertama
-    productSelect.value = "";
-}
-    
-    // ✅ SIMPAN transaction type dengan benar
-    this.currentTransactionType = type;
-    console.log('💾 Saved transaction type:', this.currentTransactionType);
-    
-    // Set current datetime
-    const now = new Date();
-    const localDateTime = now.toISOString().slice(0, 16);
-    document.getElementById('movement-date').value = localDateTime;
 
-    // Reset selected products
-    this.selectedProducts = [];
-}
-// Add product to form - FIXED VERSION dengan fallback yang kuat
-addProductToForm() {
-    const productSelect = document.getElementById('product-select');
-    const quantityInput = document.getElementById('quantity-input');
-    const productId = productSelect.value;
-    const quantity = parseInt(quantityInput.value);
+        container.classList.remove('hidden');
 
-    if (!productId || !quantity || quantity <= 0) {
-        Notifications.error('Pilih produk dan masukkan jumlah yang valid');
-        return;
+        // Get transaction type for display
+        const form = document.getElementById('stock-form');
+        const transactionType = form ? form.getAttribute('data-transaction-type') : 'in';
+        const isStockOut = transactionType === 'out';
+
+        list.innerHTML = this.selectedProducts.map((product, index) => `
+            <tr class="border-b border-gray-200">
+                <td class="py-2 px-1 text-xs text-gray-900">${product.nama_produk}</td>
+                <td class="py-2 px-1 text-xs text-gray-600 text-center">${product.current_stock}</td>
+                <td class="py-2 px-1 text-xs font-medium ${isStockOut ? 'text-red-600' : 'text-green-600'} text-center">
+                    ${isStockOut ? '-' : '+'}${product.quantity}
+                </td>
+                <td class="py-2 px-1 text-xs font-medium text-blue-600 text-center">${product.new_stock}</td>
+                <td class="py-2 px-1 text-center">
+                    <button 
+                        onclick="stockManagement.removeProductFromForm(${index})"
+                        class="text-xs text-red-600 hover:text-red-800 font-medium"
+                    >
+                        Hapus
+                    </button>
+                </td>
+            </tr>
+        `).join('');
     }
-
-    const product = this.products.find(p => p.id == productId);
-    if (!product) return;
-
-    // ✅ MULTIPLE FALLBACKS untuk mendapatkan transaction type
-    let transactionType = 'in'; // default
-    
-    // 1. Cek dari data attribute form
-    const form = document.getElementById('stock-form');
-    if (form) {
-        transactionType = form.getAttribute('data-transaction-type');
-        console.log('📋 Transaction from form data:', transactionType);
-    }
-    
-    // 2. Cek dari class property
-    if (!transactionType && this.currentTransactionType) {
-        transactionType = this.currentTransactionType;
-        console.log('📋 Transaction from class property:', transactionType);
-    }
-    
-    // 3. Cek dari modal title (fallback terakhir)
-    if (!transactionType) {
-        const modalTitle = document.querySelector('.modal h3, .modal .text-base');
-        if (modalTitle) {
-            const titleText = modalTitle.textContent.toLowerCase();
-            if (titleText.includes('keluar')) {
-                transactionType = 'out';
-            }
-            console.log('📋 Transaction from modal title:', transactionType);
-        }
-    }
-
-    const isStockOut = transactionType === 'out';
-    console.log('🎯 Final Transaction Type:', transactionType, 'Is Stock Out:', isStockOut);
-
-    // Check stock availability for stock out
-    if (isStockOut && (product.stok === null || product.stok < quantity)) {
-        Notifications.error(`Stok ${product.nama_produk} tidak mencukupi. Stok saat ini: ${product.stok || 0}`);
-        return;
-    }
-
-    // ✅ CALCULATION yang jelas
-    let newStock;
-    if (isStockOut) {
-        newStock = product.stok - quantity;
-        console.log(`➖ STOCK KELUAR: ${product.stok} - ${quantity} = ${newStock}`);
-    } else {
-        newStock = product.stok + quantity;
-        console.log(`➕ STOK MASUK: ${product.stok} + ${quantity} = ${newStock}`);
-    }
-
-    // Remove existing and add new
-    this.selectedProducts = this.selectedProducts.filter(p => p.id != productId);
-    
-    this.selectedProducts.push({
-        id: product.id,
-        nama_produk: product.nama_produk,
-        group_produk: product.group_produk,
-        outlet: product.outlet,
-        current_stock: product.stok,
-        quantity: quantity,
-        new_stock: newStock
-    });
-
-    this.updateSelectedProductsList();
-    
-    // Reset inputs
-    productSelect.value = '';
-    quantityInput.value = '';
-}
-
- // EMERGENCY FIX - Hardcode untuk testing
-updateSelectedProductsList() {
-    const container = document.getElementById('selected-products-container');
-    const list = document.getElementById('selected-products-list');
-
-    if (this.selectedProducts.length === 0) {
-        container.classList.add('hidden');
-        return;
-    }
-
-    container.classList.remove('hidden');
-
-    // EMERGENCY FIX: Always show minus for stock out
-    // Ganti 'out' dengan kondisi yang sesuai
-    const isStockOut = true; // FORCE MINUS untuk testing
-
-    list.innerHTML = this.selectedProducts.map((product, index) => `
-        <tr class="border-b border-gray-200">
-            <td class="py-3 text-sm text-gray-900">${product.nama_produk}</td>
-            <td class="py-3 text-sm text-gray-600">${product.current_stock}</td>
-            <td class="py-3 text-sm font-medium text-red-600">
-                -${product.quantity} <!-- SELALU MINUS untuk stok keluar -->
-            </td>
-            <td class="py-3 text-sm font-medium text-blue-600">${product.new_stock}</td>
-            <td class="py-3">
-                <button 
-                    onclick="stockManagement.removeProductFromForm(${index})"
-                    class="text-red-600 hover:text-red-800 text-sm font-medium"
-                >
-                    Hapus
-                </button>
-            </td>
-        </tr>
-    `).join('');
-}
 
     // Remove product from form
     removeProductFromForm(index) {
@@ -487,94 +512,92 @@ updateSelectedProductsList() {
         this.updateSelectedProductsList();
     }
 
-   // Save stock movement - FIXED: pastikan current_stock selalu dari database
-async saveStockMovement(type) {
-    try {
-        const outletSelect = document.getElementById('outlet-select');
-        const movementDate = document.getElementById('movement-date');
-        const notesInput = document.getElementById('notes-input');
+    // Save stock movement - FIXED
+    async saveStockMovement(type) {
+        try {
+            const outletSelect = document.getElementById('outlet-select');
+            const movementDate = document.getElementById('movement-date');
+            const notesInput = document.getElementById('notes-input');
 
-        const outlet = outletSelect.value;
-        const movementDateTime = movementDate.value;
-        const notes = notesInput.value;
+            const outlet = outletSelect.value;
+            const movementDateTime = movementDate.value;
+            const notes = notesInput.value;
 
-        if (!outlet) {
-            Notifications.error('Pilih outlet terlebih dahulu');
-            return;
-        }
-
-        if (this.selectedProducts.length === 0) {
-            Notifications.error('Tambah minimal satu produk');
-            return;
-        }
-
-        const user = Auth.getCurrentUser();
-        const userName = user ? (user.name || user.nama || 'System') : 'System';
-
-        Helpers.showLoading();
-
-        // Process each product
-        for (const selectedProduct of this.selectedProducts) {
-            // Get fresh product data from database to ensure accurate current stock
-            const freshProduct = this.products.find(p => p.id == selectedProduct.id);
-            if (!freshProduct) continue;
-
-            // Calculate new stock based on type - FIXED: gunakan stok fresh dari database
-            let newStock;
-            if (type === 'out') {
-                // Stok Keluar: new stock = current stock - quantity
-                newStock = freshProduct.stok - selectedProduct.quantity;
-            } else {
-                // Stok Masuk: new stock = current stock + quantity
-                newStock = freshProduct.stok + selectedProduct.quantity;
+            if (!outlet) {
+                Notifications.error('Pilih outlet terlebih dahulu');
+                return;
             }
 
-            // Update product stock in database
-            const { error: updateError } = await supabase
-                .from('produk')
-                .update({ stok: newStock })
-                .eq('id', selectedProduct.id);
+            if (this.selectedProducts.length === 0) {
+                Notifications.error('Tambah minimal satu produk');
+                return;
+            }
 
-            if (updateError) throw updateError;
+            const user = Auth.getCurrentUser();
+            const userName = user ? (user.name || user.nama || 'System') : 'System';
 
-            // Create stock movement record in localStorage
-            const movement = {
-                id: Date.now() + Math.random(),
-                outlet: outlet,
-                product_id: selectedProduct.id,
-                product_name: selectedProduct.nama_produk,
-                group_produk: selectedProduct.group_produk,
-                type: type,
-                quantity: selectedProduct.quantity,
-                previous_stock: freshProduct.stok, // Stok sebelum perubahan (dari database)
-                new_stock: newStock, // Stok setelah perubahan
-                notes: notes,
-                user_name: userName,
-                movement_date: movementDateTime,
-                created_at: new Date().toISOString()
-            };
+            Helpers.showLoading();
 
-            this.stockMovements.push(movement);
+            // Process each product
+            for (const selectedProduct of this.selectedProducts) {
+                // Get fresh product data
+                const freshProduct = this.products.find(p => p.id == selectedProduct.id);
+                if (!freshProduct) continue;
+
+                // Calculate new stock
+                let newStock;
+                if (type === 'out') {
+                    newStock = freshProduct.stok - selectedProduct.quantity;
+                } else {
+                    newStock = freshProduct.stok + selectedProduct.quantity;
+                }
+
+                // Update product stock in database
+                const { error: updateError } = await supabase
+                    .from('produk')
+                    .update({ stok: newStock })
+                    .eq('id', selectedProduct.id);
+
+                if (updateError) throw updateError;
+
+                // Create stock movement record
+                const movement = {
+                    id: Date.now() + Math.random(),
+                    outlet: outlet,
+                    product_id: selectedProduct.id,
+                    product_name: selectedProduct.nama_produk,
+                    group_produk: selectedProduct.group_produk,
+                    type: type,
+                    quantity: selectedProduct.quantity,
+                    previous_stock: freshProduct.stok,
+                    new_stock: newStock,
+                    notes: notes,
+                    user_name: userName,
+                    movement_date: movementDateTime,
+                    created_at: new Date().toISOString()
+                };
+
+                this.stockMovements.push(movement);
+            }
+
+            // Save to localStorage
+            this.saveMovementsToStorage();
+
+            modal.close();
+            Helpers.hideLoading();
+            
+            // Reload data
+            await this.loadProducts();
+            await this.loadRecentMovements();
+            
+            Notifications.success(`Stok ${type === 'in' ? 'masuk' : 'keluar'} berhasil disimpan`);
+
+        } catch (error) {
+            Helpers.hideLoading();
+            console.error('Error saving stock movement:', error);
+            Notifications.error('Gagal menyimpan pergerakan stok: ' + error.message);
         }
-
-        // Save to localStorage
-        this.saveMovementsToStorage();
-
-        modal.close();
-        Helpers.hideLoading();
-        
-        // Reload data untuk mendapatkan stok terbaru
-        await this.loadProducts();
-        await this.loadRecentMovements();
-        
-        Notifications.success(`Stok ${type === 'in' ? 'masuk' : 'keluar'} berhasil disimpan`);
-
-    } catch (error) {
-        Helpers.hideLoading();
-        console.error('Error saving stock movement:', error);
-        Notifications.error('Gagal menyimpan pergerakan stok: ' + error.message);
     }
-}
 
     // Show reset options modal
     async showResetOptions() {
@@ -639,7 +662,7 @@ async saveStockMovement(type) {
         modal.createModal('Reset Data Stok', content, [
             {
                 text: 'Batal',
-                onclick: 'modal.close()',
+                onclick: () => modal.close(),  // FIX: Gunakan fungsi
                 primary: false
             }
         ]);
@@ -815,14 +838,14 @@ async saveStockMovement(type) {
                     </div>
                     <div class="mt-4 flex justify-end space-x-2">
                         <button 
-                            onclick="stockManagement.applyMovementFilters()"
                             class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+                            id="apply-filter-btn"
                         >
                             Terapkan Filter
                         </button>
                         <button 
-                            onclick="stockManagement.clearMovementFilters()"
                             class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors"
+                            id="clear-filter-btn"
                         >
                             Reset
                         </button>
@@ -848,7 +871,7 @@ async saveStockMovement(type) {
         const buttons = [
             {
                 text: 'Tutup',
-                onclick: 'modal.close()',
+                onclick: () => modal.close(),  // FIX: Gunakan fungsi
                 primary: false
             }
         ];
@@ -865,257 +888,245 @@ async saveStockMovement(type) {
 
         document.getElementById('start-date').value = startDate.toISOString().split('T')[0];
         document.getElementById('end-date').value = endDate.toISOString().split('T')[0];
+        
+        // Setup event listeners
+        setTimeout(() => {
+            document.getElementById('apply-filter-btn').onclick = () => this.applyMovementFilters();
+            document.getElementById('clear-filter-btn').onclick = () => this.clearMovementFilters();
+        }, 100);
     }
 
-    // Apply movement filters - FIXED VERSION
-async applyMovementFilters() {
-    try {
-        const startDate = document.getElementById('start-date').value;
-        const endDate = document.getElementById('end-date').value;
-        const outletFilter = document.getElementById('outlet-filter').value;
-        const groupFilter = document.getElementById('group-filter').value;
-        const productFilter = document.getElementById('product-filter').value.toLowerCase().trim();
+    // Apply movement filters
+    async applyMovementFilters() {
+        try {
+            const startDate = document.getElementById('start-date').value;
+            const endDate = document.getElementById('end-date').value;
+            const outletFilter = document.getElementById('outlet-filter').value;
+            const groupFilter = document.getElementById('group-filter').value;
+            const productFilter = document.getElementById('product-filter').value.toLowerCase().trim();
 
-        if (!startDate || !endDate) {
-            Notifications.error('Pilih tanggal mulai dan tanggal akhir');
+            if (!startDate || !endDate) {
+                Notifications.error('Pilih tanggal mulai dan tanggal akhir');
+                return;
+            }
+
+            Helpers.showLoading();
+
+            // Filter movements by date range
+            let filteredMovements = this.stockMovements.filter(movement => {
+                const movementDate = new Date(movement.movement_date);
+                const start = new Date(startDate + 'T00:00:00');
+                const end = new Date(endDate + 'T23:59:59');
+                
+                return movementDate >= start && movementDate <= end;
+            });
+
+            // Filter by outlet
+            if (outletFilter) {
+                filteredMovements = filteredMovements.filter(movement => 
+                    movement.outlet === outletFilter
+                );
+            }
+
+            // Filter by group produk
+            if (groupFilter) {
+                filteredMovements = filteredMovements.filter(movement => 
+                    movement.group_produk === groupFilter
+                );
+            }
+
+            // Filter by product name
+            if (productFilter) {
+                filteredMovements = filteredMovements.filter(movement => {
+                    const productName = movement.product_name || '';
+                    return productName.toLowerCase().includes(productFilter);
+                });
+            }
+
+            // Generate report data
+            this.generateStockReport(filteredMovements);
+
+            Helpers.hideLoading();
+
+        } catch (error) {
+            Helpers.hideLoading();
+            console.error('Error applying filters:', error);
+            Notifications.error('Gagal memuat laporan: ' + error.message);
+        }
+    }
+
+    // Clear filters
+    clearMovementFilters() {
+        // Reset input values
+        document.getElementById('start-date').value = '';
+        document.getElementById('end-date').value = '';
+        document.getElementById('outlet-filter').value = '';
+        document.getElementById('group-filter').value = '';
+        document.getElementById('product-filter').value = '';
+        
+        // Reset ke default dates (last 30 days)
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - 30);
+
+        document.getElementById('start-date').value = startDate.toISOString().split('T')[0];
+        document.getElementById('end-date').value = endDate.toISOString().split('T')[0];
+        
+        // Clear results
+        const container = document.getElementById('movement-report-results');
+        if (container) {
+            container.innerHTML = `
+                <div class="text-center py-8">
+                    <p class="text-gray-500">Gunakan filter untuk menampilkan laporan</p>
+                    <p class="text-sm text-gray-400 mt-2">
+                        Pilih periode tanggal dan terapkan filter untuk melihat data
+                    </p>
+                </div>
+            `;
+        }
+        
+        Notifications.info('Filter telah direset');
+    }
+
+    // Generate stock report
+    generateStockReport(movements) {
+        const container = document.getElementById('movement-report-results');
+        if (!container) return;
+
+        if (movements.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-8">
+                    <p class="text-gray-500">Tidak ada data pergerakan stok untuk periode yang dipilih</p>
+                </div>
+            `;
             return;
         }
 
-        Helpers.showLoading();
+        // Get filter dates
+        const startDate = document.getElementById('start-date').value;
+        const endDate = document.getElementById('end-date').value;
+        const startDateTime = new Date(startDate + 'T00:00:00');
 
-        // Filter movements by date range
-        let filteredMovements = this.stockMovements.filter(movement => {
-            const movementDate = new Date(movement.movement_date);
-            const start = new Date(startDate + 'T00:00:00');
-            const end = new Date(endDate + 'T23:59:59');
+        // Get product filter value
+        const productFilterValue = document.getElementById('product-filter').value.toLowerCase().trim();
+
+        // Group by product and outlet
+        const productSummary = {};
+        
+        // Process each product
+        this.products.forEach(product => {
+            if (!product.inventory) return;
             
-            return movementDate >= start && movementDate <= end;
-        });
-
-        // Filter by outlet
-        if (outletFilter) {
-            filteredMovements = filteredMovements.filter(movement => 
-                movement.outlet === outletFilter
-            );
-        }
-
-        // Filter by group produk
-        if (groupFilter) {
-            filteredMovements = filteredMovements.filter(movement => 
-                movement.group_produk === groupFilter
-            );
-        }
-
-        // Filter by product name - FIXED VERSION
-        if (productFilter) {
-            filteredMovements = filteredMovements.filter(movement => {
-                // Handle case where product_name might be null/undefined
-                const productName = movement.product_name || '';
-                return productName.toLowerCase().includes(productFilter);
+            // Filter by product name
+            if (productFilterValue && !product.nama_produk.toLowerCase().includes(productFilterValue)) {
+                return;
+            }
+            
+            const key = `${product.id}-${product.outlet}`;
+            
+            // Calculate initial stock
+            let initialStock = product.stok || 0;
+            
+            // Kurangi movement dalam periode
+            movements.forEach(movement => {
+                if (movement.product_id === product.id && movement.outlet === product.outlet) {
+                    if (movement.type === 'in') {
+                        initialStock -= movement.quantity;
+                    } else if (movement.type === 'out') {
+                        initialStock += movement.quantity;
+                    }
+                }
             });
-        }
 
-        console.log('🔍 Filter Results:', {
-            totalMovements: this.stockMovements.length,
-            afterDateFilter: filteredMovements.length,
-            productFilter: productFilter,
-            filteredProducts: [...new Set(filteredMovements.map(m => m.product_name))]
+            // Hitung movement dalam periode
+            let periodMasuk = 0;
+            let periodKeluar = 0;
+
+            movements.forEach(movement => {
+                if (movement.product_id === product.id && movement.outlet === product.outlet) {
+                    if (movement.type === 'in') {
+                        periodMasuk += movement.quantity;
+                    } else if (movement.type === 'out') {
+                        periodKeluar += movement.quantity;
+                    }
+                }
+            });
+
+            // Validasi: initial stock tidak boleh negatif
+            initialStock = Math.max(0, initialStock);
+
+            const sisa = initialStock + periodMasuk - periodKeluar;
+
+            productSummary[key] = {
+                group_produk: product.group_produk,
+                product: product.nama_produk,
+                outlet: product.outlet,
+                awal: initialStock,
+                masuk: periodMasuk,
+                pengembalian: 0,
+                penjualan: 0,
+                keluar: periodKeluar,
+                sisa: sisa
+            };
         });
 
-        // Generate report data
-        this.generateStockReport(filteredMovements);
-
-        Helpers.hideLoading();
-
-    } catch (error) {
-        Helpers.hideLoading();
-        console.error('Error applying filters:', error);
-        Notifications.error('Gagal memuat laporan: ' + error.message);
-    }
-}
-
-    // Clear filters - IMPROVED VERSION
-clearMovementFilters() {
-    // Reset input values
-    document.getElementById('start-date').value = '';
-    document.getElementById('end-date').value = '';
-    document.getElementById('outlet-filter').value = '';
-    document.getElementById('group-filter').value = '';
-    document.getElementById('product-filter').value = '';
-    
-    // Reset ke default dates (last 30 days)
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - 30);
-
-    document.getElementById('start-date').value = startDate.toISOString().split('T')[0];
-    document.getElementById('end-date').value = endDate.toISOString().split('T')[0];
-    
-    // Clear results
-    const container = document.getElementById('movement-report-results');
-    if (container) {
-        container.innerHTML = `
-            <div class="text-center py-8">
-                <p class="text-gray-500">Gunakan filter untuk menampilkan laporan</p>
-                <p class="text-sm text-gray-400 mt-2">
-                    Pilih periode tanggal dan terapkan filter untuk melihat data
-                </p>
-            </div>
-        `;
-    }
-    
-    Notifications.info('Filter telah direset');
-}
-
-   // Generate stock report - FIXED VERSION dengan filter produk
-generateStockReport(movements) {
-    const container = document.getElementById('movement-report-results');
-    if (!container) return;
-
-    if (movements.length === 0) {
-        container.innerHTML = `
-            <div class="text-center py-8">
-                <p class="text-gray-500">Tidak ada data pergerakan stok untuk periode yang dipilih</p>
-            </div>
-        `;
-        return;
-    }
-
-    // Get filter dates
-    const startDate = document.getElementById('start-date').value;
-    const endDate = document.getElementById('end-date').value;
-    const startDateTime = new Date(startDate + 'T00:00:00');
-
-    // Get product filter value untuk debug
-    const productFilterValue = document.getElementById('product-filter').value.toLowerCase().trim();
-    console.log('🔍 Generating report with product filter:', productFilterValue);
-
-    // Group by product and outlet untuk perhitungan yang akurat
-    const productSummary = {};
-    
-    // Process each product to calculate initial stock and period movements
-    this.products.forEach(product => {
-        if (!product.inventory) return;
-        
-        // ✅ TAMBAHKAN: Filter berdasarkan nama produk
-        if (productFilterValue && !product.nama_produk.toLowerCase().includes(productFilterValue)) {
-            return; // Skip produk yang tidak match dengan filter
-        }
-        
-        const key = `${product.id}-${product.outlet}`;
-        
-        // Cari semua movement untuk produk ini sebelum periode
-        const movementsBeforePeriod = this.stockMovements.filter(movement => 
-            movement.product_id === product.id && 
-            movement.outlet === product.outlet &&
-            new Date(movement.movement_date) < startDateTime
+        // Convert to array
+        const summaryArray = Object.values(productSummary).filter(summary => 
+            summary.masuk > 0 || summary.keluar > 0 || summary.awal > 0
         );
 
-        // Hitung stok awal: stok saat ini dikurangi movement dalam periode, ditambah movement sebelum periode
-        let initialStock = product.stok || 0;
-        
-        // Kurangi movement dalam periode (karena stok saat ini sudah termasuk movement periode)
-        movements.forEach(movement => {
-            if (movement.product_id === product.id && movement.outlet === product.outlet) {
-                if (movement.type === 'in') {
-                    initialStock -= movement.quantity;
-                } else if (movement.type === 'out') {
-                    initialStock += movement.quantity;
-                }
-            }
-        });
-
-        // Hitung movement dalam periode
-        let periodMasuk = 0;
-        let periodKeluar = 0;
-
-        movements.forEach(movement => {
-            if (movement.product_id === product.id && movement.outlet === product.outlet) {
-                if (movement.type === 'in') {
-                    periodMasuk += movement.quantity;
-                } else if (movement.type === 'out') {
-                    periodKeluar += movement.quantity;
-                }
-            }
-        });
-
-        // Validasi: initial stock tidak boleh negatif
-        initialStock = Math.max(0, initialStock);
-
-        const sisa = initialStock + periodMasuk - periodKeluar;
-
-        productSummary[key] = {
-            group_produk: product.group_produk,
-            product: product.nama_produk,
-            outlet: product.outlet,
-            awal: initialStock,
-            masuk: periodMasuk,
-            pengembalian: 0,
-            penjualan: 0,
-            keluar: periodKeluar,
-            sisa: sisa
-        };
-    });
-
-    // Convert to array dan filter hanya yang ada movement dalam periode
-    const summaryArray = Object.values(productSummary).filter(summary => 
-        summary.masuk > 0 || summary.keluar > 0 || summary.awal > 0
-    );
-
-    console.log('📊 Products in summary after filter:', summaryArray.map(s => s.product));
-
-    const html = `
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Group Produk</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Outlet</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Awal</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Masuk</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pengembalian</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Penjualan</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Keluar</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sisa</th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
-                    ${summaryArray.map(summary => `
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${summary.group_produk}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${summary.product}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${summary.outlet}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">${summary.awal}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">+${summary.masuk}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-medium">${summary.pengembalian}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-orange-600 font-medium">${summary.penjualan}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-medium">-${summary.keluar}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm font-bold ${
-                                summary.sisa > 0 ? 'text-green-600' : summary.sisa < 0 ? 'text-red-600' : 'text-gray-600'
-                            }">
-                                ${summary.sisa}
-                            </td>
+        const html = `
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Group Produk</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Outlet</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Awal</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Masuk</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pengembalian</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Penjualan</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Keluar</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sisa</th>
                         </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        </div>
-        <div class="mt-4 text-sm text-gray-500">
-            Menampilkan ${summaryArray.length} produk dari ${movements.length} pergerakan stok
-            <br>
-            <span class="text-xs">* Periode: ${startDate} sampai ${endDate}</span>
-            <br>
-            <span class="text-xs">* Filter produk: "${document.getElementById('product-filter').value || 'Semua produk'}"</span>
-            <br>
-            <span class="text-xs">* Nilai Awal: Stok pada tanggal ${startDate}</span>
-            <br>
-            <span class="text-xs">* Rumus: Awal + Masuk - Keluar = Sisa</span>
-        </div>
-    `;
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        ${summaryArray.map(summary => `
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${summary.group_produk}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${summary.product}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${summary.outlet}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">${summary.awal}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">+${summary.masuk}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-medium">${summary.pengembalian}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-orange-600 font-medium">${summary.penjualan}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-medium">-${summary.keluar}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-bold ${
+                                    summary.sisa > 0 ? 'text-green-600' : summary.sisa < 0 ? 'text-red-600' : 'text-gray-600'
+                                }">
+                                    ${summary.sisa}
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+            <div class="mt-4 text-sm text-gray-500">
+                Menampilkan ${summaryArray.length} produk dari ${movements.length} pergerakan stok
+                <br>
+                <span class="text-xs">* Periode: ${startDate} sampai ${endDate}</span>
+                <br>
+                <span class="text-xs">* Filter produk: "${document.getElementById('product-filter').value || 'Semua produk'}"</span>
+                <br>
+                <span class="text-xs">* Nilai Awal: Stok pada tanggal ${startDate}</span>
+                <br>
+                <span class="text-xs">* Rumus: Awal + Masuk - Keluar = Sisa</span>
+            </div>
+        `;
 
-    container.innerHTML = html;
-}
+        container.innerHTML = html;
+    }
 
     // Check if initialized
     ensureInitialized() {
