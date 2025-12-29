@@ -1,11 +1,15 @@
-// Stock Management Module - CUSTOM MODAL VERSION
+// Stock Management Module - MODIFIED VERSION
+// ✅ Data disimpan ke stok_update dengan struktur sama seperti app.js
+// ✅ Langsung approved tanpa approval flow
+// ✅ Update produk.stok dengan filter nama_produk + outlet
+// ✅ Laporan dari tabel stok_update (bukan localStorage)
+
 class StockManagement {
     constructor() {
         this.outlets = [];
         this.products = [];
         this.groupProducts = [];
         this.selectedProducts = [];
-        this.stockMovements = [];
         this.isInitialized = false;
         this.currentTransactionType = 'in';
         this.modalContainer = null;
@@ -13,14 +17,12 @@ class StockManagement {
 
     // Initialize module
     async init() {
-        console.log('Initializing Stock Management module');
+        console.log('Initializing Stock Management module (Modified Version)');
         await this.loadOutlets();
         await this.loadProducts();
         await this.loadGroupProducts();
-        this.loadMovementsFromStorage();
-        await this.loadRecentMovements();
         this.isInitialized = true;
-        console.log('Stock Management module initialized');
+        console.log('✅ Stock Management module initialized');
     }
 
     // ========== MODAL CUSTOM METHODS ==========
@@ -156,9 +158,6 @@ class StockManagement {
             `<option value="${outlet.outlet}">${outlet.outlet}</option>`
         ).join('');
 
-        // Get products for current outlet (will be filtered dynamically)
-        const allProducts = this.products.filter(p => p.inventory);
-
         const content = `
             <style>
                 .stock-modal-content {
@@ -174,27 +173,6 @@ class StockManagement {
                     font-size: 14px;
                 }
                 
-                .product-option .product-name {
-                    font-weight: 500;
-                    color: #1f2937;
-                    margin-bottom: 2px;
-                    word-break: break-word;
-                }
-                
-                .product-option .product-details {
-                    font-size: 12px;
-                    color: #6b7280;
-                }
-                
-                .product-option .product-outlet {
-                    color: #4b5563;
-                }
-                
-                .product-option .product-stock {
-                    color: #059669;
-                    font-weight: 500;
-                }
-                
                 .compact-table {
                     font-size: 13px;
                 }
@@ -207,22 +185,6 @@ class StockManagement {
                 .compact-table .product-cell {
                     max-width: 200px;
                     min-width: 150px;
-                }
-                
-                .product-name-line {
-                    display: block;
-                    line-height: 1.3;
-                }
-                
-                .product-name-short {
-                    font-weight: 500;
-                    color: #1f2937;
-                }
-                
-                .product-name-cont {
-                    color: #4b5563;
-                    font-size: 12px;
-                    margin-top: 1px;
                 }
             </style>
             
@@ -247,6 +209,7 @@ class StockManagement {
                             id="movement-date"
                             class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                             required
+                            value="${new Date().toISOString().slice(0, 16)}"
                         >
                     </div>
                 </div>
@@ -260,7 +223,7 @@ class StockManagement {
                             class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors product-option-container"
                         >
                             <option value="">Pilih Produk</option>
-                            ${allProducts.map(product => this.formatProductOption(product)).join('')}
+                            <!-- Options will be populated dynamically -->
                         </select>
                         <p class="text-xs text-gray-500 mt-1.5">* Hanya produk dengan inventory aktif</p>
                     </div>
@@ -274,6 +237,7 @@ class StockManagement {
                                 id="quantity-input"
                                 placeholder="Masukkan jumlah"
                                 min="1"
+                                value="1"
                                 class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                             >
                         </div>
@@ -298,6 +262,7 @@ class StockManagement {
                                 <thead class="bg-gray-100">
                                     <tr>
                                         <th class="text-left text-xs font-medium text-gray-600 py-3 px-4">Produk</th>
+                                        <th class="text-center text-xs font-medium text-gray-600 py-3 px-2">Outlet</th>
                                         <th class="text-center text-xs font-medium text-gray-600 py-3 px-2">Stok Saat Ini</th>
                                         <th class="text-center text-xs font-medium text-gray-600 py-3 px-2">Jumlah</th>
                                         <th class="text-center text-xs font-medium text-gray-600 py-3 px-2">Stok Baru</th>
@@ -339,71 +304,22 @@ class StockManagement {
         ];
 
         this.createCustomModal(title, content, buttons, {
-            size: 'max-w-2xl', // Lebar cukup untuk table
+            size: 'max-w-2xl',
         });
 
         // Initialize
         this.initializeStockForm(type);
     }
 
-    // Format product option with multi-line display
-    formatProductOption(product) {
-        const namaProduk = product.nama_produk || '';
-        let displayName = namaProduk;
-        let continuation = '';
-        
-        // Split nama produk jika lebih dari 30 karakter
-        if (namaProduk.length > 30) {
-            const splitIndex = this.findSplitIndex(namaProduk, 25);
-            displayName = namaProduk.substring(0, splitIndex).trim();
-            continuation = namaProduk.substring(splitIndex).trim();
-        }
-        
-        return `
-            <option value="${product.id}" 
-                    data-stock="${product.stok || 0}" 
-                    data-outlet="${product.outlet}"
-                    data-nama="${namaProduk}"
-                    class="product-option">
-                <div class="product-name">${displayName}</div>
-                ${continuation ? `<div class="product-name-cont">${continuation}</div>` : ''}
-                <div class="product-details">
-                    <span class="product-outlet">Outlet: ${product.outlet}</span>
-                    <span class="ml-3 product-stock">Stok: ${product.stok || 0}</span>
-                </div>
-            </option>
-        `;
-    }
-
-    // Helper to find split index
-    findSplitIndex(text, maxLength) {
-        if (!text || text.length <= maxLength) return text.length;
-        
-        // Cari spasi terdekat untuk split natural
-        for (let i = maxLength; i > maxLength - 10 && i > 0; i--) {
-            if (text.charAt(i) === ' ') return i;
-        }
-        
-        return maxLength;
-    }
-
     // Initialize stock form
     initializeStockForm(type) {
-        // Set current transaction type
         this.currentTransactionType = type;
-        
-        // Set current datetime
-        const now = new Date();
-        const localDateTime = now.toISOString().slice(0, 16);
-        const dateInput = document.getElementById('movement-date');
-        if (dateInput) dateInput.value = localDateTime;
-
-        // Reset selected products
         this.selectedProducts = [];
         
         // Setup event listeners
         setTimeout(() => {
             this.setupStockFormEvents();
+            this.updateProductSelectOptions();
         }, 100);
     }
 
@@ -433,80 +349,6 @@ class StockManagement {
                 }
             });
         }
-        
-        // Apply custom styles for select
-        this.applyCustomSelectStyles();
-    }
-
-    // Apply custom styles for select (for multi-line display)
-    applyCustomSelectStyles() {
-        const styleId = 'stock-custom-select-styles';
-        let style = document.getElementById(styleId);
-        
-        if (!style) {
-            style = document.createElement('style');
-            style.id = styleId;
-            style.textContent = `
-                /* Custom select styling for multi-line options */
-                .product-option-container {
-                    min-height: 44px;
-                    line-height: 1.5;
-                }
-                
-                /* Unfortunately, HTML in option tags doesn't render in most browsers */
-                /* We'll handle display via JavaScript instead */
-                #product-select option {
-                    padding: 12px 10px !important;
-                    line-height: 1.4 !important;
-                    border-bottom: 1px solid #e5e7eb !important;
-                    font-size: 14px !important;
-                    white-space: normal !important;
-                    word-wrap: break-word !important;
-                    min-height: 60px;
-                    display: flex;
-                    flex-direction: column;
-                }
-                
-                /* Make select wider to accommodate text */
-                #product-select {
-                    min-width: 100%;
-                    max-width: 100%;
-                }
-                
-                /* Selected products table styling */
-                #selected-products-list .product-cell {
-                    max-width: 220px !important;
-                }
-                
-                /* Remove horizontal scroll */
-                .stock-modal-content {
-                    max-width: 100%;
-                    overflow-x: hidden !important;
-                }
-            `;
-            document.head.appendChild(style);
-        }
-        
-        // Alternative: Create a custom dropdown if browser doesn't support HTML in options
-        const productSelect = document.getElementById('product-select');
-        if (productSelect) {
-            // For browsers that don't support HTML in options, we'll use plain text
-            const options = productSelect.querySelectorAll('option');
-            options.forEach(option => {
-                if (option.value) {
-                    const product = this.products.find(p => p.id == option.value);
-                    if (product) {
-                        // Create compact text display
-                        let displayText = product.nama_produk;
-                        if (displayText.length > 25) {
-                            displayText = displayText.substring(0, 25) + '...';
-                        }
-                        displayText += ` (${product.outlet} - Stok: ${product.stok || 0})`;
-                        option.textContent = displayText;
-                    }
-                }
-            });
-        }
     }
 
     // Filter products by selected outlet
@@ -522,75 +364,134 @@ class StockManagement {
         options.forEach(option => {
             if (option.value === "") return;
             
-            const product = this.products.find(p => p.id == option.value);
-            if (product) {
-                const isVisible = !selectedOutlet || product.outlet === selectedOutlet;
+            const productOutlet = option.getAttribute('data-outlet');
+            if (productOutlet) {
+                const isVisible = !selectedOutlet || productOutlet === selectedOutlet;
                 option.style.display = isVisible ? '' : 'none';
-                
-                if (isVisible) {
-                    // Update display text
-                    let displayText = product.nama_produk;
-                    if (displayText.length > 25) {
-                        displayText = displayText.substring(0, 25) + '...';
-                    }
-                    displayText += ` (${product.outlet} - Stok: ${product.stok || 0})`;
-                    option.textContent = displayText;
-                }
             }
         });
         
         productSelect.value = "";
     }
 
-    // Add product to form
-    addProductToForm() {
+    // Update product select options
+    updateProductSelectOptions() {
+        const productSelect = document.getElementById('product-select');
+        if (!productSelect) return;
+
+        const inventoryProducts = this.products.filter(p => p.inventory);
+        
+        let options = '<option value="">Pilih Produk</option>';
+        inventoryProducts.forEach(product => {
+            const displayName = product.nama_produk.length > 30 
+                ? product.nama_produk.substring(0, 30) + '...' 
+                : product.nama_produk;
+                
+            options += `
+                <option value="${product.id}" 
+                        data-nama="${product.nama_produk}"
+                        data-outlet="${product.outlet}"
+                        data-stock="${product.stok || 0}">
+                    ${displayName} (${product.outlet} - Stok: ${product.stok || 0})
+                </option>
+            `;
+        });
+
+        productSelect.innerHTML = options;
+    }
+
+    // ========== ADD PRODUCT TO FORM ==========
+    async addProductToForm() {
         const productSelect = document.getElementById('product-select');
         const quantityInput = document.getElementById('quantity-input');
+        const outletSelect = document.getElementById('outlet-select');
+        
         const productId = productSelect.value;
         const quantity = parseInt(quantityInput.value);
+        const outlet = outletSelect.value;
 
         if (!productId || !quantity || quantity <= 0) {
             Notifications.error('Pilih produk dan masukkan jumlah yang valid');
             return;
         }
 
-        const product = this.products.find(p => p.id == productId);
-        if (!product) return;
+        if (!outlet) {
+            Notifications.error('Pilih outlet terlebih dahulu');
+            return;
+        }
+
+        // Get product data from selected option
+        const selectedOption = productSelect.selectedOptions[0];
+        const productName = selectedOption.getAttribute('data-nama');
+        const productOutlet = selectedOption.getAttribute('data-outlet');
+        const currentStock = parseInt(selectedOption.getAttribute('data-stock') || 0);
+
+        // Validasi outlet
+        if (productOutlet !== outlet) {
+            Notifications.error(`Produk ini tersedia di outlet ${productOutlet}, bukan ${outlet}`);
+            return;
+        }
 
         // Check stock for stock out
         const isStockOut = this.currentTransactionType === 'out';
-        if (isStockOut && (product.stok === null || product.stok < quantity)) {
-            Notifications.error(`Stok tidak mencukupi. Stok saat ini: ${product.stok || 0}`);
+        if (isStockOut && quantity > currentStock) {
+            Notifications.error(`Stok tidak mencukupi. Stok saat ini: ${currentStock}`);
             return;
         }
 
         // Calculate new stock
         const newStock = isStockOut ? 
-            product.stok - quantity : 
-            product.stok + quantity;
+            currentStock - quantity : 
+            currentStock + quantity;
 
-        // Remove if exists and add new
-        this.selectedProducts = this.selectedProducts.filter(p => p.id != productId);
-        
-        this.selectedProducts.push({
-            id: product.id,
-            nama_produk: product.nama_produk,
-            group_produk: product.group_produk,
-            outlet: product.outlet,
-            current_stock: product.stok,
-            quantity: quantity,
-            new_stock: newStock
-        });
+        // Find product details from database
+        const productFromDB = this.products.find(p => p.id == productId);
+        if (!productFromDB) {
+            Notifications.error('Data produk tidak ditemukan');
+            return;
+        }
+
+        // Check if product already in list
+        const existingIndex = this.selectedProducts.findIndex(p => 
+            p.id == productId && p.outlet === outlet
+        );
+
+        if (existingIndex !== -1) {
+            // Update existing item
+            const existing = this.selectedProducts[existingIndex];
+            const totalQty = existing.quantity + quantity;
+            
+            if (isStockOut && totalQty > currentStock) {
+                Notifications.error(`Total stok keluar (${totalQty}) melebihi stok saat ini (${currentStock})`);
+                return;
+            }
+            
+            this.selectedProducts[existingIndex].quantity = totalQty;
+            this.selectedProducts[existingIndex].new_stock = isStockOut ? 
+                currentStock - totalQty : 
+                currentStock + totalQty;
+        } else {
+            // Add new item
+            this.selectedProducts.push({
+                id: productId,
+                nama_produk: productName,
+                group_produk: productFromDB.group_produk || '',
+                outlet: outlet,
+                current_stock: currentStock,
+                quantity: quantity,
+                new_stock: newStock
+            });
+        }
 
         this.updateSelectedProductsList();
         
         // Reset inputs
         productSelect.value = '';
-        quantityInput.value = '';
+        quantityInput.value = '1';
         quantityInput.focus();
     }
 
-    // Update selected products list with multi-line display
+    // Update selected products list
     updateSelectedProductsList() {
         const container = document.getElementById('selected-products-container');
         const list = document.getElementById('selected-products-list');
@@ -605,38 +506,23 @@ class StockManagement {
         const isStockOut = this.currentTransactionType === 'out';
 
         list.innerHTML = this.selectedProducts.map((product, index) => {
-            // Format product name for multi-line display
-            let productNameHtml = '';
             const namaProduk = product.nama_produk || '';
-            
-            if (namaProduk.length > 30) {
-                const splitIndex = this.findSplitIndex(namaProduk, 25);
-                const line1 = namaProduk.substring(0, splitIndex).trim();
-                const line2 = namaProduk.substring(splitIndex).trim();
-                
-                productNameHtml = `
-                    <div class="product-name-line">
-                        <span class="product-name-short">${line1}</span>
-                    </div>
-                    <div class="product-name-line">
-                        <span class="product-name-cont">${line2}</span>
-                    </div>
-                `;
-            } else {
-                productNameHtml = `
-                    <div class="product-name-line">
-                        <span class="product-name-short">${namaProduk}</span>
-                    </div>
-                `;
-            }
+            const displayName = namaProduk.length > 30 
+                ? namaProduk.substring(0, 30) + '...' 
+                : namaProduk;
 
             return `
                 <tr class="hover:bg-gray-50">
-                    <td class="py-3 px-4 product-cell">
-                        ${productNameHtml}
-                        <div class="text-xs text-gray-500 mt-1">
-                            Outlet: ${product.outlet}
+                    <td class="py-3 px-4">
+                        <div class="product-name-line">
+                            <span class="font-medium text-gray-900">${displayName}</span>
                         </div>
+                        <div class="text-xs text-gray-500 mt-1">
+                            Group: ${product.group_produk || '-'}
+                        </div>
+                    </td>
+                    <td class="py-3 px-2 text-center text-sm text-gray-700">
+                        ${product.outlet}
                     </td>
                     <td class="py-3 px-2 text-center text-sm text-gray-700">
                         ${product.current_stock}
@@ -666,8 +552,7 @@ class StockManagement {
         this.updateSelectedProductsList();
     }
 
-    // ========== SAVE STOCK MOVEMENT ==========
-
+    // ========== SAVE STOCK MOVEMENT (MODIFIED) ==========
     async saveStockMovement(type) {
         try {
             const outletSelect = document.getElementById('outlet-select');
@@ -688,61 +573,112 @@ class StockManagement {
                 return;
             }
 
+            // Get user info
             const user = Auth.getCurrentUser();
-            const userName = user ? (user.name || user.nama || 'System') : 'System';
+            const userName = user ? (user.nama_karyawan || user.user_metadata?.display_name || user.email || 'User') : 'User';
 
             Helpers.showLoading();
 
             // Process each product
             for (const selectedProduct of this.selectedProducts) {
-                const freshProduct = this.products.find(p => p.id == selectedProduct.id);
-                if (!freshProduct) continue;
+                // Get fresh product data from database
+                const { data: freshProduct, error: fetchError } = await supabase
+                    .from('produk')
+                    .select('*')
+                    .eq('nama_produk', selectedProduct.nama_produk)
+                    .eq('outlet', outlet)
+                    .single();
 
-                // Calculate new stock
-                let newStock;
-                if (type === 'out') {
-                    newStock = freshProduct.stok - selectedProduct.quantity;
-                } else {
-                    newStock = freshProduct.stok + selectedProduct.quantity;
+                if (fetchError) {
+                    console.error(`Error fetching product ${selectedProduct.nama_produk}:`, fetchError);
+                    Notifications.error(`Produk ${selectedProduct.nama_produk} tidak ditemukan di outlet ${outlet}`);
+                    continue;
                 }
 
-                // Update database
+                if (!freshProduct) {
+                    Notifications.error(`Produk ${selectedProduct.nama_produk} tidak ditemukan di outlet ${outlet}`);
+                    continue;
+                }
+
+                // Calculate quantities (PERSIS seperti app.js)
+                const qtyBefore = freshProduct.stok || 0;
+                const quantity = selectedProduct.quantity;
+                
+                // Format stok_type: 'masuk'/'keluar' (sama seperti app.js)
+                const stokType = type === 'in' ? 'masuk' : 'keluar';
+                
+                // qty_change: positif untuk masuk, negatif untuk keluar
+                const qtyChange = type === 'in' ? quantity : -quantity;
+                const qtyAfter = qtyBefore + qtyChange;
+
+                // Validasi stok keluar
+                if (type === 'out' && qtyAfter < 0) {
+                    Notifications.error(`Stok tidak mencukupi! ${selectedProduct.nama_produk}: Stok saat ini ${qtyBefore}, butuh ${quantity}`);
+                    continue;
+                }
+
+                // ========== 1. UPDATE PRODUK.STOK ==========
                 const { error: updateError } = await supabase
                     .from('produk')
-                    .update({ stok: newStock })
-                    .eq('id', selectedProduct.id);
+                    .update({ 
+                        stok: qtyAfter,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('nama_produk', selectedProduct.nama_produk)
+                    .eq('outlet', outlet);
 
-                if (updateError) throw updateError;
+                if (updateError) {
+                    console.error(`Error updating product ${selectedProduct.nama_produk}:`, updateError);
+                    Notifications.error(`Gagal update stok produk ${selectedProduct.nama_produk}`);
+                    continue;
+                }
 
-                // Create movement record
-                const movement = {
-                    id: Date.now() + Math.random(),
+                // ========== 2. INSERT KE STOK_UPDATE ==========
+                const movementData = {
+                    // ✅ STRUKTUR PERSIS SAMA DENGAN APP.JS
+                    tanggal: movementDateTime.split('T')[0],
                     outlet: outlet,
-                    product_id: selectedProduct.id,
-                    product_name: selectedProduct.nama_produk,
-                    group_produk: selectedProduct.group_produk,
-                    type: type,
-                    quantity: selectedProduct.quantity,
-                    previous_stock: freshProduct.stok,
-                    new_stock: newStock,
+                    stok_type: stokType, // 'masuk' atau 'keluar'
+                    updated_by: userName,
+                    nama_produk: selectedProduct.nama_produk,
+                    group_produk: freshProduct.group_produk || '',
+                    qty_before: qtyBefore,
+                    qty_change: qtyChange, // bisa positif/negatif
+                    qty_after: qtyAfter,
+                    // ✅ LANGSUNG APPROVED (tanpa approval flow)
+                    approval_status: 'approved',
+                    approved_by: userName, // langsung diisi
+                    rejection_reason: null,
                     notes: notes,
-                    user_name: userName,
-                    movement_date: movementDateTime,
-                    created_at: new Date().toISOString()
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
                 };
 
-                this.stockMovements.push(movement);
-            }
+                const { error: insertError } = await supabase
+                    .from('stok_update')
+                    .insert([movementData]);
 
-            // Save to localStorage
-            this.saveMovementsToStorage();
+                if (insertError) {
+                    console.error(`Error inserting movement for ${selectedProduct.nama_produk}:`, insertError);
+                    Notifications.error(`Gagal menyimpan history ${selectedProduct.nama_produk}`);
+                    continue;
+                }
+
+                // Update cache produk
+                const productIndex = this.products.findIndex(p => 
+                    p.id === freshProduct.id || 
+                    (p.nama_produk === freshProduct.nama_produk && p.outlet === freshProduct.outlet)
+                );
+                if (productIndex !== -1) {
+                    this.products[productIndex].stok = qtyAfter;
+                }
+            }
 
             this.closeCustomModal();
             Helpers.hideLoading();
             
-            // Reload data
+            // Refresh product data
             await this.loadProducts();
-            await this.loadRecentMovements();
             
             Notifications.success(`Stok ${type === 'in' ? 'masuk' : 'keluar'} berhasil disimpan`);
 
@@ -753,7 +689,7 @@ class StockManagement {
         }
     }
 
-    // ========== OTHER METHODS (SAME AS BEFORE) ==========
+    // ========== DATA LOADING METHODS ==========
 
     // Load outlets from app
     async loadOutlets() {
@@ -762,12 +698,15 @@ class StockManagement {
         } else {
             try {
                 const { data, error } = await supabase
-                    .from('outlet')
+                    .from('karyawan')
                     .select('outlet')
+                    .not('outlet', 'is', null)
                     .order('outlet', { ascending: true });
 
                 if (!error) {
-                    this.outlets = data || [];
+                    // Get unique outlets
+                    const uniqueOutlets = [...new Set(data.map(o => o.outlet))].filter(Boolean);
+                    this.outlets = uniqueOutlets.map(outlet => ({ outlet }));
                 }
             } catch (error) {
                 console.error('Error loading outlets:', error);
@@ -811,266 +750,14 @@ class StockManagement {
         }
     }
 
-    // Load movements from localStorage
-    loadMovementsFromStorage() {
-        try {
-            const stored = localStorage.getItem('stock_movements');
-            this.stockMovements = stored ? JSON.parse(stored) : [];
-        } catch (error) {
-            console.error('Error loading movements from storage:', error);
-            this.stockMovements = [];
-        }
-    }
-
-    // Save movements to localStorage
-    saveMovementsToStorage() {
-        try {
-            localStorage.setItem('stock_movements', JSON.stringify(this.stockMovements));
-        } catch (error) {
-            console.error('Error saving movements to storage:', error);
-        }
-    }
-
-    // Load recent stock movements
-    async loadRecentMovements() {
-        try {
-            const recentMovements = this.stockMovements
-                .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-                .slice(0, 10);
-
-            this.renderRecentMovements(recentMovements);
-        } catch (error) {
-            console.error('Error loading recent movements:', error);
-            this.renderRecentMovements([]);
-        }
-    }
-
-    // Render recent movements
-    renderRecentMovements(movements) {
-        const container = document.getElementById('recent-stock-movements');
-        if (!container) return;
-
-        if (movements.length === 0) {
-            container.innerHTML = `
-                <div class="text-center py-8">
-                    <p class="text-gray-500">Belum ada pergerakan stok</p>
-                    <p class="text-sm text-gray-400 mt-2">
-                        Gunakan "Stok Masuk" atau "Stok Keluar" untuk menambah data
-                    </p>
-                </div>
-            `;
-            return;
-        }
-
-        const html = `
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tanggal</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Outlet</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Produk</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tipe</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Jumlah</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Keterangan</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-                        ${movements.map(movement => `
-                            <tr class="hover:bg-gray-50">
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    ${Helpers.formatDateWIB ? Helpers.formatDateWIB(movement.created_at) : new Date(movement.created_at).toLocaleDateString('id-ID')}
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    ${movement.outlet}
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    ${movement.product_name}
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                    <span class="px-2 py-1 text-xs rounded-full ${
-                                        movement.type === 'in' 
-                                            ? 'bg-green-100 text-green-800' 
-                                            : 'bg-red-100 text-red-800'
-                                    }">
-                                        ${movement.type === 'in' ? 'MASUK' : 'KELUAR'}
-                                    </span>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium ${
-                                    movement.type === 'in' ? 'text-green-600' : 'text-red-600'
-                                }">
-                                    ${movement.type === 'in' ? '+' : '-'}${movement.quantity}
-                                </td>
-                                <td class="px-6 py-4 text-sm text-gray-900">
-                                    ${movement.notes || '-'}
-                                </td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-
-        container.innerHTML = html;
-    }
-
-    // Show reset options modal
-    async showResetOptions() {
-        const content = `
-            <div class="space-y-4">
-                <div class="bg-yellow-50 border border-yellow-200 rounded-md p-4">
-                    <div class="flex">
-                        <div class="flex-shrink-0">
-                            <svg class="h-5 w-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/>
-                            </svg>
-                        </div>
-                        <div class="ml-3">
-                            <h3 class="text-sm font-medium text-yellow-800">Pilih Jenis Reset</h3>
-                            <p class="text-sm text-yellow-700 mt-1">
-                                Pilih opsi reset yang sesuai dengan kebutuhan Anda
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 gap-4">
-                    <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 cursor-pointer" onclick="stockManagement.resetStockMovements()">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <h4 class="text-sm font-medium text-gray-900">Reset History Saja</h4>
-                                <p class="text-sm text-gray-500 mt-1">
-                                    Hapus data pergerakan stok, tapi stok produk tetap
-                                </p>
-                            </div>
-                            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                            </svg>
-                        </div>
-                    </div>
-
-                    <div class="border border-red-200 rounded-lg p-4 hover:bg-red-50 cursor-pointer" onclick="stockManagement.hardResetStockData()">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <h4 class="text-sm font-medium text-red-900">Hard Reset (Berbahaya)</h4>
-                                <p class="text-sm text-red-600 mt-1">
-                                    Reset semua: history pergerakan + stok produk ke 0
-                                </p>
-                            </div>
-                            <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                            </svg>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="bg-blue-50 border border-blue-200 rounded-md p-3">
-                    <p class="text-xs text-blue-700">
-                        💡 <strong>Tips:</strong> Sebaiknya export data terlebih dahulu sebelum reset
-                    </p>
-                </div>
-            </div>
-        `;
-
-        this.createCustomModal('Reset Data Stok', content, [
-            {
-                text: 'Batal',
-                onclick: () => this.closeCustomModal(),
-                primary: false
-            }
-        ]);
-    }
-
-    // Reset stock movements data
-    async resetStockMovements() {
-        try {
-            const confirmed = confirm(
-                'RESET DATA PERGERAKAN STOK\n\n' +
-                'Apakah Anda yakin ingin menghapus semua data pergerakan stok?\n\n' +
-                '⚠️  PERINGATAN: Tindakan ini tidak dapat dibatalkan!\n' +
-                '✅  Data stok produk tetap aman\n' +
-                '🗑️  Hanya history pergerakan yang dihapus\n\n' +
-                'Klik OK untuk lanjut, Cancel untuk batal.'
-            );
-
-            if (!confirmed) {
-                console.log('Reset dibatalkan oleh user');
-                return;
-            }
-
-            Helpers.showLoading();
-
-            this.stockMovements = [];
-            this.saveMovementsToStorage();
-            this.selectedProducts = [];
-
-            Helpers.hideLoading();
-            
-            await this.loadRecentMovements();
-            
-            Notifications.success('Data pergerakan stok berhasil direset');
-            this.closeCustomModal();
-
-        } catch (error) {
-            Helpers.hideLoading();
-            console.error('Error resetting stock movements:', error);
-            Notifications.error('Gagal mereset data: ' + error.message);
-        }
-    }
-
-    // Reset stock data including product stocks (HARD RESET)
-    async hardResetStockData() {
-        try {
-            const confirmed = confirm(
-                'HARD RESET - RESET SEMUA DATA STOK\n\n' +
-                '⚠️  ⚠️  PERINGATAN SANGAT BERBAHAYA! ⚠️  ⚠️\n\n' +
-                'Tindakan ini akan:\n' +
-                '• Menghapus SEMUA data pergerakan stok\n' +
-                '• Mengembalikan stok semua produk ke nilai 0\n' +
-                '• TIDAK DAPAT DIBATALKAN!\n\n' +
-                '💡 Hanya gunakan untuk testing atau awal sistem!\n\n' +
-                'Klik OK untuk lanjut, Cancel untuk batal.'
-            );
-
-            if (!confirmed) {
-                console.log('Hard reset dibatalkan oleh user');
-                return;
-            }
-
-            Helpers.showLoading();
-
-            this.stockMovements = [];
-            this.saveMovementsToStorage();
-
-            const { error: updateError } = await supabase
-                .from('produk')
-                .update({ stok: 0 })
-                .eq('inventory', true);
-
-            if (updateError) throw updateError;
-
-            await this.loadProducts();
-
-            Helpers.hideLoading();
-            
-            await this.loadRecentMovements();
-            
-            Notifications.success('Hard reset berhasil! Semua stok dikembalikan ke 0');
-            this.closeCustomModal();
-
-        } catch (error) {
-            Helpers.hideLoading();
-            console.error('Error in hard reset:', error);
-            Notifications.error('Gagal hard reset: ' + error.message);
-        }
-    }
+    // ========== STOCK MOVEMENT REPORT ==========
 
     // Show stock movement report
     async showStockMovement() {
         await this.loadStockMovementReport();
     }
 
-    // Load stock movement report (using existing modal)
+    // Load stock movement report
     async loadStockMovementReport() {
         const groupOptions = this.groupProducts.map(group => 
             `<option value="${group.group}">${group.group}</option>`
@@ -1161,6 +848,7 @@ class StockManagement {
                 <div class="bg-white rounded-lg shadow">
                     <div class="px-6 py-4 border-b border-gray-200">
                         <h3 class="text-lg font-semibold text-gray-800">Laporan Pergerakan Stok</h3>
+                        <p class="text-sm text-gray-500 mt-1">Data dari tabel stok_update</p>
                     </div>
                     <div class="p-6">
                         <div id="movement-report-results">
@@ -1186,7 +874,7 @@ class StockManagement {
             fullHeight: true
         });
 
-        // Set default dates
+        // Set default dates (last 30 days)
         const endDate = new Date();
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - 30);
@@ -1223,33 +911,41 @@ class StockManagement {
 
             Helpers.showLoading();
 
-            let filteredMovements = this.stockMovements.filter(movement => {
-                const movementDate = new Date(movement.movement_date);
-                const start = new Date(startDate + 'T00:00:00');
-                const end = new Date(endDate + 'T23:59:59');
-                return movementDate >= start && movementDate <= end;
-            });
+            // ✅ Query data dari tabel stok_update
+            let query = supabase
+                .from('stok_update')
+                .select('*')
+                .gte('tanggal', startDate)
+                .lte('tanggal', endDate)
+                .eq('approval_status', 'approved')
+                .order('tanggal', { ascending: false })
+                .order('created_at', { ascending: false });
 
+            // Apply filters
             if (outletFilter) {
-                filteredMovements = filteredMovements.filter(movement => 
-                    movement.outlet === outletFilter
-                );
+                query = query.eq('outlet', outletFilter);
             }
 
             if (groupFilter) {
-                filteredMovements = filteredMovements.filter(movement => 
-                    movement.group_produk === groupFilter
+                query = query.eq('group_produk', groupFilter);
+            }
+
+            const { data: movements, error } = await query;
+
+            if (error) {
+                throw error;
+            }
+
+            // Filter by product name di client side
+            let filteredMovements = movements || [];
+            if (productFilter) {
+                filteredMovements = filteredMovements.filter(movement =>
+                    movement.nama_produk.toLowerCase().includes(productFilter)
                 );
             }
 
-            if (productFilter) {
-                filteredMovements = filteredMovements.filter(movement => {
-                    const productName = movement.product_name || '';
-                    return productName.toLowerCase().includes(productFilter);
-                });
-            }
-
-            this.generateStockReport(filteredMovements);
+            // Generate report
+            this.generateStockReportFromDatabase(filteredMovements);
             Helpers.hideLoading();
 
         } catch (error) {
@@ -1267,7 +963,7 @@ class StockManagement {
             if (elem) elem.value = '';
         });
         
-        // Set default dates
+        // Set default dates (last 30 days)
         const endDate = new Date();
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - 30);
@@ -1283,9 +979,6 @@ class StockManagement {
             container.innerHTML = `
                 <div class="text-center py-8">
                     <p class="text-gray-500">Gunakan filter untuk menampilkan laporan</p>
-                    <p class="text-sm text-gray-400 mt-2">
-                        Pilih periode tanggal dan terapkan filter untuk melihat data
-                    </p>
                 </div>
             `;
         }
@@ -1293,176 +986,228 @@ class StockManagement {
         Notifications.info('Filter telah direset');
     }
 
-    // Generate stock report - COMPLETE VERSION
-generateStockReport(movements) {
-    const container = document.getElementById('movement-report-results');
-    if (!container) return;
+    // Generate stock report from database data
+    generateStockReportFromDatabase(movements) {
+        const container = document.getElementById('movement-report-results');
+        if (!container) return;
 
-    if (movements.length === 0) {
-        container.innerHTML = `
-            <div class="text-center py-8">
-                <p class="text-gray-500">Tidak ada data pergerakan stok untuk periode yang dipilih</p>
-            </div>
-        `;
-        return;
-    }
-
-    // Get filter dates
-    const startDate = document.getElementById('start-date').value;
-    const endDate = document.getElementById('end-date').value;
-    const startDateTime = new Date(startDate + 'T00:00:00');
-
-    // Get product filter value
-    const productFilterValue = document.getElementById('product-filter').value.toLowerCase().trim();
-
-    // Group by product and outlet
-    const productSummary = {};
-    
-    // Process each product
-    this.products.forEach(product => {
-        if (!product.inventory) return;
-        
-        // Filter by product name
-        if (productFilterValue && !product.nama_produk.toLowerCase().includes(productFilterValue)) {
+        if (!movements || movements.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-8">
+                    <p class="text-gray-500">Tidak ada data pergerakan stok untuk periode yang dipilih</p>
+                </div>
+            `;
             return;
         }
+
+        // Get filter values
+        const startDate = document.getElementById('start-date').value;
+        const endDate = document.getElementById('end-date').value;
+        const outletFilter = document.getElementById('outlet-filter').value;
+        const productFilter = document.getElementById('product-filter').value;
+
+        // Group by product + outlet untuk summary
+        const productSummary = {};
         
-        const key = `${product.id}-${product.outlet}`;
-        
-        // Calculate initial stock
-        let initialStock = product.stok || 0;
-        
-        // Subtract movements in period
+        // Process each movement
         movements.forEach(movement => {
-            if (movement.product_id === product.id && movement.outlet === product.outlet) {
-                if (movement.type === 'in') {
-                    initialStock -= movement.quantity;
-                } else if (movement.type === 'out') {
-                    initialStock += movement.quantity;
-                }
+            const key = `${movement.nama_produk}-${movement.outlet}`;
+            
+            if (!productSummary[key]) {
+                productSummary[key] = {
+                    group_produk: movement.group_produk || '-',
+                    product: movement.nama_produk,
+                    outlet: movement.outlet,
+                    awal: 0,
+                    masuk: 0,
+                    keluar: 0,
+                    sisa: 0
+                };
+            }
+
+            // Kategorikan berdasarkan stok_type
+            if (movement.stok_type === 'masuk') {
+                productSummary[key].masuk += Math.abs(movement.qty_change);
+            } else if (movement.stok_type === 'keluar') {
+                productSummary[key].keluar += Math.abs(movement.qty_change);
             }
         });
 
-        // Calculate movements in period
-        let periodMasuk = 0;
-        let periodKeluar = 0;
+        // Convert to array
+        const summaryArray = Object.values(productSummary);
 
-        movements.forEach(movement => {
-            if (movement.product_id === product.id && movement.outlet === product.outlet) {
-                if (movement.type === 'in') {
-                    periodMasuk += movement.quantity;
-                } else if (movement.type === 'out') {
-                    periodKeluar += movement.quantity;
-                }
-            }
+        // Hitung sisa stok (masuk - keluar)
+        summaryArray.forEach(summary => {
+            summary.sisa = summary.masuk - summary.keluar;
         });
 
-        // Validation: initial stock should not be negative
-        initialStock = Math.max(0, initialStock);
+        // Sort by group and product name
+        summaryArray.sort((a, b) => {
+            if (a.group_produk !== b.group_produk) {
+                return a.group_produk.localeCompare(b.group_produk);
+            }
+            return a.product.localeCompare(b.product);
+        });
 
-        const sisa = initialStock + periodMasuk - periodKeluar;
-
-        productSummary[key] = {
-            group_produk: product.group_produk || '-',
-            product: product.nama_produk,
-            outlet: product.outlet,
-            awal: initialStock,
-            masuk: periodMasuk,
-            pengembalian: 0,
-            penjualan: 0,
-            keluar: periodKeluar,
-            sisa: sisa
+        // Calculate totals
+        const totals = {
+            awal: 0,
+            masuk: summaryArray.reduce((sum, item) => sum + item.masuk, 0),
+            keluar: summaryArray.reduce((sum, item) => sum + item.keluar, 0),
+            sisa: summaryArray.reduce((sum, item) => sum + item.sisa, 0)
         };
-    });
 
-    // Convert to array
-    const summaryArray = Object.values(productSummary).filter(summary => 
-        summary.masuk > 0 || summary.keluar > 0 || summary.awal > 0
-    );
-
-    // Sort by group and product name
-    summaryArray.sort((a, b) => {
-        if (a.group_produk !== b.group_produk) {
-            return a.group_produk.localeCompare(b.group_produk);
-        }
-        return a.product.localeCompare(b.product);
-    });
-
-    // Calculate totals
-    const totals = {
-        awal: summaryArray.reduce((sum, item) => sum + item.awal, 0),
-        masuk: summaryArray.reduce((sum, item) => sum + item.masuk, 0),
-        keluar: summaryArray.reduce((sum, item) => sum + item.keluar, 0),
-        sisa: summaryArray.reduce((sum, item) => sum + item.sisa, 0)
-    };
-
-    const html = `
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Group Produk</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Outlet</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Awal</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Masuk</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pengembalian</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Penjualan</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Keluar</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sisa</th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
-                    ${summaryArray.map(summary => `
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${summary.group_produk}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${summary.product}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${summary.outlet}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">${summary.awal}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">+${summary.masuk}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-medium">${summary.pengembalian}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-orange-600 font-medium">${summary.penjualan}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-medium">-${summary.keluar}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm font-bold ${
-                                summary.sisa > 0 ? 'text-green-600' : summary.sisa < 0 ? 'text-red-600' : 'text-gray-600'
+        // ✅ Design sama seperti existing stock-management.js
+        const html = `
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Group Produk</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Outlet</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Masuk</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Keluar</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sisa</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        ${summaryArray.map(summary => `
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${summary.group_produk}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${summary.product}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${summary.outlet}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">+${summary.masuk}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-medium">-${summary.keluar}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-bold ${
+                                    summary.sisa > 0 ? 'text-green-600' : 
+                                    summary.sisa < 0 ? 'text-red-600' : 'text-gray-600'
+                                }">
+                                    ${summary.sisa}
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                    <tfoot class="bg-gray-50">
+                        <tr class="font-semibold">
+                            <td class="px-6 py-4 text-sm text-gray-900" colspan="3">TOTAL</td>
+                            <td class="px-6 py-4 text-sm text-green-600">+${totals.masuk}</td>
+                            <td class="px-6 py-4 text-sm text-red-600">-${totals.keluar}</td>
+                            <td class="px-6 py-4 text-sm font-bold ${
+                                totals.sisa > 0 ? 'text-green-600' : 
+                                totals.sisa < 0 ? 'text-red-600' : 'text-gray-600'
                             }">
-                                ${summary.sisa}
+                                ${totals.sisa}
                             </td>
                         </tr>
-                    `).join('')}
-                </tbody>
-                <tfoot class="bg-gray-50">
-                    <tr class="font-semibold">
-                        <td class="px-6 py-4 text-sm text-gray-900" colspan="3">TOTAL</td>
-                        <td class="px-6 py-4 text-sm text-gray-900">${totals.awal}</td>
-                        <td class="px-6 py-4 text-sm text-green-600">+${totals.masuk}</td>
-                        <td class="px-6 py-4 text-sm text-blue-600">0</td>
-                        <td class="px-6 py-4 text-sm text-orange-600">0</td>
-                        <td class="px-6 py-4 text-sm text-red-600">-${totals.keluar}</td>
-                        <td class="px-6 py-4 text-sm font-bold ${
-                            totals.sisa > 0 ? 'text-green-600' : totals.sisa < 0 ? 'text-red-600' : 'text-gray-600'
-                        }">
-                            ${totals.sisa}
-                        </td>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
-        <div class="mt-4 text-sm text-gray-500">
-            Menampilkan ${summaryArray.length} produk dari ${movements.length} pergerakan stok
-            <br>
-            <span class="text-xs">* Periode: ${startDate} sampai ${endDate}</span>
-            <br>
-            <span class="text-xs">* Filter produk: "${document.getElementById('product-filter').value || 'Semua produk'}"</span>
-            <br>
-            <span class="text-xs">* Nilai Awal: Stok pada tanggal ${startDate}</span>
-            <br>
-            <span class="text-xs">* Rumus: Awal + Masuk - Keluar = Sisa</span>
-        </div>
-    `;
+                    </tfoot>
+                </table>
+            </div>
+            <div class="mt-4 text-sm text-gray-500">
+                Menampilkan ${movements.length} pergerakan stok (${summaryArray.length} produk)
+                <br>
+                <span class="text-xs">* Periode: ${startDate} sampai ${endDate}</span>
+                ${outletFilter ? `<br><span class="text-xs">* Outlet: ${outletFilter}</span>` : ''}
+                ${productFilter ? `<br><span class="text-xs">* Filter produk: "${productFilter}"</span>` : ''}
+                <br>
+                <span class="text-xs">* Sisa = Masuk - Keluar</span>
+            </div>
+        `;
 
-    container.innerHTML = html;
-}
+        container.innerHTML = html;
+    }
+
+    // ========== RESET METHODS (OPTIONAL - BISA DIHAPUS) ==========
+
+    // Show reset options modal
+    async showResetOptions() {
+        const content = `
+            <div class="space-y-4">
+                <div class="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-sm font-medium text-yellow-800">Reset History Stok Update</h3>
+                            <p class="text-sm text-yellow-700 mt-1">
+                                Hanya hapus data di tabel stok_update, stok produk tetap
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="border border-red-200 rounded-lg p-4 hover:bg-red-50 cursor-pointer" onclick="stockManagement.resetStockUpdateData()">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h4 class="text-sm font-medium text-red-900">Reset History Stok Update</h4>
+                            <p class="text-sm text-red-600 mt-1">
+                                Hapus semua data di tabel stok_update
+                            </p>
+                        </div>
+                        <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                        </svg>
+                    </div>
+                </div>
+
+                <div class="bg-blue-50 border border-blue-200 rounded-md p-3">
+                    <p class="text-xs text-blue-700">
+                        💡 <strong>Note:</strong> Tindakan ini hanya menghapus history, stok produk tidak berubah
+                    </p>
+                </div>
+            </div>
+        `;
+
+        this.createCustomModal('Reset Data History', content, [
+            {
+                text: 'Batal',
+                onclick: () => this.closeCustomModal(),
+                primary: false
+            }
+        ]);
+    }
+
+    // Reset stock update data
+    async resetStockUpdateData() {
+        try {
+            const confirmed = confirm(
+                'RESET HISTORY STOK UPDATE\n\n' +
+                'Apakah Anda yakin ingin menghapus semua data di tabel stok_update?\n\n' +
+                '⚠️  Tindakan ini tidak dapat dibatalkan!\n' +
+                '✅  Stok produk tetap aman (tidak berubah)\n' +
+                '🗑️  Hanya history pergerakan yang dihapus\n\n' +
+                'Klik OK untuk lanjut, Cancel untuk batal.'
+            );
+
+            if (!confirmed) {
+                console.log('Reset dibatalkan oleh user');
+                return;
+            }
+
+            Helpers.showLoading();
+
+            // Delete all data from stok_update
+            const { error } = await supabase
+                .from('stok_update')
+                .delete()
+                .neq('id', 0); // Delete all records
+
+            if (error) throw error;
+
+            Helpers.hideLoading();
+            
+            Notifications.success('History stok update berhasil direset');
+            this.closeCustomModal();
+
+        } catch (error) {
+            Helpers.hideLoading();
+            console.error('Error resetting stock update data:', error);
+            Notifications.error('Gagal mereset data: ' + error.message);
+        }
+    }
 
     // Check if initialized
     ensureInitialized() {
@@ -1476,14 +1221,14 @@ generateStockReport(movements) {
 window.StockManagement = StockManagement;
 
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM loaded, initializing Stock Management...');
+    console.log('DOM loaded, initializing Stock Management (Modified)...');
     
     setTimeout(async () => {
         try {
             if (!window.stockManagement) {
                 window.stockManagement = new StockManagement();
                 await window.stockManagement.init();
-                console.log('✅ Stock Management initialized successfully');
+                console.log('✅ Stock Management (Modified) initialized successfully');
             }
         } catch (error) {
             console.error('❌ Stock Management initialization failed:', error);
