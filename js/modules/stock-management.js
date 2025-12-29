@@ -1211,60 +1211,164 @@ class StockManagement {
         Notifications.info('Filter telah direset');
     }
 
-    // Generate stock report from database data
-    generateStockReportFromDatabase(movements) {
-        const container = document.getElementById('movement-report-results');
-        if (!container) return;
 
-        if (!movements || movements.length === 0) {
-            container.innerHTML = `
-                <div class="text-center py-8">
-                    <p class="text-gray-500">Tidak ada data pergerakan stok untuk periode yang dipilih</p>
-                </div>
-            `;
-            return;
-        }
+    // ========== GENERATE STOCK REPORT FROM DATABASE (COMPLETE VERSION) ==========
+async generateStockReportFromDatabase(movements) {
+    const container = document.getElementById('movement-report-results');
+    if (!container) return;
 
+    if (!movements || movements.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-8">
+                <p class="text-gray-500">Tidak ada data pergerakan stok untuk periode yang dipilih</p>
+            </div>
+        `;
+        return;
+    }
+
+    Helpers.showLoading();
+
+    try {
         // Get filter values
         const startDate = document.getElementById('start-date').value;
         const endDate = document.getElementById('end-date').value;
         const outletFilter = document.getElementById('outlet-filter').value;
-        const productFilter = document.getElementById('product-filter').value;
+        const groupFilter = document.getElementById('group-filter').value;
+        const productFilter = document.getElementById('product-filter').value.toLowerCase().trim();
 
-        // Group by product + outlet untuk summary
+        // ⭐⭐ 1. GET CURRENT PRODUCT STOCKS ⭐⭐
+        let productsQuery = supabase
+            .from('produk')
+            .select('id, nama_produk, group_produk, outlet, stok')
+            .eq('inventory', true);
+
+        if (outletFilter) {
+            productsQuery = productsQuery.eq('outlet', outletFilter);
+        }
+        
+        if (groupFilter) {
+            productsQuery = productsQuery.eq('group_produk', groupFilter);
+        }
+
+        const { data: currentProducts, error: productsError } = await productsQuery;
+        if (productsError) throw productsError;
+
+        // ⭐⭐ 2. GET PENJUALAN DATA FROM transaksi_detail (status=completed) ⭐⭐
+        let salesQuery = supabase
+            .from('transaksi_detail')
+            .select('item_name, qty, outlet, order_date')
+            .gte('order_date', startDate)
+            .lte('order_date', endDate)
+            .eq('status', 'completed');  // ⭐ PENJUALAN: status=completed
+
+        if (outletFilter) {
+            salesQuery = salesQuery.eq('outlet', outletFilter);
+        }
+
+        const { data: salesData, error: salesError } = await salesQuery;
+        if (salesError) {
+            console.error('Error fetching sales data:', salesError);
+            // Lanjut tanpa data penjualan
+        }
+
+        // ⭐⭐ 3. GET PENGEMBALIAN DATA FROM transaksi_detail (status=cancelled) ⭐⭐
+        let returnsQuery = supabase
+            .from('transaksi_detail')
+            .select('item_name, qty, outlet, order_date')
+            .gte('order_date', startDate)
+            .lte('order_date', endDate)
+            .eq('status', 'cancelled');  // ⭐ PENGEMBALIAN: status=cancelled
+
+        if (outletFilter) {
+            returnsQuery = returnsQuery.eq('outlet', outletFilter);
+        }
+
+        const { data: returnsData, error: returnsError } = await returnsQuery;
+        if (returnsError) {
+            console.error('Error fetching returns data:', returnsError);
+            // Lanjut tanpa data pengembalian
+        }
+
+        // ⭐⭐ 4. PROCESS SUMMARY ⭐⭐
         const productSummary = {};
         
-        // Process each movement
-        movements.forEach(movement => {
-            const key = `${movement.nama_produk}-${movement.outlet}`;
+        // Process each product
+        currentProducts.forEach(product => {
+            // Filter by product name
+            if (productFilter && !product.nama_produk.toLowerCase().includes(productFilter)) {
+                return;
+            }
             
-            if (!productSummary[key]) {
-                productSummary[key] = {
-                    group_produk: movement.group_produk || '-',
-                    product: movement.nama_produk,
-                    outlet: movement.outlet,
-                    awal: 0,
-                    masuk: 0,
-                    keluar: 0,
-                    sisa: 0
-                };
+            const key = `${product.id}-${product.outlet}`;
+            
+            // Hitung total masuk & keluar dari movements
+            let totalMasuk = 0;
+            let totalKeluar = 0;
+            
+            movements.forEach(movement => {
+                if (movement.nama_produk === product.nama_produk && movement.outlet === product.outlet) {
+                    if (movement.stok_type === 'masuk') {
+                        totalMasuk += Math.abs(movement.qty_change);
+                    } else if (movement.stok_type === 'keluar') {
+                        totalKeluar += Math.abs(movement.qty_change);
+                    }
+                }
+            });
+            
+            // ⭐⭐ HITUNG PENJUALAN (sales) dari transaksi_detail ⭐⭐
+            let totalPenjualan = 0;
+            if (salesData) {
+                salesData.forEach(sale => {
+                    // Match by item_name (harus sama dengan nama_produk)
+                    if (sale.item_name === product.nama_produk && sale.outlet === product.outlet) {
+                        totalPenjualan += sale.qty || 0;
+                    }
+                });
             }
-
-            // Kategorikan berdasarkan stok_type
-            if (movement.stok_type === 'masuk') {
-                productSummary[key].masuk += Math.abs(movement.qty_change);
-            } else if (movement.stok_type === 'keluar') {
-                productSummary[key].keluar += Math.abs(movement.qty_change);
+            
+            // ⭐⭐ HITUNG PENGEMBALIAN (returns) dari transaksi_detail ⭐⭐
+            let totalPengembalian = 0;
+            if (returnsData) {
+                returnsData.forEach(returnItem => {
+                    if (returnItem.item_name === product.nama_produk && returnItem.outlet === product.outlet) {
+                        totalPengembalian += returnItem.qty || 0;
+                    }
+                });
             }
+            
+            // ⭐⭐ PERHITUNGAN AWAL (SESUAI ORIGINAL) ⭐⭐
+            // awal = stok_sekarang - masuk + keluar
+            let awal = (product.stok || 0) - totalMasuk + totalKeluar;
+            awal = Math.max(0, awal); // Tidak boleh negatif
+        
+            // ⭐⭐ HITUNG SISA ⭐⭐
+            // sisa = awal + masuk - keluar
+            // TAPI: keluar di sini termasuk penjualan + lainnya
+            // Untuk laporan, kita bedakan: keluar = penjualan + lainnya
+            const keluarLainnya = totalKeluar - totalPenjualan - totalPengembalian;
+            const sisa = awal + totalMasuk + totalPengembalian - totalPenjualan - keluarLainnya;
+        
+            productSummary[key] = {
+                group_produk: product.group_produk || '-',
+                product: product.nama_produk,
+                outlet: product.outlet,
+                awal: awal,
+                masuk: totalMasuk,
+                pengembalian: totalPengembalian,  // ⭐ REAL DATA dari transaksi_detail
+                penjualan: totalPenjualan,        // ⭐ REAL DATA dari transaksi_detail
+                keluar: totalKeluar,              // Total semua keluar (termasuk penjualan & pengembalian)
+                sisa: sisa
+            };
         });
 
         // Convert to array
-        const summaryArray = Object.values(productSummary);
-
-        // Hitung sisa stok (masuk - keluar)
-        summaryArray.forEach(summary => {
-            summary.sisa = summary.masuk - summary.keluar;
-        });
+        const summaryArray = Object.values(productSummary).filter(summary => 
+            summary.masuk > 0 || 
+            summary.keluar > 0 || 
+            summary.awal > 0 ||
+            summary.penjualan > 0 ||
+            summary.pengembalian > 0
+        );
 
         // Sort by group and product name
         summaryArray.sort((a, b) => {
@@ -1276,49 +1380,126 @@ class StockManagement {
 
         // Calculate totals
         const totals = {
-            awal: 0,
+            awal: summaryArray.reduce((sum, item) => sum + item.awal, 0),
             masuk: summaryArray.reduce((sum, item) => sum + item.masuk, 0),
+            pengembalian: summaryArray.reduce((sum, item) => sum + item.pengembalian, 0),
+            penjualan: summaryArray.reduce((sum, item) => sum + item.penjualan, 0),
             keluar: summaryArray.reduce((sum, item) => sum + item.keluar, 0),
             sisa: summaryArray.reduce((sum, item) => sum + item.sisa, 0)
         };
 
-        // ✅ Design sama seperti existing stock-management.js
+        // ⭐⭐ 5. RENDER TABLE DENGAN 9 KOLOM LENGKAP ⭐⭐
         const html = `
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Group Produk</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Outlet</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Masuk</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Keluar</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sisa</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Group Produk
+                            </th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Product
+                            </th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Outlet
+                            </th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Awal
+                            </th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Masuk
+                            </th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Pengembalian
+                            </th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Penjualan
+                            </th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Keluar
+                            </th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Sisa
+                            </th>
                         </tr>
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
-                        ${summaryArray.map(summary => `
-                            <tr class="hover:bg-gray-50">
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${summary.group_produk}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${summary.product}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${summary.outlet}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">+${summary.masuk}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-medium">-${summary.keluar}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-bold ${
-                                    summary.sisa > 0 ? 'text-green-600' : 
-                                    summary.sisa < 0 ? 'text-red-600' : 'text-gray-600'
-                                }">
-                                    ${summary.sisa}
-                                </td>
-                            </tr>
-                        `).join('')}
+                        ${summaryArray.map(summary => {
+                            const isStockLow = summary.sisa <= 10;
+                            const isStockOut = summary.sisa <= 0;
+                            
+                            return `
+                                <tr class="hover:bg-gray-50 ${isStockLow ? 'bg-yellow-50' : ''} ${isStockOut ? 'bg-red-50' : ''}">
+                                    <!-- Group Produk -->
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                        ${summary.group_produk}
+                                    </td>
+                                    
+                                    <!-- Product -->
+                                    <td class="px-4 py-3 text-sm text-gray-900">
+                                        <div class="font-medium">${summary.product}</div>
+                                        ${isStockLow ? 
+                                            `<span class="text-xs text-yellow-600">⚠️ Stok rendah</span>` : 
+                                            ''}
+                                        ${isStockOut ? 
+                                            `<span class="text-xs text-red-600">⛔ Stok habis</span>` : 
+                                            ''}
+                                    </td>
+                                    
+                                    <!-- Outlet -->
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                        ${summary.outlet}
+                                    </td>
+                                    
+                                    <!-- Awal -->
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-medium">
+                                        ${summary.awal}
+                                    </td>
+                                    
+                                    <!-- Masuk -->
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-green-600 font-medium">
+                                        +${summary.masuk}
+                                    </td>
+                                    
+                                    <!-- Pengembalian -->
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-blue-600 font-medium">
+                                        ${summary.pengembalian > 0 ? `+${summary.pengembalian}` : '0'}
+                                    </td>
+                                    
+                                    <!-- Penjualan -->
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-orange-600 font-medium">
+                                        ${summary.penjualan > 0 ? `-${summary.penjualan}` : '0'}
+                                    </td>
+                                    
+                                    <!-- Keluar -->
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-red-600 font-medium">
+                                        -${summary.keluar}
+                                    </td>
+                                    
+                                    <!-- Sisa -->
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm font-bold ${
+                                        summary.sisa > 10 ? 'text-green-600' : 
+                                        summary.sisa > 0 ? 'text-yellow-600' : 
+                                        'text-red-600'
+                                    }">
+                                        ${summary.sisa}
+                                        ${summary.sisa <= 10 ? 
+                                            `<span class="ml-1 text-xs">${summary.sisa <= 0 ? '⛔' : '⚠️'}</span>` : 
+                                            ''}
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
                     </tbody>
                     <tfoot class="bg-gray-50">
                         <tr class="font-semibold">
-                            <td class="px-6 py-4 text-sm text-gray-900" colspan="3">TOTAL</td>
-                            <td class="px-6 py-4 text-sm text-green-600">+${totals.masuk}</td>
-                            <td class="px-6 py-4 text-sm text-red-600">-${totals.keluar}</td>
-                            <td class="px-6 py-4 text-sm font-bold ${
+                            <td class="px-4 py-3 text-sm text-gray-900" colspan="3">TOTAL</td>
+                            <td class="px-4 py-3 text-sm text-gray-900">${totals.awal}</td>
+                            <td class="px-4 py-3 text-sm text-green-600">+${totals.masuk}</td>
+                            <td class="px-4 py-3 text-sm text-blue-600">${totals.pengembalian > 0 ? `+${totals.pengembalian}` : '0'}</td>
+                            <td class="px-4 py-3 text-sm text-orange-600">${totals.penjualan > 0 ? `-${totals.penjualan}` : '0'}</td>
+                            <td class="px-4 py-3 text-sm text-red-600">-${totals.keluar}</td>
+                            <td class="px-4 py-3 text-sm font-bold ${
                                 totals.sisa > 0 ? 'text-green-600' : 
                                 totals.sisa < 0 ? 'text-red-600' : 'text-gray-600'
                             }">
@@ -1328,19 +1509,89 @@ class StockManagement {
                     </tfoot>
                 </table>
             </div>
+            
+            <!-- Summary Info -->
+            <div class="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div class="text-sm text-green-800 font-medium">Total Masuk</div>
+                    <div class="text-2xl font-bold text-green-600">+${totals.masuk}</div>
+                </div>
+                
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div class="text-sm text-blue-800 font-medium">Total Pengembalian</div>
+                    <div class="text-2xl font-bold text-blue-600">+${totals.pengembalian}</div>
+                </div>
+                
+                <div class="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                    <div class="text-sm text-orange-800 font-medium">Total Penjualan</div>
+                    <div class="text-2xl font-bold text-orange-600">-${totals.penjualan}</div>
+                </div>
+                
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <div class="text-sm text-gray-800 font-medium">Sisa Stok</div>
+                    <div class="text-2xl font-bold ${
+                        totals.sisa > 0 ? 'text-green-600' : 
+                        totals.sisa < 0 ? 'text-red-600' : 'text-gray-600'
+                    }">${totals.sisa}</div>
+                </div>
+            </div>
+            
+            <!-- Report Info -->
             <div class="mt-4 text-sm text-gray-500">
-                Menampilkan ${movements.length} pergerakan stok (${summaryArray.length} produk)
-                <br>
-                <span class="text-xs">* Periode: ${startDate} sampai ${endDate}</span>
-                ${outletFilter ? `<br><span class="text-xs">* Outlet: ${outletFilter}</span>` : ''}
-                ${productFilter ? `<br><span class="text-xs">* Filter produk: "${productFilter}"</span>` : ''}
-                <br>
-                <span class="text-xs">* Sisa = Masuk - Keluar</span>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <p><strong>Informasi Laporan:</strong></p>
+                        <ul class="text-xs list-disc pl-5 mt-1 space-y-1">
+                            <li>Periode: ${startDate} sampai ${endDate}</li>
+                            <li>Total produk: ${summaryArray.length}</li>
+                            <li>Total pergerakan: ${movements.length}</li>
+                            <li>Data penjualan & pengembalian dari tabel transaksi_detail</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <p><strong>Filter Aktif:</strong></p>
+                        <ul class="text-xs list-disc pl-5 mt-1 space-y-1">
+                            ${outletFilter ? `<li>Outlet: ${outletFilter}</li>` : ''}
+                            ${groupFilter ? `<li>Group: ${groupFilter}</li>` : ''}
+                            ${productFilter ? `<li>Produk: "${productFilter}"</li>` : ''}
+                            <li>Penjualan: status=completed</li>
+                            <li>Pengembalian: status=cancelled</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="mt-3 text-xs text-gray-400">
+                    <p><strong>Rumus:</strong></p>
+                    <p>Awal = Stok Sekarang - Masuk + Keluar</p>
+                    <p>Sisa = Awal + Masuk + Pengembalian - Penjualan - Keluar Lainnya</p>
+                </div>
             </div>
         `;
 
         container.innerHTML = html;
+        Helpers.hideLoading();
+
+    } catch (error) {
+        Helpers.hideLoading();
+        console.error('Error generating report:', error);
+        Notifications.error('Gagal membuat laporan: ' + error.message);
+        
+        container.innerHTML = `
+            <div class="text-center py-8">
+                <div class="bg-red-50 border border-red-200 rounded-md p-4 max-w-md mx-auto">
+                    <i class="fas fa-exclamation-triangle text-red-500 text-2xl mb-3"></i>
+                    <p class="text-red-700 font-medium">Gagal memuat laporan</p>
+                    <p class="text-sm text-red-600 mt-1">${error.message}</p>
+                    <button 
+                        onclick="stockManagement.loadStockMovementReport()"
+                        class="mt-3 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors text-sm"
+                    >
+                        <i class="fas fa-redo mr-1"></i> Coba Lagi
+                    </button>
+                </div>
+            </div>
+        `;
     }
+}
 
     // Check if initialized
     ensureInitialized() {
