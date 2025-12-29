@@ -10,6 +10,7 @@ class StockManagement {
         this.products = [];
         this.groupProducts = [];
         this.selectedProducts = [];
+        this.stockMovements = []; // Masih ada untuk kompatibilitas
         this.isInitialized = false;
         this.currentTransactionType = 'in';
         this.modalContainer = null;
@@ -21,6 +22,7 @@ class StockManagement {
         await this.loadOutlets();
         await this.loadProducts();
         await this.loadGroupProducts();
+        await this.loadRecentMovements(); // ✅ Load recent movements
         this.isInitialized = true;
         console.log('✅ Stock Management module initialized');
     }
@@ -137,6 +139,289 @@ class StockManagement {
             }
             this.modalContainer.remove();
             this.modalContainer = null;
+        }
+    }
+
+    // ========== DATA LOADING METHODS ==========
+
+    // Load outlets from app
+    async loadOutlets() {
+        if (window.app && window.app.getOutlets) {
+            this.outlets = window.app.getOutlets();
+        } else {
+            try {
+                const { data, error } = await supabase
+                    .from('karyawan')
+                    .select('outlet')
+                    .not('outlet', 'is', null)
+                    .order('outlet', { ascending: true });
+
+                if (!error) {
+                    // Get unique outlets
+                    const uniqueOutlets = [...new Set(data.map(o => o.outlet))].filter(Boolean);
+                    this.outlets = uniqueOutlets.map(outlet => ({ outlet }));
+                }
+            } catch (error) {
+                console.error('Error loading outlets:', error);
+                this.outlets = [];
+            }
+        }
+    }
+
+    // Load products with inventory
+    async loadProducts() {
+        try {
+            const { data, error } = await supabase
+                .from('produk')
+                .select('*')
+                .order('nama_produk', { ascending: true });
+
+            if (error) throw error;
+
+            this.products = data || [];
+        } catch (error) {
+            console.error('Error loading products:', error);
+            this.products = [];
+        }
+    }
+
+    // Load group products
+    async loadGroupProducts() {
+        try {
+            const { data, error } = await supabase
+                .from('group_produk')
+                .select('group')
+                .eq('status', 'active')
+                .order('group', { ascending: true });
+
+            if (error) throw error;
+
+            this.groupProducts = data || [];
+        } catch (error) {
+            console.error('Error loading group products:', error);
+            this.groupProducts = [];
+        }
+    }
+
+    // ========== LOAD RECENT MOVEMENTS ==========
+    async loadRecentMovements() {
+        try {
+            // ✅ Query data dari tabel stok_update (bukan localStorage)
+            const { data: movements, error } = await supabase
+                .from('stok_update')
+                .select('*')
+                .eq('approval_status', 'approved')
+                .order('created_at', { ascending: false })
+                .limit(10);
+
+            if (error) {
+                console.error('Error loading recent movements:', error);
+                this.renderRecentMovements([]);
+                return;
+            }
+
+            // Simpan ke cache untuk kompatibilitas
+            this.stockMovements = movements || [];
+            
+            // Render ke UI
+            this.renderRecentMovements(movements || []);
+            
+        } catch (error) {
+            console.error('Error loading recent movements:', error);
+            this.renderRecentMovements([]);
+        }
+    }
+
+    // ========== RENDER RECENT MOVEMENTS ==========
+    renderRecentMovements(movements) {
+        const container = document.getElementById('recent-stock-movements');
+        if (!container) {
+            console.log('Container recent-stock-movements tidak ditemukan');
+            return;
+        }
+
+        if (!movements || movements.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-8">
+                    <i class="fas fa-box-open text-3xl text-gray-300 mb-3"></i>
+                    <p class="text-gray-500">Belum ada pergerakan stok</p>
+                    <p class="text-sm text-gray-400 mt-2">
+                        Gunakan "Stok Masuk" atau "Stok Keluar" untuk menambah data
+                    </p>
+                </div>
+            `;
+            return;
+        }
+
+        // ✅ Tabel dengan header baku sesuai permintaan
+        const html = `
+            <div class="overflow-x-auto rounded-lg border border-gray-200">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Tanggal
+                            </th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Outlet
+                            </th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Jenis
+                            </th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Nama Produk
+                            </th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Group Produk
+                            </th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Stok Awal
+                            </th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Perubahan
+                            </th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Stok Akhir
+                            </th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Status
+                            </th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                User
+                            </th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Disetujui Oleh
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        ${movements.map(movement => {
+                            // Format tanggal
+                            const tanggal = movement.tanggal ? 
+                                new Date(movement.tanggal).toLocaleDateString('id-ID', {
+                                    day: '2-digit',
+                                    month: 'short',
+                                    year: 'numeric'
+                                }) : '-';
+                            
+                            // Format jenis stok
+                            const jenisBadge = movement.stok_type === 'masuk' 
+                                ? '<span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800 font-medium">MASUK</span>'
+                                : '<span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800 font-medium">KELUAR</span>';
+                            
+                            // Format perubahan stok
+                            const perubahanClass = movement.qty_change > 0 ? 'text-green-600' : 'text-red-600';
+                            const perubahanSign = movement.qty_change > 0 ? '+' : '';
+                            const perubahanText = `${perubahanSign}${movement.qty_change}`;
+                            
+                            // Format status
+                            const statusBadge = movement.approval_status === 'approved' 
+                                ? '<span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800 font-medium">APPROVED</span>'
+                                : '<span class="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800 font-medium">PENDING</span>';
+                            
+                            return `
+                                <tr class="hover:bg-gray-50 transition-colors">
+                                    <!-- Tanggal -->
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                        ${tanggal}
+                                    </td>
+                                    
+                                    <!-- Outlet -->
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                        ${movement.outlet || '-'}
+                                    </td>
+                                    
+                                    <!-- Jenis -->
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm">
+                                        ${jenisBadge}
+                                    </td>
+                                    
+                                    <!-- Nama Produk -->
+                                    <td class="px-4 py-3 text-sm text-gray-900">
+                                        <div class="font-medium max-w-xs">${movement.nama_produk || '-'}</div>
+                                    </td>
+                                    
+                                    <!-- Group Produk -->
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                        ${movement.group_produk || '-'}
+                                    </td>
+                                    
+                                    <!-- Stok Awal -->
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-medium">
+                                        ${movement.qty_before || 0}
+                                    </td>
+                                    
+                                    <!-- Perubahan -->
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm font-bold ${perubahanClass}">
+                                        ${perubahanText}
+                                    </td>
+                                    
+                                    <!-- Stok Akhir -->
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-blue-600 font-bold">
+                                        ${movement.qty_after || 0}
+                                    </td>
+                                    
+                                    <!-- Status -->
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm">
+                                        ${statusBadge}
+                                    </td>
+                                    
+                                    <!-- User -->
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                        ${movement.updated_by || '-'}
+                                    </td>
+                                    
+                                    <!-- Disetujui Oleh -->
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                        ${movement.approved_by || '-'}
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Footer info -->
+            <div class="mt-4 p-3 bg-gray-50 rounded-lg">
+                <div class="flex justify-between items-center">
+                    <div class="text-sm text-gray-600">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        Menampilkan <span class="font-semibold">${movements.length}</span> pergerakan stok terbaru
+                    </div>
+                    <button 
+                        onclick="stockManagement.refreshRecentMovements()"
+                        class="px-3 py-1 text-xs bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors flex items-center"
+                    >
+                        <i class="fas fa-sync-alt mr-1"></i> Refresh
+                    </button>
+                </div>
+            </div>
+        `;
+
+        container.innerHTML = html;
+    }
+
+    // Refresh recent movements
+    async refreshRecentMovements() {
+        try {
+            // Show loading
+            const container = document.getElementById('recent-stock-movements');
+            if (container) {
+                container.innerHTML = `
+                    <div class="text-center py-8">
+                        <i class="fas fa-spinner fa-spin text-blue-500 text-2xl mb-3"></i>
+                        <p class="text-gray-500">Memuat data terbaru...</p>
+                    </div>
+                `;
+            }
+            
+            await this.loadRecentMovements();
+            Notifications.success('Data pergerakan stok diperbarui');
+            
+        } catch (error) {
+            console.error('Error refreshing movements:', error);
+            Notifications.error('Gagal memuat data terbaru');
         }
     }
 
@@ -677,8 +962,9 @@ class StockManagement {
             this.closeCustomModal();
             Helpers.hideLoading();
             
-            // Refresh product data
+            // Refresh data
             await this.loadProducts();
+            await this.loadRecentMovements(); // ✅ Refresh recent movements setelah simpan
             
             Notifications.success(`Stok ${type === 'in' ? 'masuk' : 'keluar'} berhasil disimpan`);
 
@@ -686,67 +972,6 @@ class StockManagement {
             Helpers.hideLoading();
             console.error('Error saving stock movement:', error);
             Notifications.error('Gagal menyimpan pergerakan stok: ' + error.message);
-        }
-    }
-
-    // ========== DATA LOADING METHODS ==========
-
-    // Load outlets from app
-    async loadOutlets() {
-        if (window.app && window.app.getOutlets) {
-            this.outlets = window.app.getOutlets();
-        } else {
-            try {
-                const { data, error } = await supabase
-                    .from('karyawan')
-                    .select('outlet')
-                    .not('outlet', 'is', null)
-                    .order('outlet', { ascending: true });
-
-                if (!error) {
-                    // Get unique outlets
-                    const uniqueOutlets = [...new Set(data.map(o => o.outlet))].filter(Boolean);
-                    this.outlets = uniqueOutlets.map(outlet => ({ outlet }));
-                }
-            } catch (error) {
-                console.error('Error loading outlets:', error);
-                this.outlets = [];
-            }
-        }
-    }
-
-    // Load products with inventory
-    async loadProducts() {
-        try {
-            const { data, error } = await supabase
-                .from('produk')
-                .select('*')
-                .order('nama_produk', { ascending: true });
-
-            if (error) throw error;
-
-            this.products = data || [];
-        } catch (error) {
-            console.error('Error loading products:', error);
-            this.products = [];
-        }
-    }
-
-    // Load group products
-    async loadGroupProducts() {
-        try {
-            const { data, error } = await supabase
-                .from('group_produk')
-                .select('group')
-                .eq('status', 'active')
-                .order('group', { ascending: true });
-
-            if (error) throw error;
-
-            this.groupProducts = data || [];
-        } catch (error) {
-            console.error('Error loading group products:', error);
-            this.groupProducts = [];
         }
     }
 
@@ -1115,98 +1340,6 @@ class StockManagement {
         `;
 
         container.innerHTML = html;
-    }
-
-    // ========== RESET METHODS (OPTIONAL - BISA DIHAPUS) ==========
-
-    // Show reset options modal
-    async showResetOptions() {
-        const content = `
-            <div class="space-y-4">
-                <div class="bg-yellow-50 border border-yellow-200 rounded-md p-4">
-                    <div class="flex">
-                        <div class="flex-shrink-0">
-                            <svg class="h-5 w-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/>
-                            </svg>
-                        </div>
-                        <div class="ml-3">
-                            <h3 class="text-sm font-medium text-yellow-800">Reset History Stok Update</h3>
-                            <p class="text-sm text-yellow-700 mt-1">
-                                Hanya hapus data di tabel stok_update, stok produk tetap
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="border border-red-200 rounded-lg p-4 hover:bg-red-50 cursor-pointer" onclick="stockManagement.resetStockUpdateData()">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <h4 class="text-sm font-medium text-red-900">Reset History Stok Update</h4>
-                            <p class="text-sm text-red-600 mt-1">
-                                Hapus semua data di tabel stok_update
-                            </p>
-                        </div>
-                        <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                        </svg>
-                    </div>
-                </div>
-
-                <div class="bg-blue-50 border border-blue-200 rounded-md p-3">
-                    <p class="text-xs text-blue-700">
-                        💡 <strong>Note:</strong> Tindakan ini hanya menghapus history, stok produk tidak berubah
-                    </p>
-                </div>
-            </div>
-        `;
-
-        this.createCustomModal('Reset Data History', content, [
-            {
-                text: 'Batal',
-                onclick: () => this.closeCustomModal(),
-                primary: false
-            }
-        ]);
-    }
-
-    // Reset stock update data
-    async resetStockUpdateData() {
-        try {
-            const confirmed = confirm(
-                'RESET HISTORY STOK UPDATE\n\n' +
-                'Apakah Anda yakin ingin menghapus semua data di tabel stok_update?\n\n' +
-                '⚠️  Tindakan ini tidak dapat dibatalkan!\n' +
-                '✅  Stok produk tetap aman (tidak berubah)\n' +
-                '🗑️  Hanya history pergerakan yang dihapus\n\n' +
-                'Klik OK untuk lanjut, Cancel untuk batal.'
-            );
-
-            if (!confirmed) {
-                console.log('Reset dibatalkan oleh user');
-                return;
-            }
-
-            Helpers.showLoading();
-
-            // Delete all data from stok_update
-            const { error } = await supabase
-                .from('stok_update')
-                .delete()
-                .neq('id', 0); // Delete all records
-
-            if (error) throw error;
-
-            Helpers.hideLoading();
-            
-            Notifications.success('History stok update berhasil direset');
-            this.closeCustomModal();
-
-        } catch (error) {
-            Helpers.hideLoading();
-            console.error('Error resetting stock update data:', error);
-            Notifications.error('Gagal mereset data: ' + error.message);
-        }
     }
 
     // Check if initialized
