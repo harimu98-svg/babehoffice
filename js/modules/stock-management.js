@@ -1336,17 +1336,15 @@ async generateStockReportFromDatabase(movements) {
                 });
             }
             
-            // ⭐⭐ PERHITUNGAN AWAL (SESUAI ORIGINAL) ⭐⭐
-            // awal = stok_sekarang - masuk + keluar
-            let awal = (product.stok || 0) - totalMasuk + totalKeluar;
-            awal = Math.max(0, awal); // Tidak boleh negatif
-        
-            // ⭐⭐ HITUNG SISA ⭐⭐
-            // sisa = awal + masuk - keluar
-            // TAPI: keluar di sini termasuk penjualan + lainnya
-            // Untuk laporan, kita bedakan: keluar = penjualan + lainnya
-            const keluarLainnya = totalKeluar - totalPenjualan - totalPengembalian;
-            const sisa = awal + totalMasuk + totalPengembalian - totalPenjualan - keluarLainnya;
+           // ⭐⭐ RUMUS AWAL YANG BENAR: ⭐⭐
+// awal = stok_sekarang + keluar + penjualan - masuk - pengembalian
+let awal = (product.stok || 0) + totalKeluar + totalPenjualan - totalMasuk - totalPengembalian;
+awal = Math.max(0, awal);
+
+// ⭐⭐ HITUNG SISA (KONFIRMASI): ⭐⭐
+// sisa = awal + masuk + pengembalian - keluar - penjualan
+const sisa = awal + totalMasuk + totalPengembalian - totalKeluar - totalPenjualan;
+const sisaFinal = Math.max(0, sisa);
         
             productSummary[key] = {
                 group_produk: product.group_produk || '-',
