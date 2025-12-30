@@ -1404,24 +1404,54 @@ getDayName(dayIndex) {
     ];
 }
     getMembercardColumns() {
-        return [
-            { 
-                title: 'Tanggal', 
-                key: 'tanggal',
-                formatter: (value) => {
-                    if (!value || value === 'Unknown') return '-';
-                    if (value.includes('T') || value.includes(' ')) {
-                        const datePart = value.split('T')[0] || value.split(' ')[0];
-                        return datePart;
+    return [
+        { 
+            title: 'Tanggal', 
+            key: 'tanggal',
+            formatter: (value) => {
+                if (!value || value === 'Unknown') return '-';
+                
+                try {
+                    // Format: DD/MM/YYYY
+                    // Cek jika sudah format DD/MM/YYYY
+                    if (value.includes('/')) {
+                        const parts = value.split('/');
+                        if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2) {
+                            return value; // Sudah format DD/MM/YYYY
+                        }
                     }
+                    
+                    // Parse dari format YYYY-MM-DD
+                    if (value.includes('-')) {
+                        const parts = value.split('-');
+                        if (parts.length === 3) {
+                            const [year, month, day] = parts;
+                            return `${day}/${month}/${year}`;
+                        }
+                    }
+                    
+                    // Parse dari Date object
+                    const date = new Date(value);
+                    if (!isNaN(date.getTime())) {
+                        const day = date.getDate().toString().padStart(2, '0');
+                        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                        const year = date.getFullYear();
+                        return `${day}/${month}/${year}`;
+                    }
+                    
+                    return value; // Return as-is jika parsing gagal
+                    
+                } catch (error) {
+                    console.warn('Error formatting date:', value, error);
                     return value;
                 }
-            },
-            { title: 'Outlet', key: 'outlet' },
-            { title: 'Kasir', key: 'kasir' },
-            { title: 'Jumlah Membercard', key: 'jumlah_membercard' }
-        ];
-    }
+            }
+        },
+        { title: 'Outlet', key: 'outlet' },
+        { title: 'Kasir', key: 'kasir' },
+        { title: 'Jumlah Membercard', key: 'jumlah_membercard' }
+    ];
+}
 
     getAbsenColumns() {
         return [
