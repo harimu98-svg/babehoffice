@@ -528,7 +528,7 @@ processKomisiWithRole(komisiData, roleMap) {
         const serveByName = item.serve_by || 'Unknown';
         const role = roleMap[serveByName] || 'staff';
         
-        console.log(`Processing ${serveByName}: role=${role}, uop=${item.uop}`);
+        console.log(`Processing ${serveByName}: role=${role}, uop=${item.uop}, alasan=${item.alasan_nouop}`);
         
         // Atur UOP berdasarkan role
         let uopValue = item.uop || 0;
@@ -555,7 +555,8 @@ processKomisiWithRole(komisiData, roleMap) {
             total_komisi: item.komisi || 0,
             tips_qris: item.tips_qris || 0,
             jumlah_transaksi: item.jumlah_transaksi || 0,
-            role: role, // PASTIKAN ini ada
+            role: role,
+            alasan_nouop: item.alasan_nouop || '', // SIMPAN alasan_nouop untuk ditampilkan
             original_uop: item.uop || 0 // Simpan original untuk debug
         });
     }
@@ -563,7 +564,6 @@ processKomisiWithRole(komisiData, roleMap) {
     console.log('Processed komisi data:', result);
     return result;
 }
-
 // Helper untuk nama hari
 getDayName(dayIndex) {
     const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
@@ -1306,23 +1306,48 @@ getDayName(dayIndex) {
             formatter: (value, row) => {
                 // PERBAIKAN: Gunakan optional chaining
                 const role = row?.role || 'staff';
+                const alasan_nouop = row?.alasan_nouop || '';
                 
                 if (role === 'kasir') {
-                    return `<span class="text-gray-500 italic" title="Kasir - UOP dihitung bulanan di modul penghasilan">-</span>`;
+                    return `
+                        <div class="flex flex-col space-y-1">
+                            <span class="text-gray-500 italic">-</span>
+                            <span class="inline-block px-2 py-1 text-xs bg-yellow-100 text-yellow-800 border border-yellow-200 rounded">
+                                UOP Dibayarkan Bulanan
+                            </span>
+                        </div>
+                    `;
                 }
                 
                 if (!value || value === 0) {
                     if (role === 'barberman' || role === 'therapist') {
-                        return `<span class="text-orange-500" title="Tidak ada transaksi UOP hari ini">-</span>`;
+                        // Untuk barberman yang UOP = 0, tampilkan alasan dari komisi.alasan_nouop
+                        return `
+                            <div class="flex flex-col space-y-1">
+                                <span class="text-orange-500">-</span>
+                                ${alasan_nouop ? `
+                                    <span class="inline-block px-2 py-1 text-xs bg-orange-100 text-orange-800 border border-orange-200 rounded">
+                                        ${alasan_nouop}
+                                    </span>
+                                ` : ''}
+                            </div>
+                        `;
                     }
                     return `<span class="text-gray-500">-</span>`;
                 }
                 
-                // Warna berbeda berdasarkan role
-                if (role === 'barberman') {
-                    return `<span class="text-blue-600 font-bold">${Helpers.formatCurrency(value)}</span>`;
-                } else if (role === 'therapist') {
-                    return `<span class="text-purple-600 font-bold">${Helpers.formatCurrency(value)}</span>`;
+                // Jika ada UOP nilai
+                if (role === 'barberman' || role === 'therapist') {
+                    return `
+                        <div class="flex flex-col space-y-1">
+                            <span class="text-blue-600 font-bold">${Helpers.formatCurrency(value)}</span>
+                            ${alasan_nouop ? `
+                                <span class="inline-block px-2 py-1 text-xs bg-gray-100 text-gray-800 border border-gray-200 rounded">
+                                    ${alasan_nouop}
+                                </span>
+                            ` : ''}
+                        </div>
+                    `;
                 }
                 
                 return Helpers.formatCurrency(value);
@@ -1895,10 +1920,20 @@ getDayName(dayIndex) {
         return csvContent;
     }
 
- generateKomisiCSV() {
-    let csvContent = "Outlet,Tanggal,Hari,Kasir,Served By,Role,Total Amount,UOP,Total Komisi,Tips QRIS,Jumlah Transaksi\n";
+generateKomisiCSV() {
+    let csvContent = "Outlet,Tanggal,Hari,Kasir,Served By,Role,Total Amount,UOP,Alasan UOP,Total Komisi,Tips QRIS,Jumlah Transaksi\n";
     
     this.currentData.forEach(item => {
+        // Tentukan teks alasan untuk CSV
+        let alasanText = '';
+        if (item.role === 'kasir') {
+            alasanText = 'UOP Dibayarkan Bulanan';
+        } else if (item.alasan_nouop) {
+            alasanText = item.alasan_nouop;
+        } else if (!item.uop || item.uop === 0) {
+            alasanText = 'Tidak ada UOP';
+        }
+        
         const row = [
             item.outlet,
             item.tanggal,
@@ -1908,6 +1943,7 @@ getDayName(dayIndex) {
             item.role || 'staff',
             item.total_amount,
             item.uop,
+            alasanText,
             item.total_komisi,
             item.tips_qris,
             item.jumlah_transaksi
