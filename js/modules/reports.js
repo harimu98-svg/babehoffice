@@ -484,7 +484,7 @@ async processKomisiReportData(komisiData) {
     for (const item of komisiData) {
         try {
             // Ambil role karyawan dari data JOIN atau query terpisah
-            let role = 'staff';
+            let role = 'barberman';
             let serveByName = item.serve_by || 'Unknown';
             
             if (item.karyawan && item.karyawan.length > 0) {
