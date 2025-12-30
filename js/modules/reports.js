@@ -436,16 +436,10 @@ isNumericColumn(key) {
     console.log('Loading laporan komisi dari tabel komisi');
     
     try {
-        // Query ke tabel komisi dengan JOIN ke karyawan
+        // 1. Ambil data dari tabel komisi dulu
         let query = supabase
             .from('komisi')
-            .select(`
-                *,
-                karyawan:karyawan!komisi_serve_by_fkey (
-                    nama_karyawan,
-                    role
-                )
-            `)
+            .select('*')
             .order('tanggal', { ascending: false });
 
         // Apply filters
@@ -459,16 +453,50 @@ isNumericColumn(key) {
             query = query.eq('outlet', this.filters.outlet);
         }
 
-        const { data, error } = await query;
+        const { data: komisiData, error } = await query;
         if (error) {
             console.error('Error loading komisi data:', error);
             throw error;
         }
         
-        console.log('Data komisi ditemukan:', data?.length || 0, 'records');
+        console.log('Data komisi ditemukan:', komisiData?.length || 0, 'records');
         
-        // Process data untuk format yang diinginkan
-        return this.processKomisiReportData(data || []);
+        if (!komisiData || komisiData.length === 0) {
+            return [];
+        }
+        
+        // 2. Ambil semua serve_by unik untuk ambil role dari karyawan
+        const serveByNames = [...new Set(
+            komisiData
+                .map(item => item.serve_by)
+                .filter(name => name && name !== 'Unknown')
+        )];
+        
+        console.log('Unique serve_by names:', serveByNames);
+        
+        // 3. Query role dari tabel karyawan
+        let roleMap = {};
+        if (serveByNames.length > 0) {
+            const { data: karyawanData, error: karyawanError } = await supabase
+                .from('karyawan')
+                .select('nama_karyawan, role')
+                .in('nama_karyawan', serveByNames);
+            
+            if (karyawanError) {
+                console.error('Error fetching karyawan roles:', karyawanError);
+            } else if (karyawanData) {
+                // Buat mapping nama_karyawan -> role
+                karyawanData.forEach(k => {
+                    if (k.nama_karyawan) {
+                        roleMap[k.nama_karyawan] = k.role || 'staff';
+                    }
+                });
+                console.log('Role mapping created:', roleMap);
+            }
+        }
+        
+        // 4. Process data komisi dengan role
+        return this.processKomisiWithRole(komisiData, roleMap);
         
     } catch (error) {
         console.error('Error load laporan komisi:', error);
@@ -476,79 +504,63 @@ isNumericColumn(key) {
     }
 }
 
-async processKomisiReportData(komisiData) {
-    console.log('Processing komisi report data');
+processKomisiWithRole(komisiData, roleMap) {
+    console.log('Processing komisi data with role mapping');
     
     const result = [];
     
     for (const item of komisiData) {
+        const tanggal = item.tanggal || 'Unknown';
+        let hari = 'Unknown';
+        
         try {
-            // Ambil role karyawan dari data JOIN atau query terpisah
-            let role = 'barberman';
-            let serveByName = item.serve_by || 'Unknown';
-            
-            if (item.karyawan && item.karyawan.length > 0) {
-                role = item.karyawan[0].role || 'staff';
-                serveByName = item.karyawan[0].nama_karyawan || serveByName;
-            } else {
-                // Fallback query jika JOIN tidak berhasil
-                const { data: karyawanData } = await supabase
-                    .from('karyawan')
-                    .select('role')
-                    .eq('nama_karyawan', serveByName)
-                    .single();
-                
-                if (karyawanData) {
-                    role = karyawanData.role;
+            if (tanggal !== 'Unknown') {
+                const dateObj = new Date(tanggal);
+                if (!isNaN(dateObj.getTime())) {
+                    hari = this.getDayName(dateObj.getDay());
                 }
             }
-            
-            // Format data sesuai kolom yang diminta
-            const tanggal = item.tanggal || 'Unknown';
-            const formattedDate = new Date(tanggal);
-            const hari = this.getDayName(formattedDate.getDay());
-            
-            // Untuk kasir, UOP = 0
-            const isKasir = role === 'kasir' || role === 'cashier';
-            const uopValue = isKasir ? 0 : (item.uop || 0);
-            
-            result.push({
-                outlet: item.outlet || 'Unknown',
-                tanggal: tanggal,
-                hari: hari,
-                kasir: item.kasir || 'Unknown',
-                serve_by: serveByName,
-                total_amount: item.total_transaksi || 0,
-                uop: uopValue,
-                total_komisi: item.komisi || 0,
-                tips_qris: item.tips_qris || 0,
-                jumlah_transaksi: item.jumlah_transaksi || 0,
-                role: role // Untuk internal tracking
-            });
-            
-        } catch (error) {
-            console.warn('Error processing komisi item:', error);
-            // Tambahkan data tanpa role
-            const tanggal = item.tanggal || 'Unknown';
-            const formattedDate = new Date(tanggal);
-            const hari = this.getDayName(formattedDate.getDay());
-            
-            result.push({
-                outlet: item.outlet || 'Unknown',
-                tanggal: tanggal,
-                hari: hari,
-                kasir: item.kasir || 'Unknown',
-                serve_by: item.serve_by || 'Unknown',
-                total_amount: item.total_transaksi || 0,
-                uop: item.uop || 0,
-                total_komisi: item.komisi || 0,
-                tips_qris: item.tips_qris || 0,
-                jumlah_transaksi: item.jumlah_transaksi || 0,
-                role: 'unknown'
-            });
+        } catch (e) {
+            console.warn('Error parsing date:', tanggal, e);
         }
+        
+        // Ambil role dari mapping atau default 'staff'
+        const serveByName = item.serve_by || 'Unknown';
+        const role = roleMap[serveByName] || 'staff';
+        
+        console.log(`Processing ${serveByName}: role=${role}, uop=${item.uop}`);
+        
+        // Atur UOP berdasarkan role
+        let uopValue = item.uop || 0;
+        
+        if (role === 'kasir' || role === 'cashier') {
+            // Kasir: UOP = 0
+            uopValue = 0;
+        } else if (role === 'barberman' || role === 'therapist') {
+            // Barberman/Therapist: UOP = komisi.uop (ambil dari database)
+            uopValue = item.uop || 0;
+        } else {
+            // Staff lain: UOP = 0 atau sesuai database
+            uopValue = 0;
+        }
+        
+        result.push({
+            outlet: item.outlet || 'Unknown',
+            tanggal: tanggal,
+            hari: hari,
+            kasir: item.kasir || 'Unknown',
+            serve_by: serveByName,
+            total_amount: item.total_transaksi || 0,
+            uop: uopValue,
+            total_komisi: item.komisi || 0,
+            tips_qris: item.tips_qris || 0,
+            jumlah_transaksi: item.jumlah_transaksi || 0,
+            role: role,
+            original_uop: item.uop || 0 // Simpan original untuk debug
+        });
     }
     
+    console.log('Processed komisi data:', result.length, 'records');
     return result;
 }
 
@@ -1252,29 +1264,26 @@ getDayName(dayIndex) {
             title: '👤 Served By', 
             key: 'serve_by',
             formatter: (value, row) => {
-                // Tambahkan badge role jika ada
-                if (row.role && row.role !== 'unknown') {
-                    const roleColors = {
-                        'barberman': 'bg-blue-100 text-blue-800',
-                        'kasir': 'bg-green-100 text-green-800',
-                        'therapist': 'bg-purple-100 text-purple-800',
-                        'staff': 'bg-gray-100 text-gray-800',
-                        'owner': 'bg-yellow-100 text-yellow-800'
-                    };
-                    
-                    const color = roleColors[row.role] || 'bg-gray-100 text-gray-800';
-                    const roleText = row.role.charAt(0).toUpperCase() + row.role.slice(1);
-                    
-                    return `
-                        <div class="flex items-center space-x-2">
-                            <span>${value}</span>
-                            <span class="px-2 py-1 text-xs rounded-full ${color}">
-                                ${roleText}
-                            </span>
-                        </div>
-                    `;
-                }
-                return value;
+                const role = row.role || 'staff';
+                const roleColors = {
+                    'kasir': 'bg-green-100 text-green-800 border border-green-200',
+                    'barberman': 'bg-blue-100 text-blue-800 border border-blue-200',
+                    'therapist': 'bg-purple-100 text-purple-800 border border-purple-200',
+                    'owner': 'bg-yellow-100 text-yellow-800 border border-yellow-200',
+                    'staff': 'bg-gray-100 text-gray-800 border border-gray-200'
+                };
+                
+                const color = roleColors[role] || roleColors['staff'];
+                const roleText = role.charAt(0).toUpperCase() + role.slice(1);
+                
+                return `
+                    <div class="flex flex-col space-y-1">
+                        <span class="font-medium">${value}</span>
+                        <span class="inline-block px-2 py-1 text-xs rounded ${color}">
+                            ${roleText}
+                        </span>
+                    </div>
+                `;
             }
         },
         { 
@@ -1287,12 +1296,26 @@ getDayName(dayIndex) {
             key: 'uop',
             type: 'currency',
             formatter: (value, row) => {
+                const role = row.role || 'staff';
+                
+                if (role === 'kasir') {
+                    return `<span class="text-gray-500 italic" title="Kasir - UOP dihitung bulanan di modul penghasilan">-</span>`;
+                }
+                
                 if (value === 0 || value === null) {
-                    if (row.role === 'kasir') {
-                        return `<span class="text-gray-500" title="Kasir - UOP dihitung bulanan">-</span>`;
+                    if (role === 'barberman' || role === 'therapist') {
+                        return `<span class="text-orange-500" title="Tidak ada transaksi UOP hari ini">-</span>`;
                     }
                     return `<span class="text-gray-500">-</span>`;
                 }
+                
+                // Warna berbeda berdasarkan role
+                if (role === 'barberman') {
+                    return `<span class="text-blue-600 font-bold">${Helpers.formatCurrency(value)}</span>`;
+                } else if (role === 'therapist') {
+                    return `<span class="text-purple-600 font-bold">${Helpers.formatCurrency(value)}</span>`;
+                }
+                
                 return Helpers.formatCurrency(value);
             }
         },
@@ -1301,7 +1324,9 @@ getDayName(dayIndex) {
             key: 'total_komisi',
             type: 'currency',
             formatter: (value) => {
-                return value > 0 ? `<span class="text-green-600 font-semibold">${Helpers.formatCurrency(value)}</span>` : '-';
+                return value > 0 ? 
+                    `<span class="text-green-600 font-semibold">${Helpers.formatCurrency(value)}</span>` : 
+                    '<span class="text-gray-500">-</span>';
             }
         },
         { 
@@ -1309,14 +1334,16 @@ getDayName(dayIndex) {
             key: 'tips_qris',
             type: 'currency',
             formatter: (value) => {
-                return value > 0 ? `<span class="text-purple-600">${Helpers.formatCurrency(value)}</span>` : '-';
+                return value > 0 ? 
+                    `<span class="text-purple-600">${Helpers.formatCurrency(value)}</span>` : 
+                    '<span class="text-gray-500">-</span>';
             }
         },
         { 
-            title: '🛒 Jumlah Transaksi', 
+            title: '🛒 Jml Trans', 
             key: 'jumlah_transaksi',
             formatter: (value) => {
-                return `<span class="font-semibold">${value}</span>`;
+                return `<span class="font-medium">${value}</span>`;
             }
         }
     ];
@@ -1860,7 +1887,7 @@ getDayName(dayIndex) {
     }
 
  generateKomisiCSV() {
-    let csvContent = "Outlet,Tanggal,Hari,Kasir,Served By,Total Amount,UOP,Total Komisi,Tips QRIS,Jumlah Transaksi\n";
+    let csvContent = "Outlet,Tanggal,Hari,Kasir,Served By,Role,Total Amount,UOP,Total Komisi,Tips QRIS,Jumlah Transaksi\n";
     
     this.currentData.forEach(item => {
         const row = [
@@ -1869,6 +1896,7 @@ getDayName(dayIndex) {
             item.hari,
             item.kasir,
             item.serve_by,
+            item.role || 'staff',
             item.total_amount,
             item.uop,
             item.total_komisi,
