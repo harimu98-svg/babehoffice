@@ -74,44 +74,79 @@ class Reports {
     // ==================== FOOTER METHODS ====================
 
     getFooterData() {
-        if (!this.currentData || this.currentData.length === 0) {
-            return null;
+    if (!this.currentData || this.currentData.length === 0) {
+        return null;
+    }
+
+    const footerData = {};
+    const columns = this.getTableColumns();
+    
+    columns.forEach((col, index) => {
+        const key = col.key;
+        
+        if (key === 'outlet' || key === 'hari' || key === 'kasir' || key === 'serve_by') {
+            // Kolom teks: kosong atau "TOTAL" untuk kolom pertama
+            footerData[key] = index === 0 ? 'TOTAL' : '';
+        } 
+        else if (key === 'tanggal') {
+            footerData[key] = '';
         }
+        else if (col.type === 'currency' || this.isNumericColumn(key)) {
+            // Kolom numerik: hitung total
+            footerData[key] = this.currentData.reduce((sum, item) => {
+                const value = parseFloat(item[key]) || 0;
+                return sum + value;
+            }, 0);
+        } 
+        else {
+            footerData[key] = '';
+        }
+    });
 
-        const footerData = {};
-        const columns = this.getTableColumns();
+    return footerData;
+}
+
+   // Tambah di constructor atau sebagai method
+async getKaryawanRole(namaKaryawan) {
+    if (!namaKaryawan || namaKaryawan === 'Unknown') return 'staff';
+    
+    try {
+        const { data, error } = await supabase
+            .from('karyawan')
+            .select('role')
+            .eq('nama_karyawan', namaKaryawan)
+            .single();
         
-        columns.forEach((col, index) => {
-            if (col.type === 'currency' || this.isNumericColumn(col.key)) {
-                footerData[col.key] = this.currentData.reduce((sum, item) => {
-                    const value = parseFloat(item[col.key]) || 0;
-                    return sum + value;
-                }, 0);
-            } else {
-                // Hanya kolom pertama yang menampilkan "TOTAL", lainnya kosong
-                footerData[col.key] = index === 0 ? 'TOTAL' : '';
-            }
-        });
-
-        return footerData;
-    }
-
-    isNumericColumn(key) {
-        const numericColumns = [
-            'qty', 'jumlah_membercard', 'jumlah_transaksi', 'point', 'redeem_qty',
-            'discount_percent', 'total_amount', 'amount', 'harga_jual', 'harga_beli',
-            'profit', 'comission', 'total_omset', 'total_modal', 'total_discount',
-            'total_redeem', 'omset_bersih', 'net_profit', 'rata_rata_transaksi',
-            'totalAmount', 'totalAmountCancel', 'total_komisi', 'total_uop',
-            'omset_cash', 'top_up_kas', 'sisa_setoran', 'hutang_komisi', 
-            'pemasukan_lain_lain', 'uop', 'tips_qris', 'bayar_hutang_komisi',
-            'iuran_rt', 'sumbangan', 'iuran_sampah', 'galon', 'biaya_admin_setoran',
-            'yakult', 'pengeluaran_lain_lain', 'pemasukan', 'pengeluaran', 'saldo'
-        ];
+        if (error || !data) {
+            console.warn(`Role not found for ${namaKaryawan}:`, error);
+            return 'staff';
+        }
         
-        return numericColumns.includes(key);
+        return data.role || 'staff';
+    } catch (error) {
+        console.error('Error getting karyawan role:', error);
+        return 'staff';
     }
+}
 
+// Update isNumericColumn untuk kolom baru
+isNumericColumn(key) {
+    const numericColumns = [
+        'qty', 'jumlah_membercard', 'jumlah_transaksi', 'point', 'redeem_qty',
+        'discount_percent', 'total_amount', 'amount', 'harga_jual', 'harga_beli',
+        'profit', 'comission', 'total_omset', 'total_modal', 'total_discount',
+        'total_redeem', 'omset_bersih', 'net_profit', 'rata_rata_transaksi',
+        'totalAmount', 'totalAmountCancel', 'total_komisi', 'total_uop',
+        'omset_cash', 'top_up_kas', 'sisa_setoran', 'hutang_komisi', 
+        'pemasukan_lain_lain', 'uop', 'tips_qris', 'bayar_hutang_komisi',
+        'iuran_rt', 'sumbangan', 'iuran_sampah', 'galon', 'biaya_admin_setoran',
+        'yakult', 'pengeluaran_lain_lain', 'pemasukan', 'pengeluaran', 'saldo',
+        // Tambah kolom komisi baru
+        'total_amount', 'uop', 'total_komisi', 'tips_qris', 'jumlah_transaksi'
+    ];
+    
+    return numericColumns.includes(key);
+}
     // Set default date filter (hari ini)
     setDefaultDateFilter() {
         const today = new Date();
@@ -398,72 +433,130 @@ class Reports {
     }
 
     async loadLaporanKomisi() {
-        console.log('Loading laporan komisi');
-        
+    console.log('Loading laporan komisi dari tabel komisi');
+    
+    try {
+        // Query ke tabel komisi dengan JOIN ke karyawan
         let query = supabase
-            .from('transaksi_detail')
-            .select('*')
-            .order('order_date', { ascending: false });
+            .from('komisi')
+            .select(`
+                *,
+                karyawan:karyawan!komisi_serve_by_fkey (
+                    nama_karyawan,
+                    role
+                )
+            `)
+            .order('tanggal', { ascending: false });
 
         // Apply filters
         if (this.filters.startDate) {
-            query = query.gte('order_date', this.filters.startDate);
+            query = query.gte('tanggal', this.filters.startDate);
         }
         if (this.filters.endDate) {
-            query = query.lte('order_date', this.filters.endDate);
+            query = query.lte('tanggal', this.filters.endDate);
         }
         if (this.filters.outlet) {
             query = query.eq('outlet', this.filters.outlet);
         }
 
         const { data, error } = await query;
-        if (error) throw error;
-
-        return this.processKomisiData(data || []);
-    }
-
-    processKomisiData(data) {
-        const result = {};
+        if (error) {
+            console.error('Error loading komisi data:', error);
+            throw error;
+        }
         
-        data.forEach(item => {
-            const outlet = item.outlet || 'Unknown';
-            const serveBy = item.serve_by || 'Unknown';
-            const kasir = item.kasir || 'Unknown';
-            const tanggal = item.order_date ? item.order_date.split('T')[0] : 'Unknown';
-            const amount = parseFloat(item.amount) || 0;
-            const isCompleted = item.status === 'completed';
-            const isUOP = item.item_group === 'UOP';
-            
-            if (!isCompleted) return;
-            
-            const key = `${outlet}-${serveBy}-${kasir}-${tanggal}`;
-            
-            if (!result[key]) {
-                result[key] = {
-                    tanggal: tanggal,
-                    outlet: outlet,
-                    serve_by: serveBy,
-                    kasir: kasir,
-                    total_amount: 0,
-                    total_uop: 0,
-                    total_komisi: 0
-                };
-            }
-            
-            result[key].total_amount += amount;
-            
-            if (isUOP) {
-                result[key].total_uop += amount;
-            }
-            
-            if (!isUOP) {
-                const komisi = amount * 0.1;
-                result[key].total_komisi += komisi;
-            }
-        });
+        console.log('Data komisi ditemukan:', data?.length || 0, 'records');
         
-        return Object.values(result);
+        // Process data untuk format yang diinginkan
+        return this.processKomisiReportData(data || []);
+        
+    } catch (error) {
+        console.error('Error load laporan komisi:', error);
+        throw error;
     }
+}
+
+async processKomisiReportData(komisiData) {
+    console.log('Processing komisi report data');
+    
+    const result = [];
+    
+    for (const item of komisiData) {
+        try {
+            // Ambil role karyawan dari data JOIN atau query terpisah
+            let role = 'staff';
+            let serveByName = item.serve_by || 'Unknown';
+            
+            if (item.karyawan && item.karyawan.length > 0) {
+                role = item.karyawan[0].role || 'staff';
+                serveByName = item.karyawan[0].nama_karyawan || serveByName;
+            } else {
+                // Fallback query jika JOIN tidak berhasil
+                const { data: karyawanData } = await supabase
+                    .from('karyawan')
+                    .select('role')
+                    .eq('nama_karyawan', serveByName)
+                    .single();
+                
+                if (karyawanData) {
+                    role = karyawanData.role;
+                }
+            }
+            
+            // Format data sesuai kolom yang diminta
+            const tanggal = item.tanggal || 'Unknown';
+            const formattedDate = new Date(tanggal);
+            const hari = this.getDayName(formattedDate.getDay());
+            
+            // Untuk kasir, UOP = 0
+            const isKasir = role === 'kasir' || role === 'cashier';
+            const uopValue = isKasir ? 0 : (item.uop || 0);
+            
+            result.push({
+                outlet: item.outlet || 'Unknown',
+                tanggal: tanggal,
+                hari: hari,
+                kasir: item.kasir || 'Unknown',
+                serve_by: serveByName,
+                total_amount: item.total_transaksi || 0,
+                uop: uopValue,
+                total_komisi: item.komisi || 0,
+                tips_qris: item.tips_qris || 0,
+                jumlah_transaksi: item.jumlah_transaksi || 0,
+                role: role // Untuk internal tracking
+            });
+            
+        } catch (error) {
+            console.warn('Error processing komisi item:', error);
+            // Tambahkan data tanpa role
+            const tanggal = item.tanggal || 'Unknown';
+            const formattedDate = new Date(tanggal);
+            const hari = this.getDayName(formattedDate.getDay());
+            
+            result.push({
+                outlet: item.outlet || 'Unknown',
+                tanggal: tanggal,
+                hari: hari,
+                kasir: item.kasir || 'Unknown',
+                serve_by: item.serve_by || 'Unknown',
+                total_amount: item.total_transaksi || 0,
+                uop: item.uop || 0,
+                total_komisi: item.komisi || 0,
+                tips_qris: item.tips_qris || 0,
+                jumlah_transaksi: item.jumlah_transaksi || 0,
+                role: 'unknown'
+            });
+        }
+    }
+    
+    return result;
+}
+
+// Helper untuk nama hari
+getDayName(dayIndex) {
+    const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+    return days[dayIndex] || 'Unknown';
+}
 
     async loadLaporanMembercard() {
         console.log('Loading laporan membercard');
@@ -1137,35 +1230,98 @@ class Reports {
     }
 
     getKomisiColumns() {
-        return [
-            { 
-                title: 'Tanggal', 
-                key: 'tanggal',
-                type: 'date'
-            },
-            { title: 'Outlet', key: 'outlet' },
-            { title: 'Serve By', key: 'serve_by' },
-            { title: 'Kasir', key: 'kasir' },
-            { 
-                title: 'Total Amount', 
-                key: 'total_amount',
-                type: 'currency'
-            },
-            { 
-                title: 'UOP', 
-                key: 'total_uop',
-                type: 'currency',
-                formatter: (value) => {
-                    return value > 0 ? Helpers.formatCurrency(value) : '-';
+    return [
+        { 
+            title: '🏪 Outlet', 
+            key: 'outlet'
+        },
+        { 
+            title: '📅 Tanggal', 
+            key: 'tanggal',
+            type: 'date'
+        },
+        { 
+            title: '📆 Hari', 
+            key: 'hari'
+        },
+        { 
+            title: '💵 Kasir', 
+            key: 'kasir'
+        },
+        { 
+            title: '👤 Served By', 
+            key: 'serve_by',
+            formatter: (value, row) => {
+                // Tambahkan badge role jika ada
+                if (row.role && row.role !== 'unknown') {
+                    const roleColors = {
+                        'barberman': 'bg-blue-100 text-blue-800',
+                        'kasir': 'bg-green-100 text-green-800',
+                        'therapist': 'bg-purple-100 text-purple-800',
+                        'staff': 'bg-gray-100 text-gray-800',
+                        'owner': 'bg-yellow-100 text-yellow-800'
+                    };
+                    
+                    const color = roleColors[row.role] || 'bg-gray-100 text-gray-800';
+                    const roleText = row.role.charAt(0).toUpperCase() + row.role.slice(1);
+                    
+                    return `
+                        <div class="flex items-center space-x-2">
+                            <span>${value}</span>
+                            <span class="px-2 py-1 text-xs rounded-full ${color}">
+                                ${roleText}
+                            </span>
+                        </div>
+                    `;
                 }
-            },
-            { 
-                title: 'Total Komisi', 
-                key: 'total_komisi',
-                type: 'currency'
+                return value;
             }
-        ];
-    }
+        },
+        { 
+            title: '💰 Total Amount', 
+            key: 'total_amount',
+            type: 'currency'
+        },
+        { 
+            title: '💸 UOP', 
+            key: 'uop',
+            type: 'currency',
+            formatter: (value, row) => {
+                if (value === 0 || value === null) {
+                    if (row.role === 'kasir') {
+                        return `<span class="text-gray-500" title="Kasir - UOP dihitung bulanan">-</span>`;
+                    }
+                    return `<span class="text-gray-500">-</span>`;
+                }
+                return Helpers.formatCurrency(value);
+            }
+        },
+        { 
+            title: '📈 Total Komisi', 
+            key: 'total_komisi',
+            type: 'currency',
+            formatter: (value) => {
+                return value > 0 ? `<span class="text-green-600 font-semibold">${Helpers.formatCurrency(value)}</span>` : '-';
+            }
+        },
+        { 
+            title: '💳 Tips QRIS', 
+            key: 'tips_qris',
+            type: 'currency',
+            formatter: (value) => {
+                return value > 0 ? `<span class="text-purple-600">${Helpers.formatCurrency(value)}</span>` : '-';
+            }
+        },
+        { 
+            title: '🛒 Jumlah Transaksi', 
+            key: 'jumlah_transaksi',
+            formatter: (value) => {
+                return `<span class="font-semibold">${value}</span>`;
+            }
+        }
+    ];
+}
+
 
     getMembercardColumns() {
         return [
@@ -1703,26 +1859,28 @@ class Reports {
         return csvContent;
     }
 
-    generateKomisiCSV() {
-        let csvContent = "Tanggal,Outlet,Serve By,Kasir,Total Amount,UOP,Total Komisi\n";
+ generateKomisiCSV() {
+    let csvContent = "Outlet,Tanggal,Hari,Kasir,Served By,Total Amount,UOP,Total Komisi,Tips QRIS,Jumlah Transaksi\n";
+    
+    this.currentData.forEach(item => {
+        const row = [
+            item.outlet,
+            item.tanggal,
+            item.hari,
+            item.kasir,
+            item.serve_by,
+            item.total_amount,
+            item.uop,
+            item.total_komisi,
+            item.tips_qris,
+            item.jumlah_transaksi
+        ].map(field => `"${field}"`).join(',');
         
-        this.currentData.forEach(item => {
-            const row = [
-                item.tanggal,
-                item.outlet,
-                item.serve_by,
-                item.kasir,
-                item.total_amount,
-                item.total_uop || 0,
-                item.total_komisi
-            ].map(field => `"${field}"`).join(',');
-            
-            csvContent += row + '\n';
-        });
+        csvContent += row + '\n';
+    });
 
-        return csvContent;
-    }
-
+    return csvContent;
+}
     generateMembercardCSV() {
         let csvContent = "Tanggal,Outlet,Kasir,Jumlah Membercard\n";
         
