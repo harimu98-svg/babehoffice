@@ -555,12 +555,12 @@ processKomisiWithRole(komisiData, roleMap) {
             total_komisi: item.komisi || 0,
             tips_qris: item.tips_qris || 0,
             jumlah_transaksi: item.jumlah_transaksi || 0,
-            role: role,
+            role: role, // PASTIKAN ini ada
             original_uop: item.uop || 0 // Simpan original untuk debug
         });
     }
     
-    console.log('Processed komisi data:', result.length, 'records');
+    console.log('Processed komisi data:', result);
     return result;
 }
 
@@ -1250,7 +1250,11 @@ getDayName(dayIndex) {
         { 
             title: '📅 Tanggal', 
             key: 'tanggal',
-            type: 'date'
+            type: 'date',
+            formatter: (value) => {
+                if (!value || value === 'Unknown') return '-';
+                return value;
+            }
         },
         { 
             title: '📆 Hari', 
@@ -1264,7 +1268,8 @@ getDayName(dayIndex) {
             title: '👤 Served By', 
             key: 'serve_by',
             formatter: (value, row) => {
-                const role = row.role || 'staff';
+                // PERBAIKAN: Gunakan optional chaining dan default value
+                const role = row?.role || 'staff';
                 const roleColors = {
                     'kasir': 'bg-green-100 text-green-800 border border-green-200',
                     'barberman': 'bg-blue-100 text-blue-800 border border-blue-200',
@@ -1278,7 +1283,7 @@ getDayName(dayIndex) {
                 
                 return `
                     <div class="flex flex-col space-y-1">
-                        <span class="font-medium">${value}</span>
+                        <span class="font-medium">${value || '-'}</span>
                         <span class="inline-block px-2 py-1 text-xs rounded ${color}">
                             ${roleText}
                         </span>
@@ -1289,20 +1294,24 @@ getDayName(dayIndex) {
         { 
             title: '💰 Total Amount', 
             key: 'total_amount',
-            type: 'currency'
+            type: 'currency',
+            formatter: (value) => {
+                return Helpers.formatCurrency(value || 0);
+            }
         },
         { 
             title: '💸 UOP', 
             key: 'uop',
             type: 'currency',
             formatter: (value, row) => {
-                const role = row.role || 'staff';
+                // PERBAIKAN: Gunakan optional chaining
+                const role = row?.role || 'staff';
                 
                 if (role === 'kasir') {
                     return `<span class="text-gray-500 italic" title="Kasir - UOP dihitung bulanan di modul penghasilan">-</span>`;
                 }
                 
-                if (value === 0 || value === null) {
+                if (!value || value === 0) {
                     if (role === 'barberman' || role === 'therapist') {
                         return `<span class="text-orange-500" title="Tidak ada transaksi UOP hari ini">-</span>`;
                     }
@@ -1324,9 +1333,10 @@ getDayName(dayIndex) {
             key: 'total_komisi',
             type: 'currency',
             formatter: (value) => {
-                return value > 0 ? 
-                    `<span class="text-green-600 font-semibold">${Helpers.formatCurrency(value)}</span>` : 
-                    '<span class="text-gray-500">-</span>';
+                if (!value || value === 0) {
+                    return '<span class="text-gray-500">-</span>';
+                }
+                return `<span class="text-green-600 font-semibold">${Helpers.formatCurrency(value)}</span>`;
             }
         },
         { 
@@ -1334,22 +1344,21 @@ getDayName(dayIndex) {
             key: 'tips_qris',
             type: 'currency',
             formatter: (value) => {
-                return value > 0 ? 
-                    `<span class="text-purple-600">${Helpers.formatCurrency(value)}</span>` : 
-                    '<span class="text-gray-500">-</span>';
+                if (!value || value === 0) {
+                    return '<span class="text-gray-500">-</span>';
+                }
+                return `<span class="text-purple-600">${Helpers.formatCurrency(value)}</span>`;
             }
         },
         { 
             title: '🛒 Jml Trans', 
             key: 'jumlah_transaksi',
             formatter: (value) => {
-                return `<span class="font-medium">${value}</span>`;
+                return `<span class="font-medium">${value || 0}</span>`;
             }
         }
     ];
 }
-
-
     getMembercardColumns() {
         return [
             { 
