@@ -1241,7 +1241,7 @@ getDayName(dayIndex) {
         ];
     }
 
-    getKomisiColumns() {
+   getKomisiColumns() {
     return [
         { 
             title: '🏪 Outlet', 
@@ -1250,10 +1250,33 @@ getDayName(dayIndex) {
         { 
             title: '📅 Tanggal', 
             key: 'tanggal',
-            type: 'date',
             formatter: (value) => {
                 if (!value || value === 'Unknown') return '-';
-                return value;
+                
+                try {
+                    // Format: DD/MM/YYYY
+                    const date = new Date(value);
+                    if (isNaN(date.getTime())) {
+                        // Jika format ISO tidak berhasil, coba parse langsung
+                        if (value.includes('-')) {
+                            const parts = value.split('-');
+                            if (parts.length === 3) {
+                                const [year, month, day] = parts;
+                                return `${day}/${month}/${year}`;
+                            }
+                        }
+                        return value;
+                    }
+                    
+                    const day = date.getDate().toString().padStart(2, '0');
+                    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                    const year = date.getFullYear();
+                    
+                    return `${day}/${month}/${year}`;
+                } catch (error) {
+                    console.warn('Error formatting date:', value, error);
+                    return value;
+                }
             }
         },
         { 
@@ -1268,7 +1291,6 @@ getDayName(dayIndex) {
             title: '👤 Served By', 
             key: 'serve_by',
             formatter: (value, row) => {
-                // PERBAIKAN: Gunakan optional chaining dan default value
                 const role = row?.role || 'staff';
                 const roleColors = {
                     'kasir': 'bg-green-100 text-green-800 border border-green-200',
@@ -1304,7 +1326,6 @@ getDayName(dayIndex) {
             key: 'uop',
             type: 'currency',
             formatter: (value, row) => {
-                // PERBAIKAN: Gunakan optional chaining
                 const role = row?.role || 'staff';
                 const alasan_nouop = row?.alasan_nouop || '';
                 
@@ -1321,7 +1342,6 @@ getDayName(dayIndex) {
                 
                 if (!value || value === 0) {
                     if (role === 'barberman' || role === 'therapist') {
-                        // Untuk barberman yang UOP = 0, tampilkan alasan dari komisi.alasan_nouop
                         return `
                             <div class="flex flex-col space-y-1">
                                 <span class="text-orange-500">-</span>
@@ -1336,7 +1356,6 @@ getDayName(dayIndex) {
                     return `<span class="text-gray-500">-</span>`;
                 }
                 
-                // Jika ada UOP nilai
                 if (role === 'barberman' || role === 'therapist') {
                     return `
                         <div class="flex flex-col space-y-1">
