@@ -1,4 +1,4 @@
-// Stock Management Module - FINAL VERSION
+// Stock Management Module - VERSION DIPERBAIKI
 
 class StockManagement {
     constructor() {
@@ -265,8 +265,11 @@ class StockManagement {
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">Pilih Produk *</label>
                     <select id="product-select" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                        <option value="">Pilih Produk</option>
+                        <option value="">Pilih outlet terlebih dahulu</option>
                     </select>
+                    <div id="product-count-info" class="text-xs text-gray-500 mt-1 hidden">
+                        <span id="available-products-count">0</span> produk tersedia di outlet ini
+                    </div>
                     <p class="text-xs text-gray-500 mt-1.5">* Hanya produk dengan inventory aktif</p>
                 </div>
 
@@ -326,13 +329,16 @@ class StockManagement {
         
         setTimeout(() => {
             this.setupStockFormEvents();
-            this.updateProductSelectOptions();
+            // Tidak perlu langsung update, tunggu user pilih outlet
         }, 100);
     }
 
     setupStockFormEvents() {
         document.getElementById('add-product-btn')?.addEventListener('click', () => this.addProductToForm());
-        document.getElementById('outlet-select')?.addEventListener('change', () => this.filterProductsByOutlet());
+        document.getElementById('outlet-select')?.addEventListener('change', () => {
+            this.updateProductSelectOptions();
+            this.clearProductSelection();
+        });
         document.getElementById('quantity-input')?.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -341,17 +347,57 @@ class StockManagement {
         });
     }
 
+    clearProductSelection() {
+        this.selectedProducts = [];
+        this.updateSelectedProductsList();
+        document.getElementById('product-select').value = '';
+        document.getElementById('quantity-input').value = '1';
+    }
+
     updateProductSelectOptions() {
         const select = document.getElementById('product-select');
-        if (!select) return;
+        const outletSelect = document.getElementById('outlet-select');
+        
+        if (!select || !outletSelect) return;
 
-        const inventoryProducts = this.products.filter(p => p.inventory);
-        select.innerHTML = '<option value="">Pilih Produk</option>' + inventoryProducts.map(product => 
-            `<option value="${product.id}" data-nama="${product.nama_produk}" data-outlet="${product.outlet}" data-stock="${product.stok || 0}">
-                ${product.nama_produk.length > 30 ? product.nama_produk.substring(0, 30) + '...' : product.nama_produk} 
-                (${product.outlet} - Stok: ${product.stok || 0})
-            </option>`
-        ).join('');
+        const selectedOutlet = outletSelect.value;
+        
+        // Filter produk berdasarkan outlet yang dipilih
+        let filteredProducts = this.products.filter(p => p.inventory);
+        
+        // Jika outlet sudah dipilih, filter produk untuk outlet tersebut
+        if (selectedOutlet) {
+            filteredProducts = filteredProducts.filter(p => p.outlet === selectedOutlet);
+        }
+        
+        if (filteredProducts.length === 0) {
+            select.innerHTML = `
+                <option value="">${selectedOutlet ? `Tidak ada produk di outlet ${selectedOutlet}` : 'Pilih outlet terlebih dahulu'}</option>
+            `;
+        } else {
+            select.innerHTML = '<option value="">Pilih Produk</option>' + filteredProducts.map(product => 
+                `<option value="${product.id}" 
+                        data-nama="${product.nama_produk}" 
+                        data-outlet="${product.outlet}" 
+                        data-stock="${product.stok || 0}">
+                    ${product.nama_produk.length > 30 ? product.nama_produk.substring(0, 30) + '...' : product.nama_produk} 
+                    (Stok: ${product.stok || 0})
+                </option>`
+            ).join('');
+        }
+
+        // Update product count info
+        const countInfo = document.getElementById('product-count-info');
+        const countSpan = document.getElementById('available-products-count');
+
+        if (countInfo && countSpan) {
+            if (selectedOutlet) {
+                countSpan.textContent = filteredProducts.length;
+                countInfo.classList.remove('hidden');
+            } else {
+                countInfo.classList.add('hidden');
+            }
+        }
     }
 
     async addProductToForm() {
@@ -363,13 +409,21 @@ class StockManagement {
         const quantity = parseInt(quantityInput.value);
         const outlet = outletSelect.value;
 
-        if (!productId || !quantity || quantity <= 0) {
-            Notifications.error('Pilih produk dan masukkan jumlah yang valid');
+        // Validasi outlet dipilih
+        if (!outlet) {
+            Notifications.error('Pilih outlet terlebih dahulu');
             return;
         }
 
-        if (!outlet) {
-            Notifications.error('Pilih outlet terlebih dahulu');
+        // Validasi produk dipilih
+        if (!productId) {
+            Notifications.error('Pilih produk terlebih dahulu');
+            return;
+        }
+
+        // Validasi jumlah valid
+        if (!quantity || quantity <= 0 || isNaN(quantity)) {
+            Notifications.error('Masukkan jumlah yang valid');
             return;
         }
 
@@ -378,8 +432,9 @@ class StockManagement {
         const productOutlet = selectedOption.getAttribute('data-outlet');
         const currentStock = parseInt(selectedOption.getAttribute('data-stock') || 0);
 
+        // Validasi outlet produk sesuai (seharusnya sudah terfilter)
         if (productOutlet !== outlet) {
-            Notifications.error(`Produk ini tersedia di outlet ${productOutlet}, bukan ${outlet}`);
+            Notifications.error(`Produk tidak tersedia di outlet ${outlet}. Pilih produk yang sesuai.`);
             return;
         }
 
