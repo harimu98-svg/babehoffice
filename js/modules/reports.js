@@ -629,201 +629,321 @@ getDayName(dayIndex) {
         }
     }
 
-    async loadLaporanAbsen() {
-        console.log('Loading laporan absen');
-        
-        try {
-            let query = supabase
-                .from('absen')
-                .select('*')
-                .order('tanggal', { ascending: false });
+   async loadLaporanAbsen() {
+    console.log('Loading laporan absen');
+    
+    try {
+        // Query dengan JOIN ke tabel karyawan
+        let query = supabase
+            .from('absen')
+            .select(`
+                *,
+                karyawan (
+                    nama_karyawan,
+                    jadwal_masuk,
+                    jadwal_pulang
+                )
+            `)
+            .order('tanggal', { ascending: false });
 
-            if (this.filters.startDate) {
-                const [year, month, day] = this.filters.startDate.split('-');
-                const startDateAbsenFormat = `${day}/${month}/${year}`;
-                query = query.gte('tanggal', startDateAbsenFormat);
-            }
-            if (this.filters.endDate) {
-                const [year, month, day] = this.filters.endDate.split('-');
-                const endDateAbsenFormat = `${day}/${month}/${year}`;
-                query = query.lte('tanggal', endDateAbsenFormat);
-            }
-            if (this.filters.outlet) {
-                query = query.eq('outlet', this.filters.outlet);
-            }
-
-            const { data, error } = await query;
-            if (error) throw error;
-
-            console.log('📊 Data absen ditemukan:', data.length, 'records');
-            return this.processAbsenData(data || []);
-        } catch (error) {
-            console.error('Error load absen:', error);
-            return this.generateFallbackAbsenData();
+        // Apply filters
+        if (this.filters.startDate) {
+            // Konversi format YYYY-MM-DD ke DD/MM/YYYY untuk tabel absen
+            const [year, month, day] = this.filters.startDate.split('-');
+            const startDateAbsenFormat = `${day}/${month}/${year}`;
+            query = query.gte('tanggal', startDateAbsenFormat);
         }
+        if (this.filters.endDate) {
+            const [year, month, day] = this.filters.endDate.split('-');
+            const endDateAbsenFormat = `${day}/${month}/${year}`;
+            query = query.lte('tanggal', endDateAbsenFormat);
+        }
+        if (this.filters.outlet) {
+            query = query.eq('outlet', this.filters.outlet);
+        }
+
+        const { data: absenData, error } = await query;
+        if (error) {
+            console.error('Error loading absen data:', error);
+            // Fallback ke query tanpa JOIN
+            return await this.loadAbsenWithoutJoin();
+        }
+
+        console.log('📊 Data absen ditemukan:', absenData?.length || 0, 'records');
+        return this.processAbsenDataWithJoin(absenData || []);
+        
+    } catch (error) {
+        console.error('Error load absen:', error);
+        // Fallback ke data dummy jika error
+        return this.generateFallbackAbsenData();
+    }
+}
+
+// Fallback jika JOIN tidak berhasil
+async loadAbsenWithoutJoin() {
+    console.log('Loading absen tanpa JOIN');
+    
+    let query = supabase
+        .from('absen')
+        .select('*')
+        .order('tanggal', { ascending: false });
+
+    // Apply filters (sama seperti di atas)
+    if (this.filters.startDate) {
+        const [year, month, day] = this.filters.startDate.split('-');
+        const startDateAbsenFormat = `${day}/${month}/${year}`;
+        query = query.gte('tanggal', startDateAbsenFormat);
+    }
+    if (this.filters.endDate) {
+        const [year, month, day] = this.filters.endDate.split('-');
+        const endDateAbsenFormat = `${day}/${month}/${year}`;
+        query = query.lte('tanggal', endDateAbsenFormat);
+    }
+    if (this.filters.outlet) {
+        query = query.eq('outlet', this.filters.outlet);
     }
 
-    processAbsenData(data) {
-        return data.map(item => {
-            let tanggal = 'Unknown';
-            if (item.tanggal) {
-                const parts = item.tanggal.split('/');
-                if (parts.length === 3) {
-                    const day = parts[0].padStart(2, '0');
-                    const month = parts[1].padStart(2, '0');
-                    const year = parts[2];
-                    tanggal = `${year}-${month}-${day}`;
-                }
-            }
-            
-            const karyawan = item.nama || 'Unknown';
-            const jadwalMasuk = '09:00';
-            const jadwalPulang = '21:00';
-            
-            // FORMAT BARU: Clock In dan Clock Out hanya jam:menit
-            let clockinTime = item.clockin || '';
-            let clockinDisplay = '';
-            if (clockinTime) {
-                // Format jam:menit saja
-                if (clockinTime.includes(':')) {
-                    const timeParts = clockinTime.split(':');
-                    if (timeParts.length >= 2) {
-                        clockinDisplay = `${timeParts[0].padStart(2, '0')}:${timeParts[1].padStart(2, '0')}`;
-                    }
-                } else if (clockinTime.length >= 4) {
-                    // Format HHMM
-                    clockinDisplay = `${clockinTime.substring(0, 2)}:${clockinTime.substring(2, 4)}`;
-                }
-            }
-            
-            let clockoutTime = item.clockout || '';
-            let clockoutDisplay = '';
-            if (clockoutTime) {
-                // Format jam:menit saja
-                if (clockoutTime.includes(':')) {
-                    const timeParts = clockoutTime.split(':');
-                    if (timeParts.length >= 2) {
-                        clockoutDisplay = `${timeParts[0].padStart(2, '0')}:${timeParts[1].padStart(2, '0')}`;
-                    }
-                } else if (clockoutTime.length >= 4) {
-                    // Format HHMM
-                    clockoutDisplay = `${clockoutTime.substring(0, 2)}:${clockoutTime.substring(2, 4)}`;
-                }
-            }
-            
-            let jamKerja = 'Masih bekerja';
-            if (clockinTime && clockoutTime) {
-                try {
-                    // Buat tanggal lengkap untuk perhitungan
-                    const clockinFull = `${tanggal}T${clockinDisplay}:00`;
-                    const clockoutFull = `${tanggal}T${clockoutDisplay}:00`;
-                    
-                    const clockin = new Date(clockinFull);
-                    const clockout = new Date(clockoutFull);
-                    
-                    if (!isNaN(clockin.getTime()) && !isNaN(clockout.getTime())) {
-                        const diffMs = clockout - clockin;
-                        const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-                        const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-                        jamKerja = `${diffHours} jam ${diffMinutes} menit`;
-                    }
-                } catch (e) {
-                    console.warn('Error hitung jam kerja:', e);
-                    jamKerja = 'Error hitung';
-                }
-            }
-            
-            let keterangan = '';
-            
-            if (clockinDisplay) {
-                const [clockinHours, clockinMinutes] = clockinDisplay.split(':').map(Number);
-                const [jadwalMasukHours, jadwalMasukMinutes] = jadwalMasuk.split(':').map(Number);
-                
-                if (clockinHours > jadwalMasukHours || 
-                    (clockinHours === jadwalMasukHours && clockinMinutes > jadwalMasukMinutes)) {
-                    const telatMenit = (clockinHours - jadwalMasukHours) * 60 + (clockinMinutes - jadwalMasukMinutes);
-                    keterangan = `Terlambat ${telatMenit} menit`;
-                }
-            }
-            
-            if (clockoutDisplay && keterangan === '') {
-                const [clockoutHours, clockoutMinutes] = clockoutDisplay.split(':').map(Number);
-                const [jadwalPulangHours, jadwalPulangMinutes] = jadwalPulang.split(':').map(Number);
-                
-                if (clockoutHours < jadwalPulangHours || 
-                    (clockoutHours === jadwalPulangHours && clockoutMinutes < jadwalPulangMinutes)) {
-                    const cepatMenit = (jadwalPulangHours - clockoutHours) * 60 + (jadwalPulangMinutes - clockoutMinutes);
-                    keterangan = `Pulang Cepat ${cepatMenit} menit`;
-                }
-            }
-            
-            if (keterangan === '' && clockinDisplay) {
-                keterangan = 'Tepat waktu';
-            }
-            
-            return {
-                outlet: item.outlet || 'Unknown',
-                karyawan: karyawan,
-                tanggal: tanggal,
-                jadwal_masuk: jadwalMasuk,
-                jadwal_pulang: jadwalPulang,
-                clockin: clockinDisplay, // Hanya jam:menit
-                clockout: clockoutDisplay, // Hanya jam:menit
-                jam_kerja: jamKerja,
-                keterangan: keterangan
-            };
-        });
-    }
+    const { data: absenData, error } = await query;
+    if (error) throw error;
+    
+    // Ambil data karyawan terpisah
+    return await this.processAbsenDataWithSeparateQuery(absenData || []);
+}
 
-    generateFallbackAbsenData() {
-        const outlets = ['Rempoa', 'Ciputat', 'Pondok Cabe'];
-        const karyawans = ['Echwan Abdillah', 'Hari Suryono', 'Ahmad Fauzi', 'Siti Rahma', 'Budi Santoso'];
+// Process data dengan JOIN
+processAbsenDataWithJoin(absenData) {
+    return absenData.map(item => {
+        const tanggal = this.formatAbsenDateForDisplay(item.tanggal);
         
-        const data = [];
-        const today = new Date();
+        // Ambil data dari JOIN
+        const karyawanData = item.karyawan && item.karyawan.length > 0 
+            ? item.karyawan[0] 
+            : null;
         
-        for (let i = 0; i < 15; i++) {
-            const date = new Date();
-            date.setDate(today.getDate() - i);
-            
-            const outlet = outlets[Math.floor(Math.random() * outlets.length)];
-            const karyawan = karyawans[Math.floor(Math.random() * karyawans.length)];
-            
-            const clockinHour = 7 + Math.floor(Math.random() * 3);
-            const clockinMinute = Math.floor(Math.random() * 60);
-            const clockin = `${clockinHour.toString().padStart(2, '0')}:${clockinMinute.toString().padStart(2, '0')}`;
-            
-            const clockoutHour = 16 + Math.floor(Math.random() * 4);
-            const clockoutMinute = Math.floor(Math.random() * 60);
-            const clockout = `${clockoutHour.toString().padStart(2, '0')}:${clockoutMinute.toString().padStart(2, '0')}`;
-            
-            const diffHours = clockoutHour - clockinHour;
-            const diffMinutes = clockoutMinute - clockinMinute;
-            const jamKerja = `${diffHours} jam ${Math.abs(diffMinutes)} menit`;
-            
-            let keterangan = '';
-            if (clockinHour > 8 || (clockinHour === 8 && clockinMinute > 0)) {
-                const telatMenit = (clockinHour - 8) * 60 + clockinMinute;
-                keterangan = `Terlambat ${telatMenit} menit`;
-            } else {
-                keterangan = 'Tepat waktu';
+        const karyawanNama = karyawanData?.nama_karyawan || item.nama || 'Unknown';
+        const jadwalMasuk = karyawanData?.jadwal_masuk || '09:00';
+        const jadwalPulang = karyawanData?.jadwal_pulang || '21:00';
+        
+        // Format clockin dan clockout
+        const clockinDisplay = this.formatTime(item.clockin);
+        const clockoutDisplay = this.formatTime(item.clockout);
+        
+        // Gunakan jam_kerja dari database jika ada, jika tidak hitung manual
+        let jamKerja = item.jamkerja || 'Masih bekerja';
+        if (!jamKerja || jamKerja === 'Masih bekerja') {
+            if (clockinDisplay && clockoutDisplay) {
+                jamKerja = this.calculateWorkingHours(clockinDisplay, clockoutDisplay);
             }
+        }
+        
+        // Keterangan dari status_kehadiran
+        const keterangan = item.status_kehadiran || this.determineAttendanceStatus(
+            clockinDisplay, 
+            clockoutDisplay, 
+            jadwalMasuk, 
+            jadwalPulang
+        );
+        
+        return {
+            outlet: item.outlet || 'Unknown',
+            karyawan: karyawanNama,
+            tanggal: tanggal,
+            jadwal_masuk: jadwalMasuk,
+            jadwal_pulang: jadwalPulang,
+            clockin: clockinDisplay,
+            clockout: clockoutDisplay,
+            jam_kerja: jamKerja,
+            keterangan: keterangan
+        };
+    });
+}
+
+// Process data dengan query terpisah ke karyawan
+async processAbsenDataWithSeparateQuery(absenData) {
+    const result = [];
+    
+    // Ambil semua nama karyawan unik
+    const namaKaryawans = [...new Set(
+        absenData.map(item => item.nama).filter(Boolean)
+    )];
+    
+    // Query data karyawan sekaligus
+    let karyawanMap = {};
+    if (namaKaryawans.length > 0) {
+        const { data: karyawanData } = await supabase
+            .from('karyawan')
+            .select('nama_karyawan, jadwal_masuk, jadwal_pulang')
+            .in('nama_karyawan', namaKaryawans);
             
-            data.push({
-                outlet: outlet,
-                karyawan: karyawan,
-                tanggal: date.toISOString().split('T')[0],
-                jadwal_masuk: '08:00',
-                jadwal_pulang: '17:00',
-                clockin: clockin,
-                clockout: clockout,
-                jam_kerja: jamKerja,
-                keterangan: keterangan
+        if (karyawanData) {
+            karyawanData.forEach(k => {
+                karyawanMap[k.nama_karyawan] = k;
             });
         }
-        
-        return data;
     }
+    
+    // Process setiap data absen
+    for (const item of absenData) {
+        const tanggal = this.formatAbsenDateForDisplay(item.tanggal);
+        const karyawanNama = item.nama || 'Unknown';
+        
+        // Ambil data karyawan dari map
+        const karyawanInfo = karyawanMap[karyawanNama];
+        const jadwalMasuk = karyawanInfo?.jadwal_masuk || '09:00';
+        const jadwalPulang = karyawanInfo?.jadwal_pulang || '21:00';
+        
+        // Format waktu
+        const clockinDisplay = this.formatTime(item.clockin);
+        const clockoutDisplay = this.formatTime(item.clockout);
+        
+        // Jam kerja
+        let jamKerja = item.jamkerja || 'Masih bekerja';
+        if (!jamKerja || jamKerja === 'Masih bekerja') {
+            if (clockinDisplay && clockoutDisplay) {
+                jamKerja = this.calculateWorkingHours(clockinDisplay, clockoutDisplay);
+            }
+        }
+        
+        // Keterangan
+        const keterangan = item.status_kehadiran || this.determineAttendanceStatus(
+            clockinDisplay, 
+            clockoutDisplay, 
+            jadwalMasuk, 
+            jadwalPulang
+        );
+        
+        result.push({
+            outlet: item.outlet || 'Unknown',
+            karyawan: karyawanNama,
+            tanggal: tanggal,
+            jadwal_masuk: jadwalMasuk,
+            jadwal_pulang: jadwalPulang,
+            clockin: clockinDisplay,
+            clockout: clockoutDisplay,
+            jam_kerja: jamKerja,
+            keterangan: keterangan
+        });
+    }
+    
+    return result;
+}
+
+// Helper Methods
+formatAbsenDateForDisplay(tanggal) {
+    if (!tanggal) return 'Unknown';
+    
+    try {
+        // Format dari DD/MM/YYYY ke DD/MM/YYYY (tampilan)
+        if (tanggal.includes('/')) {
+            const parts = tanggal.split('/');
+            if (parts.length === 3) {
+                const [day, month, year] = parts;
+                return `${day.padStart(2, '0')}/${month.padStart(2, '0')}/${year}`;
+            }
+        }
+        
+        // Jika format YYYY-MM-DD
+        if (tanggal.includes('-')) {
+            const parts = tanggal.split('-');
+            if (parts.length === 3) {
+                const [year, month, day] = parts;
+                return `${day.padStart(2, '0')}/${month.padStart(2, '0')}/${year}`;
+            }
+        }
+        
+        return tanggal;
+    } catch (error) {
+        console.warn('Error formatting absen date:', tanggal, error);
+        return tanggal;
+    }
+}
+
+formatTime(timeStr) {
+    if (!timeStr) return '';
+    
+    try {
+        // Format HH:MM dari berbagai format
+        if (timeStr.includes(':')) {
+            const parts = timeStr.split(':');
+            if (parts.length >= 2) {
+                return `${parts[0].padStart(2, '0')}:${parts[1].padStart(2, '0')}`;
+            }
+        } else if (timeStr.length >= 4) {
+            // Format HHMM
+            return `${timeStr.substring(0, 2)}:${timeStr.substring(2, 4)}`;
+        }
+    } catch (error) {
+        console.warn('Error formatting time:', timeStr, error);
+    }
+    
+    return timeStr;
+}
+
+calculateWorkingHours(clockin, clockout) {
+    if (!clockin || !clockout) return 'Masih bekerja';
+    
+    try {
+        const [inHour, inMinute] = clockin.split(':').map(Number);
+        const [outHour, outMinute] = clockout.split(':').map(Number);
+        
+        let totalMinutes = (outHour * 60 + outMinute) - (inHour * 60 + inMinute);
+        
+        if (totalMinutes < 0) {
+            // Jika melewati tengah malam
+            totalMinutes += 24 * 60;
+        }
+        
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        
+        return `${hours} jam ${minutes} menit`;
+    } catch (error) {
+        console.warn('Error calculating working hours:', error);
+        return 'Error hitung';
+    }
+}
+
+determineAttendanceStatus(clockin, clockout, jadwalMasuk, jadwalPulang) {
+    if (!clockin) return 'Belum clock in';
+    
+    let status = 'Hadir';
+    
+    try {
+        if (clockin) {
+            const [clockinHour, clockinMinute] = clockin.split(':').map(Number);
+            const [jadwalMasukHour, jadwalMasukMinute] = jadwalMasuk.split(':').map(Number);
+            
+            const clockinTotal = clockinHour * 60 + clockinMinute;
+            const jadwalTotal = jadwalMasukHour * 60 + jadwalMasukMinute;
+            
+            if (clockinTotal > jadwalTotal + 15) { // Toleransi 15 menit
+                const lateMinutes = clockinTotal - jadwalTotal;
+                status = `Terlambat ${lateMinutes} menit`;
+            }
+        }
+        
+        if (clockout) {
+            const [clockoutHour, clockoutMinute] = clockout.split(':').map(Number);
+            const [jadwalPulangHour, jadwalPulangMinute] = jadwalPulang.split(':').map(Number);
+            
+            const clockoutTotal = clockoutHour * 60 + clockoutMinute;
+            const jadwalPulangTotal = jadwalPulangHour * 60 + jadwalPulangMinute;
+            
+            if (clockoutTotal < jadwalPulangTotal - 15) { // Toleransi 15 menit
+                const earlyMinutes = jadwalPulangTotal - clockoutTotal;
+                if (status === 'Hadir') {
+                    status = `Pulang cepat ${earlyMinutes} menit`;
+                } else {
+                    status += `, pulang cepat ${earlyMinutes} menit`;
+                }
+            }
+        }
+    } catch (error) {
+        console.warn('Error determining attendance status:', error);
+    }
+    
+    return status;
+}
 
     async loadLaporanOmset() {
         console.log('Loading laporan omset dari transaksi_order');
@@ -1453,31 +1573,68 @@ getDayName(dayIndex) {
     ];
 }
 
-    getAbsenColumns() {
-        return [
-            { 
-                title: 'Tanggal', 
-                key: 'tanggal',
-                type: 'date'
-            },
-            { title: 'Outlet', key: 'outlet' },
-            { title: 'Karyawan', key: 'karyawan' },
-            { title: 'Jadwal Masuk', key: 'jadwal_masuk' },
-            { title: 'Jadwal Pulang', key: 'jadwal_pulang' },
-            { 
-                title: 'Clock In', 
-                key: 'clockin',
-                formatter: (value) => value || '-'
-            },
-            { 
-                title: 'Clock Out', 
-                key: 'clockout',
-                formatter: (value) => value || '-'
-            },
-            { title: 'Jam Kerja', key: 'jam_kerja' },
-            { title: 'Keterangan', key: 'keterangan' }
-        ];
-    }
+   getAbsenColumns() {
+    return [
+        { 
+            title: 'Tanggal', 
+            key: 'tanggal',
+            formatter: (value) => {
+                if (!value || value === 'Unknown') return '-';
+                return value; // Sudah dalam format DD/MM/YYYY
+            }
+        },
+        { title: 'Outlet', key: 'outlet' },
+        { title: 'Karyawan', key: 'karyawan' },
+        { 
+            title: 'Jadwal Masuk', 
+            key: 'jadwal_masuk',
+            formatter: (value) => value || '09:00'
+        },
+        { 
+            title: 'Jadwal Pulang', 
+            key: 'jadwal_pulang',
+            formatter: (value) => value || '21:00'
+        },
+        { 
+            title: 'Clock In', 
+            key: 'clockin',
+            formatter: (value) => value || '-'
+        },
+        { 
+            title: 'Clock Out', 
+            key: 'clockout',
+            formatter: (value) => value || '-'
+        },
+        { 
+            title: 'Jam Kerja', 
+            key: 'jam_kerja',
+            formatter: (value) => {
+                if (!value || value === 'Masih bekerja') return '-';
+                return value;
+            }
+        },
+        { 
+            title: 'Keterangan', 
+            key: 'keterangan',
+            formatter: (value) => {
+                if (!value) return '-';
+                
+                // Beri warna berdasarkan status
+                if (value.includes('Terlambat')) {
+                    return `<span class="text-orange-600 font-medium">${value}</span>`;
+                } else if (value.includes('pulang cepat')) {
+                    return `<span class="text-yellow-600 font-medium">${value}</span>`;
+                } else if (value === 'Hadir') {
+                    return `<span class="text-green-600 font-medium">${value}</span>`;
+                } else if (value === 'Belum clock in') {
+                    return `<span class="text-red-500 font-medium">${value}</span>`;
+                }
+                
+                return value;
+            }
+        }
+    ];
+}
 
     getOmsetColumns() {
     return [
