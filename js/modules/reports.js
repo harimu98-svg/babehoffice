@@ -570,28 +570,35 @@ getDayName(dayIndex) {
     return days[dayIndex] || 'Unknown';
 }
 
-    async loadLaporanMembercard() {
-        console.log('Loading laporan membercard');
-        
-        try {
-            let query = supabase
-                .from('membercard')
-                .select('*');
+   async loadLaporanMembercard() {
+    console.log('Loading laporan membercard');
+    
+    try {
+        let query = supabase
+            .from('membercard')
+            .select('*')
+            .order('created_at', { ascending: false }); // Tambah sorting
 
-            if (this.filters.outlet) {
-                query = query.eq('outlet', this.filters.outlet);
-            }
-
-            const { data, error } = await query;
-            if (error) throw error;
-
-            return this.processMembercardData(data || []);
-        } catch (error) {
-            console.warn('Membercard table not found, using fallback data');
-            return this.generateFallbackMembercardData();
+        // APPLY FILTERS (SAMA SEPERTI TABEL LAIN)
+        if (this.filters.startDate) {
+            query = query.gte('created_at', `${this.filters.startDate}T00:00:00`);
         }
-    }
+        if (this.filters.endDate) {
+            query = query.lte('created_at', `${this.filters.endDate}T23:59:59`);
+        }
+        if (this.filters.outlet) {
+            query = query.eq('outlet', this.filters.outlet);
+        }
 
+        const { data, error } = await query;
+        if (error) throw error;
+
+        return this.processMembercardData(data || []);
+    } catch (error) {
+        console.warn('Membercard table not found, using fallback data');
+        return this.generateFallbackMembercardData();
+    }
+}
     processMembercardData(data) {
         const groupedData = {};
         
