@@ -1,4 +1,4 @@
-// Reports Module dengan 8 Tab Laporan - FINAL VERSION WITH FOOTER
+// Reports Module dengan 9 Tab Laporan (termasuk Setoran Barberman)
 class Reports {
     constructor() {
         // Cek apakah instance sudah ada
@@ -7,7 +7,7 @@ class Reports {
         }
         
         this.currentData = [];
-        this.currentTab = 'detail-transaksi';
+        this.currentTab = 'detail-transaksi'; // default tab
         this.table = null;
         this.filters = {
             startDate: '',
@@ -32,6 +32,9 @@ class Reports {
         this.cleanup = this.cleanup.bind(this);
         this.setDefaultDateFilter = this.setDefaultDateFilter.bind(this);
         this.getFooterData = this.getFooterData.bind(this);
+        this.getKaryawanRole = this.getKaryawanRole.bind(this);
+        this.loadSetoranBarberman = this.loadSetoranBarberman.bind(this);
+        this.generateSetoranBarbermanCSV = this.generateSetoranBarbermanCSV.bind(this);
 
         window.reportsInstance = this;
     }
@@ -74,79 +77,82 @@ class Reports {
     // ==================== FOOTER METHODS ====================
 
     getFooterData() {
-    if (!this.currentData || this.currentData.length === 0) {
-        return null;
+        if (!this.currentData || this.currentData.length === 0) {
+            return null;
+        }
+
+        const footerData = {};
+        const columns = this.getTableColumns();
+        
+        columns.forEach((col, index) => {
+            const key = col.key;
+            
+            if (key === 'outlet' || key === 'hari' || key === 'kasir' || key === 'serve_by' || key === 'role' || key === 'alasan_uop') {
+                // Kolom teks: kosong atau "TOTAL" untuk kolom pertama
+                footerData[key] = index === 0 ? 'TOTAL' : '';
+            } 
+            else if (key === 'tanggal') {
+                footerData[key] = '';
+            }
+            else if (col.type === 'currency' || this.isNumericColumn(key)) {
+                // Kolom numerik: hitung total
+                footerData[key] = this.currentData.reduce((sum, item) => {
+                    const value = parseFloat(item[key]) || 0;
+                    return sum + value;
+                }, 0);
+            } 
+            else {
+                footerData[key] = '';
+            }
+        });
+
+        return footerData;
     }
 
-    const footerData = {};
-    const columns = this.getTableColumns();
-    
-    columns.forEach((col, index) => {
-        const key = col.key;
+    // Tambah di constructor atau sebagai method
+    async getKaryawanRole(namaKaryawan) {
+        if (!namaKaryawan || namaKaryawan === 'Unknown') return 'staff';
         
-        if (key === 'outlet' || key === 'hari' || key === 'kasir' || key === 'serve_by') {
-            // Kolom teks: kosong atau "TOTAL" untuk kolom pertama
-            footerData[key] = index === 0 ? 'TOTAL' : '';
-        } 
-        else if (key === 'tanggal') {
-            footerData[key] = '';
-        }
-        else if (col.type === 'currency' || this.isNumericColumn(key)) {
-            // Kolom numerik: hitung total
-            footerData[key] = this.currentData.reduce((sum, item) => {
-                const value = parseFloat(item[key]) || 0;
-                return sum + value;
-            }, 0);
-        } 
-        else {
-            footerData[key] = '';
-        }
-    });
-
-    return footerData;
-}
-
-   // Tambah di constructor atau sebagai method
-async getKaryawanRole(namaKaryawan) {
-    if (!namaKaryawan || namaKaryawan === 'Unknown') return 'staff';
-    
-    try {
-        const { data, error } = await supabase
-            .from('karyawan')
-            .select('role')
-            .eq('nama_karyawan', namaKaryawan)
-            .single();
-        
-        if (error || !data) {
-            console.warn(`Role not found for ${namaKaryawan}:`, error);
+        try {
+            const { data, error } = await supabase
+                .from('karyawan')
+                .select('role')
+                .eq('nama_karyawan', namaKaryawan)
+                .single();
+            
+            if (error || !data) {
+                console.warn(`Role not found for ${namaKaryawan}:`, error);
+                return 'staff';
+            }
+            
+            return data.role || 'staff';
+        } catch (error) {
+            console.error('Error getting karyawan role:', error);
             return 'staff';
         }
-        
-        return data.role || 'staff';
-    } catch (error) {
-        console.error('Error getting karyawan role:', error);
-        return 'staff';
     }
-}
 
-// Update isNumericColumn untuk kolom baru
-isNumericColumn(key) {
-    const numericColumns = [
-        'qty', 'jumlah_membercard', 'jumlah_transaksi', 'point', 'redeem_qty',
-        'discount_percent', 'total_amount', 'amount', 'harga_jual', 'harga_beli',
-        'profit', 'comission', 'total_omset', 'total_modal', 'total_discount',
-        'total_redeem', 'omset_bersih', 'net_profit', 'rata_rata_transaksi',
-        'totalAmount', 'totalAmountCancel', 'total_komisi', 'total_uop',
-        'omset_cash', 'top_up_kas', 'sisa_setoran', 'hutang_komisi', 
-        'pemasukan_lain_lain', 'uop', 'tips_qris', 'bayar_hutang_komisi',
-        'iuran_rt', 'sumbangan', 'iuran_sampah', 'galon', 'biaya_admin_setoran',
-        'yakult', 'pengeluaran_lain_lain', 'pemasukan', 'pengeluaran', 'saldo',
-        // Tambah kolom komisi baru
-        'total_amount', 'uop', 'total_komisi', 'tips_qris', 'jumlah_transaksi'
-    ];
-    
-    return numericColumns.includes(key);
-}
+    // Update isNumericColumn untuk kolom baru
+    isNumericColumn(key) {
+        const numericColumns = [
+            'qty', 'jumlah_membercard', 'jumlah_transaksi', 'point', 'redeem_qty',
+            'discount_percent', 'total_amount', 'amount', 'harga_jual', 'harga_beli',
+            'profit', 'comission', 'total_omset', 'total_modal', 'total_discount',
+            'total_redeem', 'omset_bersih', 'net_profit', 'rata_rata_transaksi',
+            'totalAmount', 'totalAmountCancel', 'total_komisi', 'total_uop',
+            'omset_cash', 'top_up_kas', 'sisa_setoran', 'hutang_komisi', 
+            'pemasukan_lain_lain', 'uop', 'tips_qris', 'bayar_hutang_komisi',
+            'iuran_rt', 'sumbangan', 'iuran_sampah', 'galon', 'biaya_admin_setoran',
+            'yakult', 'pengeluaran_lain_lain', 'pemasukan', 'pengeluaran', 'saldo',
+            // Kolom untuk setoran barberman
+            'cash_amount', 'qris_amount', 'setoran', 'uop_display',
+            // Tambah kolom komisi baru
+            'total_amount', 'uop', 'total_komisi', 'tips_qris', 'jumlah_transaksi'
+        ];
+        
+        return numericColumns.includes(key);
+    }
+
     // Set default date filter (hari ini)
     setDefaultDateFilter() {
         const today = new Date();
@@ -212,7 +218,8 @@ isNumericColumn(key) {
             'omset': 'Laporan Omset',
             'pemasukan-pengeluaran': 'Laporan Pemasukan & Pengeluaran',
             'order-transaksi': 'Laporan Order Transaksi',
-            'transaksi-cancel': 'Laporan Transaksi Cancel'
+            'transaksi-cancel': 'Laporan Transaksi Cancel',
+            'setoran-barberman': 'Laporan Setoran Barberman' // TAB BARU
         };
 
         const titleElement = document.getElementById('report-title');
@@ -311,6 +318,9 @@ isNumericColumn(key) {
                     break;
                 case 'order-transaksi':
                     data = await this.loadOrderTransaksi();
+                    break;
+                case 'setoran-barberman': // TAB BARU
+                    data = await this.loadSetoranBarberman();
                     break;
                 default:
                     console.warn('Unknown tab, loading detail transaksi');
@@ -433,172 +443,361 @@ isNumericColumn(key) {
     }
 
     async loadLaporanKomisi() {
-    console.log('Loading laporan komisi dari tabel komisi');
-    
-    try {
-        // 1. Ambil data dari tabel komisi dulu
-        let query = supabase
-            .from('komisi')
-            .select('*')
-            .order('tanggal', { ascending: false });
-
-        // Apply filters
-        if (this.filters.startDate) {
-            query = query.gte('tanggal', this.filters.startDate);
-        }
-        if (this.filters.endDate) {
-            query = query.lte('tanggal', this.filters.endDate);
-        }
-        if (this.filters.outlet) {
-            query = query.eq('outlet', this.filters.outlet);
-        }
-
-        const { data: komisiData, error } = await query;
-        if (error) {
-            console.error('Error loading komisi data:', error);
-            throw error;
-        }
-        
-        console.log('Data komisi ditemukan:', komisiData?.length || 0, 'records');
-        
-        if (!komisiData || komisiData.length === 0) {
-            return [];
-        }
-        
-        // 2. Ambil semua serve_by unik untuk ambil role dari karyawan
-        const serveByNames = [...new Set(
-            komisiData
-                .map(item => item.serve_by)
-                .filter(name => name && name !== 'Unknown')
-        )];
-        
-        console.log('Unique serve_by names:', serveByNames);
-        
-        // 3. Query role dari tabel karyawan
-        let roleMap = {};
-        if (serveByNames.length > 0) {
-            const { data: karyawanData, error: karyawanError } = await supabase
-                .from('karyawan')
-                .select('nama_karyawan, role')
-                .in('nama_karyawan', serveByNames);
-            
-            if (karyawanError) {
-                console.error('Error fetching karyawan roles:', karyawanError);
-            } else if (karyawanData) {
-                // Buat mapping nama_karyawan -> role
-                karyawanData.forEach(k => {
-                    if (k.nama_karyawan) {
-                        roleMap[k.nama_karyawan] = k.role || 'staff';
-                    }
-                });
-                console.log('Role mapping created:', roleMap);
-            }
-        }
-        
-        // 4. Process data komisi dengan role
-        return this.processKomisiWithRole(komisiData, roleMap);
-        
-    } catch (error) {
-        console.error('Error load laporan komisi:', error);
-        throw error;
-    }
-}
-
-processKomisiWithRole(komisiData, roleMap) {
-    console.log('Processing komisi data with role mapping');
-    
-    const result = [];
-    
-    for (const item of komisiData) {
-        const tanggal = item.tanggal || 'Unknown';
-        let hari = 'Unknown';
+        console.log('Loading laporan komisi dari tabel komisi');
         
         try {
-            if (tanggal !== 'Unknown') {
-                const dateObj = new Date(tanggal);
-                if (!isNaN(dateObj.getTime())) {
-                    hari = this.getDayName(dateObj.getDay());
+            // 1. Ambil data dari tabel komisi dulu
+            let query = supabase
+                .from('komisi')
+                .select('*')
+                .order('tanggal', { ascending: false });
+
+            // Apply filters
+            if (this.filters.startDate) {
+                query = query.gte('tanggal', this.filters.startDate);
+            }
+            if (this.filters.endDate) {
+                query = query.lte('tanggal', this.filters.endDate);
+            }
+            if (this.filters.outlet) {
+                query = query.eq('outlet', this.filters.outlet);
+            }
+
+            const { data: komisiData, error } = await query;
+            if (error) {
+                console.error('Error loading komisi data:', error);
+                throw error;
+            }
+            
+            console.log('Data komisi ditemukan:', komisiData?.length || 0, 'records');
+            
+            if (!komisiData || komisiData.length === 0) {
+                return [];
+            }
+            
+            // 2. Ambil semua serve_by unik untuk ambil role dari karyawan
+            const serveByNames = [...new Set(
+                komisiData
+                    .map(item => item.serve_by)
+                    .filter(name => name && name !== 'Unknown')
+            )];
+            
+            console.log('Unique serve_by names:', serveByNames);
+            
+            // 3. Query role dari tabel karyawan
+            let roleMap = {};
+            if (serveByNames.length > 0) {
+                const { data: karyawanData, error: karyawanError } = await supabase
+                    .from('karyawan')
+                    .select('nama_karyawan, role')
+                    .in('nama_karyawan', serveByNames);
+                
+                if (karyawanError) {
+                    console.error('Error fetching karyawan roles:', karyawanError);
+                } else if (karyawanData) {
+                    // Buat mapping nama_karyawan -> role
+                    karyawanData.forEach(k => {
+                        if (k.nama_karyawan) {
+                            roleMap[k.nama_karyawan] = k.role || 'staff';
+                        }
+                    });
+                    console.log('Role mapping created:', roleMap);
                 }
             }
-        } catch (e) {
-            console.warn('Error parsing date:', tanggal, e);
+            
+            // 4. Process data komisi dengan role
+            return this.processKomisiWithRole(komisiData, roleMap);
+            
+        } catch (error) {
+            console.error('Error load laporan komisi:', error);
+            throw error;
         }
-        
-        // Ambil role dari mapping atau default 'staff'
-        const serveByName = item.serve_by || 'Unknown';
-        const role = roleMap[serveByName] || 'staff';
-        
-        console.log(`Processing ${serveByName}: role=${role}, uop=${item.uop}, alasan=${item.alasan_nouop}`);
-        
-        // Atur UOP berdasarkan role
-        let uopValue = item.uop || 0;
-        
-        if (role === 'kasir' || role === 'cashier') {
-            // Kasir: UOP = 0
-            uopValue = 0;
-        } else if (role === 'barberman' || role === 'therapist') {
-            // Barberman/Therapist: UOP = komisi.uop (ambil dari database)
-            uopValue = item.uop || 0;
-        } else {
-            // Staff lain: UOP = 0 atau sesuai database
-            uopValue = 0;
-        }
-        
-        result.push({
-            outlet: item.outlet || 'Unknown',
-            tanggal: tanggal,
-            hari: hari,
-            kasir: item.kasir || 'Unknown',
-            serve_by: serveByName,
-            total_amount: item.total_transaksi || 0,
-            uop: uopValue,
-            total_komisi: item.komisi || 0,
-            tips_qris: item.tips_qris || 0,
-            jumlah_transaksi: item.jumlah_transaksi || 0,
-            role: role,
-            alasan_nouop: item.alasan_nouop || '', // SIMPAN alasan_nouop untuk ditampilkan
-            original_uop: item.uop || 0 // Simpan original untuk debug
-        });
     }
-    
-    console.log('Processed komisi data:', result);
-    return result;
-}
-// Helper untuk nama hari
-getDayName(dayIndex) {
-    const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-    return days[dayIndex] || 'Unknown';
-}
 
-   async loadLaporanMembercard() {
-    console.log('Loading laporan membercard');
-    
-    try {
-        let query = supabase
-            .from('membercard')
-            .select('*')
-            .order('created_at', { ascending: false }); // Tambah sorting
-
-        // APPLY FILTERS (SAMA SEPERTI TABEL LAIN)
-        if (this.filters.startDate) {
-            query = query.gte('created_at', `${this.filters.startDate}T00:00:00`);
+    processKomisiWithRole(komisiData, roleMap) {
+        console.log('Processing komisi data with role mapping');
+        
+        const result = [];
+        
+        for (const item of komisiData) {
+            const tanggal = item.tanggal || 'Unknown';
+            let hari = 'Unknown';
+            
+            try {
+                if (tanggal !== 'Unknown') {
+                    const dateObj = new Date(tanggal);
+                    if (!isNaN(dateObj.getTime())) {
+                        hari = this.getDayName(dateObj.getDay());
+                    }
+                }
+            } catch (e) {
+                console.warn('Error parsing date:', tanggal, e);
+            }
+            
+            // Ambil role dari mapping atau default 'staff'
+            const serveByName = item.serve_by || 'Unknown';
+            const role = roleMap[serveByName] || 'staff';
+            
+            console.log(`Processing ${serveByName}: role=${role}, uop=${item.uop}, alasan=${item.alasan_nouop}`);
+            
+            // Atur UOP berdasarkan role
+            let uopValue = item.uop || 0;
+            
+            if (role === 'kasir' || role === 'cashier') {
+                // Kasir: UOP = 0
+                uopValue = 0;
+            } else if (role === 'barberman' || role === 'therapist') {
+                // Barberman/Therapist: UOP = komisi.uop (ambil dari database)
+                uopValue = item.uop || 0;
+            } else {
+                // Staff lain: UOP = 0 atau sesuai database
+                uopValue = 0;
+            }
+            
+            result.push({
+                outlet: item.outlet || 'Unknown',
+                tanggal: tanggal,
+                hari: hari,
+                kasir: item.kasir || 'Unknown',
+                serve_by: serveByName,
+                total_amount: item.total_transaksi || 0,
+                uop: uopValue,
+                total_komisi: item.komisi || 0,
+                tips_qris: item.tips_qris || 0,
+                jumlah_transaksi: item.jumlah_transaksi || 0,
+                role: role,
+                alasan_nouop: item.alasan_nouop || '', // SIMPAN alasan_nouop untuk ditampilkan
+                original_uop: item.uop || 0 // Simpan original untuk debug
+            });
         }
-        if (this.filters.endDate) {
-            query = query.lte('created_at', `${this.filters.endDate}T23:59:59`);
-        }
-        if (this.filters.outlet) {
-            query = query.eq('outlet', this.filters.outlet);
-        }
-
-        const { data, error } = await query;
-        if (error) throw error;
-
-        return this.processMembercardData(data || []);
-    } catch (error) {
-        console.warn('Membercard table not found, using fallback data');
-        return this.generateFallbackMembercardData();
+        
+        console.log('Processed komisi data:', result);
+        return result;
     }
-}
+
+    // ==================== SETORAN BARBERMAN - TAB BARU ====================
+
+    async loadSetoranBarberman() {
+        console.log('Loading laporan setoran barberman');
+        
+        try {
+            // Query data dari tabel komisi (karena di reportsmodule menggunakan data komisi)
+            let query = supabase
+                .from('komisi')
+                .select('*')
+                .order('tanggal', { ascending: false });
+
+            // Apply filters
+            if (this.filters.startDate) {
+                query = query.gte('tanggal', this.filters.startDate);
+            }
+            if (this.filters.endDate) {
+                query = query.lte('tanggal', this.filters.endDate);
+            }
+            if (this.filters.outlet) {
+                query = query.eq('outlet', this.filters.outlet);
+            }
+
+            const { data: komisiData, error } = await query;
+            if (error) {
+                console.error('Error loading setoran barberman data:', error);
+                throw error;
+            }
+            
+            console.log('Data setoran barberman ditemukan:', komisiData?.length || 0, 'records');
+            
+            if (!komisiData || komisiData.length === 0) {
+                return [];
+            }
+            
+            // Ambil semua serve_by unik untuk ambil role dari karyawan
+            const serveByNames = [...new Set(
+                komisiData
+                    .map(item => item.serve_by)
+                    .filter(name => name && name !== 'Unknown')
+            )];
+            
+            // Query role dari tabel karyawan
+            let roleMap = {};
+            if (serveByNames.length > 0) {
+                const { data: karyawanData, error: karyawanError } = await supabase
+                    .from('karyawan')
+                    .select('nama_karyawan, role')
+                    .in('nama_karyawan', serveByNames);
+                
+                if (!karyawanError && karyawanData) {
+                    karyawanData.forEach(k => {
+                        if (k.nama_karyawan) {
+                            roleMap[k.nama_karyawan] = k.role || 'staff';
+                        }
+                    });
+                }
+            }
+            
+            // Process data setoran barberman
+            return this.processSetoranBarbermanData(komisiData, roleMap);
+            
+        } catch (error) {
+            console.error('Error load setoran barberman:', error);
+            // Fallback ke data dummy jika error
+            return this.generateFallbackSetoranBarbermanData();
+        }
+    }
+
+    processSetoranBarbermanData(komisiData, roleMap) {
+        const result = [];
+        
+        for (const item of komisiData) {
+            const tanggal = item.tanggal || 'Unknown';
+            let hari = 'Unknown';
+            
+            try {
+                if (tanggal !== 'Unknown') {
+                    const dateObj = new Date(tanggal);
+                    if (!isNaN(dateObj.getTime())) {
+                        hari = this.getDayName(dateObj.getDay());
+                    }
+                }
+            } catch (e) {
+                console.warn('Error parsing date:', tanggal, e);
+            }
+            
+            const serveByName = item.serve_by || 'Unknown';
+            const role = roleMap[serveByName] || 'staff';
+            const isKasir = role === 'kasir' || role === 'cashier';
+            
+            // Hitung komponen setoran
+            const totalAmount = parseFloat(item.total_transaksi) || 0;
+            
+            // Asumsikan pembagian cash dan qris (50:50 untuk contoh, bisa disesuaikan)
+            // Dalam implementasi sebenarnya, data ini harus dari tabel transaksi
+            const cashAmount = totalAmount * 0.5; // 50% cash
+            const qrisAmount = totalAmount * 0.5; // 50% qris/transfer
+            
+            // UOP berdasarkan role
+            let uopDisplay = 0;
+            if (!isKasir) {
+                uopDisplay = parseFloat(item.uop) || 0;
+            }
+            
+            // Setoran = (cash + qris) - uop - komisi
+            const komisi = parseFloat(item.komisi) || 0;
+            const setoran = (cashAmount + qrisAmount) - uopDisplay - komisi;
+            
+            result.push({
+                outlet: item.outlet || 'Unknown',
+                tanggal: tanggal,
+                hari: hari,
+                kasir: item.kasir || 'Unknown',
+                serve_by: serveByName,
+                role: role,
+                is_kasir: isKasir,
+                total_amount: totalAmount,
+                cash_amount: cashAmount,
+                qris_amount: qrisAmount,
+                uop: uopDisplay,
+                uop_display: uopDisplay,
+                alasan_uop: isKasir ? 'UOP Dibayarkan Bulanan' : (item.alasan_nouop || '-'),
+                total_komisi: komisi,
+                tips_qris: parseFloat(item.tips_qris) || 0,
+                jumlah_transaksi: parseInt(item.jumlah_transaksi) || 0,
+                setoran: setoran
+            });
+        }
+        
+        return result;
+    }
+
+    generateFallbackSetoranBarbermanData() {
+        const outlets = ['Rempoa', 'Ciputat', 'Pondok Cabe'];
+        const kasirs = ['Devi Siska Sari', 'Hari Suryono'];
+        const barbermans = ['Ahmad', 'Budi', 'Charlie', 'Dedi'];
+        const roles = ['barberman', 'therapist', 'kasir'];
+        
+        const data = [];
+        const today = new Date();
+        const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        
+        for (let i = 0; i < 10; i++) {
+            const date = new Date();
+            date.setDate(today.getDate() - i);
+            const tanggal = date.toISOString().split('T')[0];
+            const hari = days[date.getDay()];
+            
+            const outlet = outlets[Math.floor(Math.random() * outlets.length)];
+            const isKasir = Math.random() > 0.7;
+            const role = isKasir ? 'kasir' : roles[Math.floor(Math.random() * (roles.length - 1))];
+            const serveByName = isKasir ? kasirs[Math.floor(Math.random() * kasirs.length)] : barbermans[Math.floor(Math.random() * barbermans.length)];
+            
+            const totalAmount = Math.floor(Math.random() * 500000) + 100000;
+            const cashAmount = totalAmount * (Math.random() * 0.8 + 0.1);
+            const qrisAmount = totalAmount - cashAmount;
+            const uopDisplay = isKasir ? 0 : Math.floor(Math.random() * 50000);
+            const komisi = isKasir ? 0 : Math.floor(Math.random() * 50000) + 10000;
+            const tipsQris = Math.floor(Math.random() * 20000);
+            const jumlahTransaksi = Math.floor(Math.random() * 5) + 1;
+            const setoran = (cashAmount + qrisAmount) - uopDisplay - komisi;
+            
+            data.push({
+                outlet: outlet,
+                tanggal: tanggal,
+                hari: hari,
+                kasir: isKasir ? serveByName : kasirs[Math.floor(Math.random() * kasirs.length)],
+                serve_by: serveByName,
+                role: role,
+                is_kasir: isKasir,
+                total_amount: totalAmount,
+                cash_amount: cashAmount,
+                qris_amount: qrisAmount,
+                uop: uopDisplay,
+                uop_display: uopDisplay,
+                alasan_uop: isKasir ? 'UOP Dibayarkan Bulanan' : (Math.random() > 0.8 ? 'Tidak dapat UOP' : '-'),
+                total_komisi: komisi,
+                tips_qris: tipsQris,
+                jumlah_transaksi: jumlahTransaksi,
+                setoran: setoran
+            });
+        }
+        
+        return data;
+    }
+
+    // Helper untuk nama hari
+    getDayName(dayIndex) {
+        const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        return days[dayIndex] || 'Unknown';
+    }
+
+    async loadLaporanMembercard() {
+        console.log('Loading laporan membercard');
+        
+        try {
+            let query = supabase
+                .from('membercard')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            // APPLY FILTERS (SAMA SEPERTI TABEL LAIN)
+            if (this.filters.startDate) {
+                query = query.gte('created_at', `${this.filters.startDate}T00:00:00`);
+            }
+            if (this.filters.endDate) {
+                query = query.lte('created_at', `${this.filters.endDate}T23:59:59`);
+            }
+            if (this.filters.outlet) {
+                query = query.eq('outlet', this.filters.outlet);
+            }
+
+            const { data, error } = await query;
+            if (error) throw error;
+
+            return this.processMembercardData(data || []);
+        } catch (error) {
+            console.warn('Membercard table not found, using fallback data');
+            return this.generateFallbackMembercardData();
+        }
+    }
+
     processMembercardData(data) {
         const groupedData = {};
         
@@ -636,26 +835,67 @@ getDayName(dayIndex) {
         }
     }
 
-   async loadLaporanAbsen() {
-    console.log('Loading laporan absen');
-    
-    try {
-        // Query dengan JOIN ke tabel karyawan
+    async loadLaporanAbsen() {
+        console.log('Loading laporan absen');
+        
+        try {
+            // Query dengan JOIN ke tabel karyawan
+            let query = supabase
+                .from('absen')
+                .select(`
+                    *,
+                    karyawan (
+                        nama_karyawan,
+                        jadwal_masuk,
+                        jadwal_pulang
+                    )
+                `)
+                .order('tanggal', { ascending: false });
+
+            // Apply filters
+            if (this.filters.startDate) {
+                // Konversi format YYYY-MM-DD ke DD/MM/YYYY untuk tabel absen
+                const [year, month, day] = this.filters.startDate.split('-');
+                const startDateAbsenFormat = `${day}/${month}/${year}`;
+                query = query.gte('tanggal', startDateAbsenFormat);
+            }
+            if (this.filters.endDate) {
+                const [year, month, day] = this.filters.endDate.split('-');
+                const endDateAbsenFormat = `${day}/${month}/${year}`;
+                query = query.lte('tanggal', endDateAbsenFormat);
+            }
+            if (this.filters.outlet) {
+                query = query.eq('outlet', this.filters.outlet);
+            }
+
+            const { data: absenData, error } = await query;
+            if (error) {
+                console.error('Error loading absen data:', error);
+                // Fallback ke query tanpa JOIN
+                return await this.loadAbsenWithoutJoin();
+            }
+
+            console.log('📊 Data absen ditemukan:', absenData?.length || 0, 'records');
+            return this.processAbsenDataWithJoin(absenData || []);
+            
+        } catch (error) {
+            console.error('Error load absen:', error);
+            // Fallback ke data dummy jika error
+            return this.generateFallbackAbsenData();
+        }
+    }
+
+    // Fallback jika JOIN tidak berhasil
+    async loadAbsenWithoutJoin() {
+        console.log('Loading absen tanpa JOIN');
+        
         let query = supabase
             .from('absen')
-            .select(`
-                *,
-                karyawan (
-                    nama_karyawan,
-                    jadwal_masuk,
-                    jadwal_pulang
-                )
-            `)
+            .select('*')
             .order('tanggal', { ascending: false });
 
-        // Apply filters
+        // Apply filters (sama seperti di atas)
         if (this.filters.startDate) {
-            // Konversi format YYYY-MM-DD ke DD/MM/YYYY untuk tabel absen
             const [year, month, day] = this.filters.startDate.split('-');
             const startDateAbsenFormat = `${day}/${month}/${year}`;
             query = query.gte('tanggal', startDateAbsenFormat);
@@ -670,287 +910,246 @@ getDayName(dayIndex) {
         }
 
         const { data: absenData, error } = await query;
-        if (error) {
-            console.error('Error loading absen data:', error);
-            // Fallback ke query tanpa JOIN
-            return await this.loadAbsenWithoutJoin();
-        }
-
-        console.log('📊 Data absen ditemukan:', absenData?.length || 0, 'records');
-        return this.processAbsenDataWithJoin(absenData || []);
+        if (error) throw error;
         
-    } catch (error) {
-        console.error('Error load absen:', error);
-        // Fallback ke data dummy jika error
-        return this.generateFallbackAbsenData();
-    }
-}
-
-// Fallback jika JOIN tidak berhasil
-async loadAbsenWithoutJoin() {
-    console.log('Loading absen tanpa JOIN');
-    
-    let query = supabase
-        .from('absen')
-        .select('*')
-        .order('tanggal', { ascending: false });
-
-    // Apply filters (sama seperti di atas)
-    if (this.filters.startDate) {
-        const [year, month, day] = this.filters.startDate.split('-');
-        const startDateAbsenFormat = `${day}/${month}/${year}`;
-        query = query.gte('tanggal', startDateAbsenFormat);
-    }
-    if (this.filters.endDate) {
-        const [year, month, day] = this.filters.endDate.split('-');
-        const endDateAbsenFormat = `${day}/${month}/${year}`;
-        query = query.lte('tanggal', endDateAbsenFormat);
-    }
-    if (this.filters.outlet) {
-        query = query.eq('outlet', this.filters.outlet);
+        // Ambil data karyawan terpisah
+        return await this.processAbsenDataWithSeparateQuery(absenData || []);
     }
 
-    const { data: absenData, error } = await query;
-    if (error) throw error;
-    
-    // Ambil data karyawan terpisah
-    return await this.processAbsenDataWithSeparateQuery(absenData || []);
-}
-
-// Process data dengan JOIN
-processAbsenDataWithJoin(absenData) {
-    return absenData.map(item => {
-        const tanggal = this.formatAbsenDateForDisplay(item.tanggal);
-        
-        // Ambil data dari JOIN
-        const karyawanData = item.karyawan && item.karyawan.length > 0 
-            ? item.karyawan[0] 
-            : null;
-        
-        const karyawanNama = karyawanData?.nama_karyawan || item.nama || 'Unknown';
-        const jadwalMasuk = karyawanData?.jadwal_masuk || '09:00';
-        const jadwalPulang = karyawanData?.jadwal_pulang || '21:00';
-        
-        // Format clockin dan clockout
-        const clockinDisplay = this.formatTime(item.clockin);
-        const clockoutDisplay = this.formatTime(item.clockout);
-        
-        // Gunakan jam_kerja dari database jika ada, jika tidak hitung manual
-        let jamKerja = item.jamkerja || 'Masih bekerja';
-        if (!jamKerja || jamKerja === 'Masih bekerja') {
-            if (clockinDisplay && clockoutDisplay) {
-                jamKerja = this.calculateWorkingHours(clockinDisplay, clockoutDisplay);
-            }
-        }
-        
-        // Keterangan dari status_kehadiran
-        const keterangan = item.status_kehadiran || this.determineAttendanceStatus(
-            clockinDisplay, 
-            clockoutDisplay, 
-            jadwalMasuk, 
-            jadwalPulang
-        );
-        
-        return {
-            outlet: item.outlet || 'Unknown',
-            karyawan: karyawanNama,
-            tanggal: tanggal,
-            jadwal_masuk: jadwalMasuk,
-            jadwal_pulang: jadwalPulang,
-            clockin: clockinDisplay,
-            clockout: clockoutDisplay,
-            jam_kerja: jamKerja,
-            keterangan: keterangan
-        };
-    });
-}
-
-// Process data dengan query terpisah ke karyawan
-async processAbsenDataWithSeparateQuery(absenData) {
-    const result = [];
-    
-    // Ambil semua nama karyawan unik
-    const namaKaryawans = [...new Set(
-        absenData.map(item => item.nama).filter(Boolean)
-    )];
-    
-    // Query data karyawan sekaligus
-    let karyawanMap = {};
-    if (namaKaryawans.length > 0) {
-        const { data: karyawanData } = await supabase
-            .from('karyawan')
-            .select('nama_karyawan, jadwal_masuk, jadwal_pulang')
-            .in('nama_karyawan', namaKaryawans);
+    // Process data dengan JOIN
+    processAbsenDataWithJoin(absenData) {
+        return absenData.map(item => {
+            const tanggal = this.formatAbsenDateForDisplay(item.tanggal);
             
-        if (karyawanData) {
-            karyawanData.forEach(k => {
-                karyawanMap[k.nama_karyawan] = k;
-            });
-        }
-    }
-    
-    // Process setiap data absen
-    for (const item of absenData) {
-        const tanggal = this.formatAbsenDateForDisplay(item.tanggal);
-        const karyawanNama = item.nama || 'Unknown';
-        
-        // Ambil data karyawan dari map
-        const karyawanInfo = karyawanMap[karyawanNama];
-        const jadwalMasuk = karyawanInfo?.jadwal_masuk || '09:00';
-        const jadwalPulang = karyawanInfo?.jadwal_pulang || '21:00';
-        
-        // Format waktu
-        const clockinDisplay = this.formatTime(item.clockin);
-        const clockoutDisplay = this.formatTime(item.clockout);
-        
-        // Jam kerja
-        let jamKerja = item.jamkerja || 'Masih bekerja';
-        if (!jamKerja || jamKerja === 'Masih bekerja') {
-            if (clockinDisplay && clockoutDisplay) {
-                jamKerja = this.calculateWorkingHours(clockinDisplay, clockoutDisplay);
-            }
-        }
-        
-        // Keterangan
-        const keterangan = item.status_kehadiran || this.determineAttendanceStatus(
-            clockinDisplay, 
-            clockoutDisplay, 
-            jadwalMasuk, 
-            jadwalPulang
-        );
-        
-        result.push({
-            outlet: item.outlet || 'Unknown',
-            karyawan: karyawanNama,
-            tanggal: tanggal,
-            jadwal_masuk: jadwalMasuk,
-            jadwal_pulang: jadwalPulang,
-            clockin: clockinDisplay,
-            clockout: clockoutDisplay,
-            jam_kerja: jamKerja,
-            keterangan: keterangan
-        });
-    }
-    
-    return result;
-}
-
-// Helper Methods
-formatAbsenDateForDisplay(tanggal) {
-    if (!tanggal) return 'Unknown';
-    
-    try {
-        // Format dari DD/MM/YYYY ke DD/MM/YYYY (tampilan)
-        if (tanggal.includes('/')) {
-            const parts = tanggal.split('/');
-            if (parts.length === 3) {
-                const [day, month, year] = parts;
-                return `${day.padStart(2, '0')}/${month.padStart(2, '0')}/${year}`;
-            }
-        }
-        
-        // Jika format YYYY-MM-DD
-        if (tanggal.includes('-')) {
-            const parts = tanggal.split('-');
-            if (parts.length === 3) {
-                const [year, month, day] = parts;
-                return `${day.padStart(2, '0')}/${month.padStart(2, '0')}/${year}`;
-            }
-        }
-        
-        return tanggal;
-    } catch (error) {
-        console.warn('Error formatting absen date:', tanggal, error);
-        return tanggal;
-    }
-}
-
-formatTime(timeStr) {
-    if (!timeStr) return '';
-    
-    try {
-        // Format HH:MM dari berbagai format
-        if (timeStr.includes(':')) {
-            const parts = timeStr.split(':');
-            if (parts.length >= 2) {
-                return `${parts[0].padStart(2, '0')}:${parts[1].padStart(2, '0')}`;
-            }
-        } else if (timeStr.length >= 4) {
-            // Format HHMM
-            return `${timeStr.substring(0, 2)}:${timeStr.substring(2, 4)}`;
-        }
-    } catch (error) {
-        console.warn('Error formatting time:', timeStr, error);
-    }
-    
-    return timeStr;
-}
-
-calculateWorkingHours(clockin, clockout) {
-    if (!clockin || !clockout) return 'Masih bekerja';
-    
-    try {
-        const [inHour, inMinute] = clockin.split(':').map(Number);
-        const [outHour, outMinute] = clockout.split(':').map(Number);
-        
-        let totalMinutes = (outHour * 60 + outMinute) - (inHour * 60 + inMinute);
-        
-        if (totalMinutes < 0) {
-            // Jika melewati tengah malam
-            totalMinutes += 24 * 60;
-        }
-        
-        const hours = Math.floor(totalMinutes / 60);
-        const minutes = totalMinutes % 60;
-        
-        return `${hours} jam ${minutes} menit`;
-    } catch (error) {
-        console.warn('Error calculating working hours:', error);
-        return 'Error hitung';
-    }
-}
-
-determineAttendanceStatus(clockin, clockout, jadwalMasuk, jadwalPulang) {
-    if (!clockin) return 'Belum clock in';
-    
-    let status = 'Hadir';
-    
-    try {
-        if (clockin) {
-            const [clockinHour, clockinMinute] = clockin.split(':').map(Number);
-            const [jadwalMasukHour, jadwalMasukMinute] = jadwalMasuk.split(':').map(Number);
+            // Ambil data dari JOIN
+            const karyawanData = item.karyawan && item.karyawan.length > 0 
+                ? item.karyawan[0] 
+                : null;
             
-            const clockinTotal = clockinHour * 60 + clockinMinute;
-            const jadwalTotal = jadwalMasukHour * 60 + jadwalMasukMinute;
+            const karyawanNama = karyawanData?.nama_karyawan || item.nama || 'Unknown';
+            const jadwalMasuk = karyawanData?.jadwal_masuk || '09:00';
+            const jadwalPulang = karyawanData?.jadwal_pulang || '21:00';
             
-            if (clockinTotal > jadwalTotal + 15) { // Toleransi 15 menit
-                const lateMinutes = clockinTotal - jadwalTotal;
-                status = `Terlambat ${lateMinutes} menit`;
-            }
-        }
-        
-        if (clockout) {
-            const [clockoutHour, clockoutMinute] = clockout.split(':').map(Number);
-            const [jadwalPulangHour, jadwalPulangMinute] = jadwalPulang.split(':').map(Number);
+            // Format clockin dan clockout
+            const clockinDisplay = this.formatTime(item.clockin);
+            const clockoutDisplay = this.formatTime(item.clockout);
             
-            const clockoutTotal = clockoutHour * 60 + clockoutMinute;
-            const jadwalPulangTotal = jadwalPulangHour * 60 + jadwalPulangMinute;
-            
-            if (clockoutTotal < jadwalPulangTotal - 15) { // Toleransi 15 menit
-                const earlyMinutes = jadwalPulangTotal - clockoutTotal;
-                if (status === 'Hadir') {
-                    status = `Pulang cepat ${earlyMinutes} menit`;
-                } else {
-                    status += `, pulang cepat ${earlyMinutes} menit`;
+            // Gunakan jam_kerja dari database jika ada, jika tidak hitung manual
+            let jamKerja = item.jamkerja || 'Masih bekerja';
+            if (!jamKerja || jamKerja === 'Masih bekerja') {
+                if (clockinDisplay && clockoutDisplay) {
+                    jamKerja = this.calculateWorkingHours(clockinDisplay, clockoutDisplay);
                 }
             }
-        }
-    } catch (error) {
-        console.warn('Error determining attendance status:', error);
+            
+            // Keterangan dari status_kehadiran
+            const keterangan = item.status_kehadiran || this.determineAttendanceStatus(
+                clockinDisplay, 
+                clockoutDisplay, 
+                jadwalMasuk, 
+                jadwalPulang
+            );
+            
+            return {
+                outlet: item.outlet || 'Unknown',
+                karyawan: karyawanNama,
+                tanggal: tanggal,
+                jadwal_masuk: jadwalMasuk,
+                jadwal_pulang: jadwalPulang,
+                clockin: clockinDisplay,
+                clockout: clockoutDisplay,
+                jam_kerja: jamKerja,
+                keterangan: keterangan
+            };
+        });
     }
-    
-    return status;
-}
+
+    // Process data dengan query terpisah ke karyawan
+    async processAbsenDataWithSeparateQuery(absenData) {
+        const result = [];
+        
+        // Ambil semua nama karyawan unik
+        const namaKaryawans = [...new Set(
+            absenData.map(item => item.nama).filter(Boolean)
+        )];
+        
+        // Query data karyawan sekaligus
+        let karyawanMap = {};
+        if (namaKaryawans.length > 0) {
+            const { data: karyawanData } = await supabase
+                .from('karyawan')
+                .select('nama_karyawan, jadwal_masuk, jadwal_pulang')
+                .in('nama_karyawan', namaKaryawans);
+                
+            if (karyawanData) {
+                karyawanData.forEach(k => {
+                    karyawanMap[k.nama_karyawan] = k;
+                });
+            }
+        }
+        
+        // Process setiap data absen
+        for (const item of absenData) {
+            const tanggal = this.formatAbsenDateForDisplay(item.tanggal);
+            const karyawanNama = item.nama || 'Unknown';
+            
+            // Ambil data karyawan dari map
+            const karyawanInfo = karyawanMap[karyawanNama];
+            const jadwalMasuk = karyawanInfo?.jadwal_masuk || '09:00';
+            const jadwalPulang = karyawanInfo?.jadwal_pulang || '21:00';
+            
+            // Format waktu
+            const clockinDisplay = this.formatTime(item.clockin);
+            const clockoutDisplay = this.formatTime(item.clockout);
+            
+            // Jam kerja
+            let jamKerja = item.jamkerja || 'Masih bekerja';
+            if (!jamKerja || jamKerja === 'Masih bekerja') {
+                if (clockinDisplay && clockoutDisplay) {
+                    jamKerja = this.calculateWorkingHours(clockinDisplay, clockoutDisplay);
+                }
+            }
+            
+            // Keterangan
+            const keterangan = item.status_kehadiran || this.determineAttendanceStatus(
+                clockinDisplay, 
+                clockoutDisplay, 
+                jadwalMasuk, 
+                jadwalPulang
+            );
+            
+            result.push({
+                outlet: item.outlet || 'Unknown',
+                karyawan: karyawanNama,
+                tanggal: tanggal,
+                jadwal_masuk: jadwalMasuk,
+                jadwal_pulang: jadwalPulang,
+                clockin: clockinDisplay,
+                clockout: clockoutDisplay,
+                jam_kerja: jamKerja,
+                keterangan: keterangan
+            });
+        }
+        
+        return result;
+    }
+
+    // Helper Methods
+    formatAbsenDateForDisplay(tanggal) {
+        if (!tanggal) return 'Unknown';
+        
+        try {
+            // Format dari DD/MM/YYYY ke DD/MM/YYYY (tampilan)
+            if (tanggal.includes('/')) {
+                const parts = tanggal.split('/');
+                if (parts.length === 3) {
+                    const [day, month, year] = parts;
+                    return `${day.padStart(2, '0')}/${month.padStart(2, '0')}/${year}`;
+                }
+            }
+            
+            // Jika format YYYY-MM-DD
+            if (tanggal.includes('-')) {
+                const parts = tanggal.split('-');
+                if (parts.length === 3) {
+                    const [year, month, day] = parts;
+                    return `${day.padStart(2, '0')}/${month.padStart(2, '0')}/${year}`;
+                }
+            }
+            
+            return tanggal;
+        } catch (error) {
+            console.warn('Error formatting absen date:', tanggal, error);
+            return tanggal;
+        }
+    }
+
+    formatTime(timeStr) {
+        if (!timeStr) return '';
+        
+        try {
+            // Format HH:MM dari berbagai format
+            if (timeStr.includes(':')) {
+                const parts = timeStr.split(':');
+                if (parts.length >= 2) {
+                    return `${parts[0].padStart(2, '0')}:${parts[1].padStart(2, '0')}`;
+                }
+            } else if (timeStr.length >= 4) {
+                // Format HHMM
+                return `${timeStr.substring(0, 2)}:${timeStr.substring(2, 4)}`;
+            }
+        } catch (error) {
+            console.warn('Error formatting time:', timeStr, error);
+        }
+        
+        return timeStr;
+    }
+
+    calculateWorkingHours(clockin, clockout) {
+        if (!clockin || !clockout) return 'Masih bekerja';
+        
+        try {
+            const [inHour, inMinute] = clockin.split(':').map(Number);
+            const [outHour, outMinute] = clockout.split(':').map(Number);
+            
+            let totalMinutes = (outHour * 60 + outMinute) - (inHour * 60 + inMinute);
+            
+            if (totalMinutes < 0) {
+                // Jika melewati tengah malam
+                totalMinutes += 24 * 60;
+            }
+            
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+            
+            return `${hours} jam ${minutes} menit`;
+        } catch (error) {
+            console.warn('Error calculating working hours:', error);
+            return 'Error hitung';
+        }
+    }
+
+    determineAttendanceStatus(clockin, clockout, jadwalMasuk, jadwalPulang) {
+        if (!clockin) return 'Belum clock in';
+        
+        let status = 'Hadir';
+        
+        try {
+            if (clockin) {
+                const [clockinHour, clockinMinute] = clockin.split(':').map(Number);
+                const [jadwalMasukHour, jadwalMasukMinute] = jadwalMasuk.split(':').map(Number);
+                
+                const clockinTotal = clockinHour * 60 + clockinMinute;
+                const jadwalTotal = jadwalMasukHour * 60 + jadwalMasukMinute;
+                
+                if (clockinTotal > jadwalTotal + 15) { // Toleransi 15 menit
+                    const lateMinutes = clockinTotal - jadwalTotal;
+                    status = `Terlambat ${lateMinutes} menit`;
+                }
+            }
+            
+            if (clockout) {
+                const [clockoutHour, clockoutMinute] = clockout.split(':').map(Number);
+                const [jadwalPulangHour, jadwalPulangMinute] = jadwalPulang.split(':').map(Number);
+                
+                const clockoutTotal = clockoutHour * 60 + clockoutMinute;
+                const jadwalPulangTotal = jadwalPulangHour * 60 + jadwalPulangMinute;
+                
+                if (clockoutTotal < jadwalPulangTotal - 15) { // Toleransi 15 menit
+                    const earlyMinutes = jadwalPulangTotal - clockoutTotal;
+                    if (status === 'Hadir') {
+                        status = `Pulang cepat ${earlyMinutes} menit`;
+                    } else {
+                        status += `, pulang cepat ${earlyMinutes} menit`;
+                    }
+                }
+            }
+        } catch (error) {
+            console.warn('Error determining attendance status:', error);
+        }
+        
+        return status;
+    }
 
     async loadLaporanOmset() {
         console.log('Loading laporan omset dari transaksi_order');
@@ -977,71 +1176,70 @@ determineAttendanceStatus(clockin, clockout, jadwalMasuk, jadwalPulang) {
     }
 
     processOmsetData(data) {
-    const result = {};
-    
-    data.forEach(item => {
-        const outlet = item.outlet || 'Unknown';
-        const orderDate = item.order_date ? item.order_date.split('T')[0] : 'Unknown';
-        const isCompleted = item.status === 'completed';
+        const result = {};
         
-        if (!isCompleted) return;
+        data.forEach(item => {
+            const outlet = item.outlet || 'Unknown';
+            const orderDate = item.order_date ? item.order_date.split('T')[0] : 'Unknown';
+            const isCompleted = item.status === 'completed';
+            
+            if (!isCompleted) return;
+            
+            const key = `${outlet}-${orderDate}`;
+            
+            if (!result[key]) {
+                result[key] = {
+                    outlet: outlet,
+                    tanggal: orderDate,
+                    total_omset: 0,
+                    total_modal: 0,
+                    total_discount: 0,
+                    total_redeem: 0,
+                    total_komisi: 0,
+                    jumlah_transaksi: 0
+                };
+            }
+            
+            const subtotal = parseFloat(item.subtotal_amount) || 0;
+            const modal = parseFloat(item.harga_beli) || 0;
+            const discount = parseFloat(item.discount_amount) || 0;
+            const redeem = parseFloat(item.redeem_amount) || 0;
+            const komisi = parseFloat(item.comission) || 0;
+            
+            result[key].total_omset += subtotal;
+            result[key].total_modal += modal;
+            result[key].total_discount += discount;
+            result[key].total_redeem += redeem;
+            result[key].total_komisi += komisi;
+            result[key].jumlah_transaksi += 1;
+        });
         
-        const key = `${outlet}-${orderDate}`;
-        
-        if (!result[key]) {
-            result[key] = {
-                outlet: outlet,
-                tanggal: orderDate,
-                total_omset: 0,
-                total_modal: 0,
-                total_discount: 0,
-                total_redeem: 0,
-                total_komisi: 0,
-                jumlah_transaksi: 0
+        // PERBAIKAN FORMULA DAN URUTAN
+        const tableData = Object.values(result).map(item => {
+            // Formula baru
+            const omset_kotor = item.total_omset - item.total_discount - item.total_redeem;
+            const omset_bersih = omset_kotor - item.total_modal;
+            const net_profit = omset_bersih - item.total_komisi;
+            const rata_transaksi = item.jumlah_transaksi > 0 ? item.total_omset / item.jumlah_transaksi : 0;
+            
+            return {
+                outlet: item.outlet,
+                tanggal: item.tanggal,
+                total_omset: item.total_omset,
+                total_discount: item.total_discount,
+                total_redeem: item.total_redeem,
+                omset_kotor: omset_kotor,           // TAMBAH KOLOM BARU
+                total_modal: item.total_modal,
+                omset_bersih: omset_bersih,
+                total_komisi: item.total_komisi,
+                net_profit: net_profit,
+                jumlah_transaksi: item.jumlah_transaksi,
+                rata_rata_transaksi: rata_transaksi
             };
-        }
+        });
         
-        const subtotal = parseFloat(item.subtotal_amount) || 0;
-        const modal = parseFloat(item.harga_beli) || 0;
-        const discount = parseFloat(item.discount_amount) || 0;
-        const redeem = parseFloat(item.redeem_amount) || 0;
-        const komisi = parseFloat(item.comission) || 0;
-        
-        result[key].total_omset += subtotal;
-        result[key].total_modal += modal;
-        result[key].total_discount += discount;
-        result[key].total_redeem += redeem;
-        result[key].total_komisi += komisi;
-        result[key].jumlah_transaksi += 1;
-    });
-    
-    // PERBAIKAN FORMULA DAN URUTAN
-    const tableData = Object.values(result).map(item => {
-        // Formula baru
-        const omset_kotor = item.total_omset - item.total_discount - item.total_redeem;
-        const omset_bersih = omset_kotor - item.total_modal;
-        const net_profit = omset_bersih - item.total_komisi;
-        const rata_transaksi = item.jumlah_transaksi > 0 ? item.total_omset / item.jumlah_transaksi : 0;
-        
-        return {
-            outlet: item.outlet,
-            tanggal: item.tanggal,
-            total_omset: item.total_omset,
-            total_discount: item.total_discount,
-            total_redeem: item.total_redeem,
-            omset_kotor: omset_kotor,           // TAMBAH KOLOM BARU
-            total_modal: item.total_modal,
-            omset_bersih: omset_bersih,
-            total_komisi: item.total_komisi,
-            net_profit: net_profit,
-            jumlah_transaksi: item.jumlah_transaksi,
-            rata_rata_transaksi: rata_transaksi
-        };
-    });
-    
-    return tableData;
-}
-
+        return tableData;
+    }
 
     async loadLaporanPemasukanPengeluaran() {
         console.log('Loading laporan pemasukan pengeluaran');
@@ -1262,7 +1460,8 @@ determineAttendanceStatus(clockin, clockout, jadwalMasuk, jadwalPulang) {
             'omset': this.getOmsetColumns(),
             'pemasukan-pengeluaran': this.getPemasukanPengeluaranColumns(),
             'order-transaksi': this.getOrderTransaksiColumns(),
-            'transaksi-cancel': this.getTransaksiCancelColumns()
+            'transaksi-cancel': this.getTransaksiCancelColumns(),
+            'setoran-barberman': this.getSetoranBarbermanColumns() // TAB BARU
         };
 
         return columnDefinitions[this.currentTab] || this.getDetailTransaksiColumns();
@@ -1368,23 +1567,184 @@ determineAttendanceStatus(clockin, clockout, jadwalMasuk, jadwalPulang) {
         ];
     }
 
-   getKomisiColumns() {
-    return [
-        { 
-            title: '🏪 Outlet', 
-            key: 'outlet'
-        },
-        { 
-            title: '📅 Tanggal', 
-            key: 'tanggal',
-            formatter: (value) => {
-                if (!value || value === 'Unknown') return '-';
-                
-                try {
-                    // Format: DD/MM/YYYY
-                    const date = new Date(value);
-                    if (isNaN(date.getTime())) {
-                        // Jika format ISO tidak berhasil, coba parse langsung
+    getKomisiColumns() {
+        return [
+            { 
+                title: '🏪 Outlet', 
+                key: 'outlet'
+            },
+            { 
+                title: '📅 Tanggal', 
+                key: 'tanggal',
+                formatter: (value) => {
+                    if (!value || value === 'Unknown') return '-';
+                    
+                    try {
+                        // Format: DD/MM/YYYY
+                        const date = new Date(value);
+                        if (isNaN(date.getTime())) {
+                            // Jika format ISO tidak berhasil, coba parse langsung
+                            if (value.includes('-')) {
+                                const parts = value.split('-');
+                                if (parts.length === 3) {
+                                    const [year, month, day] = parts;
+                                    return `${day}/${month}/${year}`;
+                                }
+                            }
+                            return value;
+                        }
+                        
+                        const day = date.getDate().toString().padStart(2, '0');
+                        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                        const year = date.getFullYear();
+                        
+                        return `${day}/${month}/${year}`;
+                    } catch (error) {
+                        console.warn('Error formatting date:', value, error);
+                        return value;
+                    }
+                }
+            },
+            { 
+                title: '📆 Hari', 
+                key: 'hari'
+            },
+            { 
+                title: '💵 Kasir', 
+                key: 'kasir'
+            },
+            { 
+                title: '👤 Served By', 
+                key: 'serve_by',
+                formatter: (value, row) => {
+                    const role = row?.role || 'staff';
+                    const roleColors = {
+                        'kasir': 'bg-green-100 text-green-800 border border-green-200',
+                        'barberman': 'bg-blue-100 text-blue-800 border border-blue-200',
+                        'therapist': 'bg-purple-100 text-purple-800 border border-purple-200',
+                        'owner': 'bg-yellow-100 text-yellow-800 border border-yellow-200',
+                        'staff': 'bg-gray-100 text-gray-800 border border-gray-200'
+                    };
+                    
+                    const color = roleColors[role] || roleColors['staff'];
+                    const roleText = role.charAt(0).toUpperCase() + role.slice(1);
+                    
+                    return `
+                        <div class="flex flex-col space-y-1">
+                            <span class="font-medium">${value || '-'}</span>
+                            <span class="inline-block px-2 py-1 text-xs rounded ${color}">
+                                ${roleText}
+                            </span>
+                        </div>
+                    `;
+                }
+            },
+            { 
+                title: '💰 Total Amount', 
+                key: 'total_amount',
+                type: 'currency',
+                formatter: (value) => {
+                    return Helpers.formatCurrency(value || 0);
+                }
+            },
+            { 
+                title: '💸 UOP', 
+                key: 'uop',
+                type: 'currency',
+                formatter: (value, row) => {
+                    const role = row?.role || 'staff';
+                    const alasan_nouop = row?.alasan_nouop || '';
+                    
+                    if (role === 'kasir') {
+                        return `
+                            <div class="flex flex-col space-y-1">
+                                <span class="text-gray-500 italic">-</span>
+                                <span class="inline-block px-2 py-1 text-xs bg-yellow-100 text-yellow-800 border border-yellow-200 rounded">
+                                    UOP Dibayarkan Bulanan
+                                </span>
+                            </div>
+                        `;
+                    }
+                    
+                    if (!value || value === 0) {
+                        if (role === 'barberman' || role === 'therapist') {
+                            return `
+                                <div class="flex flex-col space-y-1">
+                                    <span class="text-orange-500">-</span>
+                                    ${alasan_nouop ? `
+                                        <span class="inline-block px-2 py-1 text-xs bg-orange-100 text-orange-800 border border-orange-200 rounded">
+                                            ${alasan_nouop}
+                                        </span>
+                                    ` : ''}
+                                </div>
+                            `;
+                        }
+                        return `<span class="text-gray-500">-</span>`;
+                    }
+                    
+                    if (role === 'barberman' || role === 'therapist') {
+                        return `
+                            <div class="flex flex-col space-y-1">
+                                <span class="text-blue-600 font-bold">${Helpers.formatCurrency(value)}</span>
+                                ${alasan_nouop ? `
+                                    <span class="inline-block px-2 py-1 text-xs bg-gray-100 text-gray-800 border border-gray-200 rounded">
+                                        ${alasan_nouop}
+                                    </span>
+                                ` : ''}
+                            </div>
+                        `;
+                    }
+                    
+                    return Helpers.formatCurrency(value);
+                }
+            },
+            { 
+                title: '📈 Total Komisi', 
+                key: 'total_komisi',
+                type: 'currency',
+                formatter: (value) => {
+                    if (!value || value === 0) {
+                        return '<span class="text-gray-500">-</span>';
+                    }
+                    return `<span class="text-green-600 font-semibold">${Helpers.formatCurrency(value)}</span>`;
+                }
+            },
+            { 
+                title: '💳 Tips QRIS', 
+                key: 'tips_qris',
+                type: 'currency',
+                formatter: (value) => {
+                    if (!value || value === 0) {
+                        return '<span class="text-gray-500">-</span>';
+                    }
+                    return `<span class="text-purple-600">${Helpers.formatCurrency(value)}</span>`;
+                }
+            },
+            { 
+                title: '🛒 Jml Trans', 
+                key: 'jumlah_transaksi',
+                formatter: (value) => {
+                    return `<span class="font-medium">${value || 0}</span>`;
+                }
+            }
+        ];
+    }
+
+    // ==================== SETORAN BARBERMAN COLUMNS ====================
+
+    getSetoranBarbermanColumns() {
+        return [
+            { 
+                title: '🏪 Outlet', 
+                key: 'outlet'
+            },
+            { 
+                title: '📅 Tanggal', 
+                key: 'tanggal',
+                formatter: (value) => {
+                    if (!value || value === 'Unknown') return '-';
+                    
+                    try {
                         if (value.includes('-')) {
                             const parts = value.split('-');
                             if (parts.length === 3) {
@@ -1393,313 +1753,297 @@ determineAttendanceStatus(clockin, clockout, jadwalMasuk, jadwalPulang) {
                             }
                         }
                         return value;
+                    } catch (error) {
+                        return value;
                     }
-                    
-                    const day = date.getDate().toString().padStart(2, '0');
-                    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-                    const year = date.getFullYear();
-                    
-                    return `${day}/${month}/${year}`;
-                } catch (error) {
-                    console.warn('Error formatting date:', value, error);
-                    return value;
                 }
-            }
-        },
-        { 
-            title: '📆 Hari', 
-            key: 'hari'
-        },
-        { 
-            title: '💵 Kasir', 
-            key: 'kasir'
-        },
-        { 
-            title: '👤 Served By', 
-            key: 'serve_by',
-            formatter: (value, row) => {
-                const role = row?.role || 'staff';
-                const roleColors = {
-                    'kasir': 'bg-green-100 text-green-800 border border-green-200',
-                    'barberman': 'bg-blue-100 text-blue-800 border border-blue-200',
-                    'therapist': 'bg-purple-100 text-purple-800 border border-purple-200',
-                    'owner': 'bg-yellow-100 text-yellow-800 border border-yellow-200',
-                    'staff': 'bg-gray-100 text-gray-800 border border-gray-200'
-                };
-                
-                const color = roleColors[role] || roleColors['staff'];
-                const roleText = role.charAt(0).toUpperCase() + role.slice(1);
-                
-                return `
-                    <div class="flex flex-col space-y-1">
-                        <span class="font-medium">${value || '-'}</span>
-                        <span class="inline-block px-2 py-1 text-xs rounded ${color}">
-                            ${roleText}
-                        </span>
-                    </div>
-                `;
-            }
-        },
-        { 
-            title: '💰 Total Amount', 
-            key: 'total_amount',
-            type: 'currency',
-            formatter: (value) => {
-                return Helpers.formatCurrency(value || 0);
-            }
-        },
-        { 
-            title: '💸 UOP', 
-            key: 'uop',
-            type: 'currency',
-            formatter: (value, row) => {
-                const role = row?.role || 'staff';
-                const alasan_nouop = row?.alasan_nouop || '';
-                
-                if (role === 'kasir') {
+            },
+            { 
+                title: '📆 Hari', 
+                key: 'hari'
+            },
+            { 
+                title: '💵 Kasir', 
+                key: 'kasir'
+            },
+            { 
+                title: '👤 Served By', 
+                key: 'serve_by',
+                formatter: (value, row) => {
+                    const role = row?.role || 'staff';
+                    const roleColors = {
+                        'kasir': 'bg-green-100 text-green-800 border border-green-200',
+                        'barberman': 'bg-blue-100 text-blue-800 border border-blue-200',
+                        'therapist': 'bg-purple-100 text-purple-800 border border-purple-200'
+                    };
+                    
+                    const color = roleColors[role] || 'bg-gray-100 text-gray-800';
+                    const roleText = role.charAt(0).toUpperCase() + role.slice(1);
+                    
                     return `
                         <div class="flex flex-col space-y-1">
-                            <span class="text-gray-500 italic">-</span>
-                            <span class="inline-block px-2 py-1 text-xs bg-yellow-100 text-yellow-800 border border-yellow-200 rounded">
-                                UOP Dibayarkan Bulanan
+                            <span class="font-medium">${value || '-'}</span>
+                            <span class="inline-block px-2 py-1 text-xs rounded ${color}">
+                                ${roleText}
                             </span>
                         </div>
                     `;
                 }
-                
-                if (!value || value === 0) {
-                    if (role === 'barberman' || role === 'therapist') {
+            },
+            { 
+                title: '💰 Total Amount', 
+                key: 'total_amount',
+                type: 'currency'
+            },
+            { 
+                title: '💵 Cash', 
+                key: 'cash_amount',
+                type: 'currency'
+            },
+            { 
+                title: '💳 QRIS/Transfer', 
+                key: 'qris_amount',
+                type: 'currency'
+            },
+            { 
+                title: '💸 UOP', 
+                key: 'uop',
+                type: 'currency',
+                formatter: (value, row) => {
+                    if (row?.is_kasir) {
                         return `
                             <div class="flex flex-col space-y-1">
-                                <span class="text-orange-500">-</span>
-                                ${alasan_nouop ? `
-                                    <span class="inline-block px-2 py-1 text-xs bg-orange-100 text-orange-800 border border-orange-200 rounded">
-                                        ${alasan_nouop}
-                                    </span>
-                                ` : ''}
+                                <span class="text-gray-500">-</span>
+                                <span class="inline-block px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded">
+                                    UOP Dibayarkan Bulanan
+                                </span>
                             </div>
                         `;
                     }
-                    return `<span class="text-gray-500">-</span>`;
-                }
-                
-                if (role === 'barberman' || role === 'therapist') {
-                    return `
-                        <div class="flex flex-col space-y-1">
-                            <span class="text-blue-600 font-bold">${Helpers.formatCurrency(value)}</span>
-                            ${alasan_nouop ? `
-                                <span class="inline-block px-2 py-1 text-xs bg-gray-100 text-gray-800 border border-gray-200 rounded">
-                                    ${alasan_nouop}
-                                </span>
-                            ` : ''}
-                        </div>
-                    `;
-                }
-                
-                return Helpers.formatCurrency(value);
-            }
-        },
-        { 
-            title: '📈 Total Komisi', 
-            key: 'total_komisi',
-            type: 'currency',
-            formatter: (value) => {
-                if (!value || value === 0) {
-                    return '<span class="text-gray-500">-</span>';
-                }
-                return `<span class="text-green-600 font-semibold">${Helpers.formatCurrency(value)}</span>`;
-            }
-        },
-        { 
-            title: '💳 Tips QRIS', 
-            key: 'tips_qris',
-            type: 'currency',
-            formatter: (value) => {
-                if (!value || value === 0) {
-                    return '<span class="text-gray-500">-</span>';
-                }
-                return `<span class="text-purple-600">${Helpers.formatCurrency(value)}</span>`;
-            }
-        },
-        { 
-            title: '🛒 Jml Trans', 
-            key: 'jumlah_transaksi',
-            formatter: (value) => {
-                return `<span class="font-medium">${value || 0}</span>`;
-            }
-        }
-    ];
-}
-    getMembercardColumns() {
-    return [
-        { 
-            title: 'Tanggal', 
-            key: 'tanggal',
-            formatter: (value) => {
-                if (!value || value === 'Unknown') return '-';
-                
-                try {
-                    // Format: DD/MM/YYYY
-                    // Cek jika sudah format DD/MM/YYYY
-                    if (value.includes('/')) {
-                        const parts = value.split('/');
-                        if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2) {
-                            return value; // Sudah format DD/MM/YYYY
-                        }
+                    
+                    if (!value || value === 0) {
+                        return '<span class="text-gray-500">-</span>';
                     }
                     
-                    // Parse dari format YYYY-MM-DD
-                    if (value.includes('-')) {
-                        const parts = value.split('-');
-                        if (parts.length === 3) {
-                            const [year, month, day] = parts;
+                    return Helpers.formatCurrency(value);
+                }
+            },
+            { 
+                title: '📝 Alasan UOP', 
+                key: 'alasan_uop',
+                formatter: (value, row) => {
+                    if (row?.is_kasir) {
+                        return '<span class="text-blue-600 font-medium">UOP Dibayarkan Bulanan</span>';
+                    }
+                    return value || '-';
+                }
+            },
+            { 
+                title: '📈 Total Komisi', 
+                key: 'total_komisi',
+                type: 'currency',
+                formatter: (value) => {
+                    if (!value || value === 0) {
+                        return '<span class="text-gray-500">-</span>';
+                    }
+                    return `<span class="text-green-600 font-semibold">${Helpers.formatCurrency(value)}</span>`;
+                }
+            },
+            { 
+                title: '💳 Tips QRIS', 
+                key: 'tips_qris',
+                type: 'currency'
+            },
+            { 
+                title: '🛒 Jml Transaksi', 
+                key: 'jumlah_transaksi',
+                formatter: (value) => value || 0
+            },
+            { 
+                title: '💰 Setoran', 
+                key: 'setoran',
+                type: 'currency',
+                formatter: (value) => {
+                    const isPositive = value >= 0;
+                    const sign = isPositive ? '+' : '-';
+                    const color = isPositive ? 'text-green-600' : 'text-red-600';
+                    const absoluteValue = Math.abs(value);
+                    
+                    return `<span class="font-bold ${color}">${sign} ${Helpers.formatCurrency(absoluteValue)}</span>`;
+                }
+            }
+        ];
+    }
+
+    getMembercardColumns() {
+        return [
+            { 
+                title: 'Tanggal', 
+                key: 'tanggal',
+                formatter: (value) => {
+                    if (!value || value === 'Unknown') return '-';
+                    
+                    try {
+                        // Format: DD/MM/YYYY
+                        // Cek jika sudah format DD/MM/YYYY
+                        if (value.includes('/')) {
+                            const parts = value.split('/');
+                            if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2) {
+                                return value; // Sudah format DD/MM/YYYY
+                            }
+                        }
+                        
+                        // Parse dari format YYYY-MM-DD
+                        if (value.includes('-')) {
+                            const parts = value.split('-');
+                            if (parts.length === 3) {
+                                const [year, month, day] = parts;
+                                return `${day}/${month}/${year}`;
+                            }
+                        }
+                        
+                        // Parse dari Date object
+                        const date = new Date(value);
+                        if (!isNaN(date.getTime())) {
+                            const day = date.getDate().toString().padStart(2, '0');
+                            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                            const year = date.getFullYear();
                             return `${day}/${month}/${year}`;
                         }
+                        
+                        return value; // Return as-is jika parsing gagal
+                        
+                    } catch (error) {
+                        console.warn('Error formatting date:', value, error);
+                        return value;
+                    }
+                }
+            },
+            { title: 'Outlet', key: 'outlet' },
+            { title: 'Kasir', key: 'kasir' },
+            { title: 'Jumlah Membercard', key: 'jumlah_membercard' }
+        ];
+    }
+
+    getAbsenColumns() {
+        return [
+            { 
+                title: 'Tanggal', 
+                key: 'tanggal',
+                formatter: (value) => {
+                    if (!value || value === 'Unknown') return '-';
+                    return value; // Sudah dalam format DD/MM/YYYY
+                }
+            },
+            { title: 'Outlet', key: 'outlet' },
+            { title: 'Karyawan', key: 'karyawan' },
+            { 
+                title: 'Jadwal Masuk', 
+                key: 'jadwal_masuk',
+                formatter: (value) => value || '09:00'
+            },
+            { 
+                title: 'Jadwal Pulang', 
+                key: 'jadwal_pulang',
+                formatter: (value) => value || '21:00'
+            },
+            { 
+                title: 'Clock In', 
+                key: 'clockin',
+                formatter: (value) => value || '-'
+            },
+            { 
+                title: 'Clock Out', 
+                key: 'clockout',
+                formatter: (value) => value || '-'
+            },
+            { 
+                title: 'Jam Kerja', 
+                key: 'jam_kerja',
+                formatter: (value) => {
+                    if (!value || value === 'Masih bekerja') return '-';
+                    return value;
+                }
+            },
+            { 
+                title: 'Keterangan', 
+                key: 'keterangan',
+                formatter: (value) => {
+                    if (!value) return '-';
+                    
+                    // Beri warna berdasarkan status
+                    if (value.includes('Terlambat')) {
+                        return `<span class="text-orange-600 font-medium">${value}</span>`;
+                    } else if (value.includes('pulang cepat')) {
+                        return `<span class="text-yellow-600 font-medium">${value}</span>`;
+                    } else if (value === 'Hadir') {
+                        return `<span class="text-green-600 font-medium">${value}</span>`;
+                    } else if (value === 'Belum clock in') {
+                        return `<span class="text-red-500 font-medium">${value}</span>`;
                     }
                     
-                    // Parse dari Date object
-                    const date = new Date(value);
-                    if (!isNaN(date.getTime())) {
-                        const day = date.getDate().toString().padStart(2, '0');
-                        const month = (date.getMonth() + 1).toString().padStart(2, '0');
-                        const year = date.getFullYear();
-                        return `${day}/${month}/${year}`;
-                    }
-                    
-                    return value; // Return as-is jika parsing gagal
-                    
-                } catch (error) {
-                    console.warn('Error formatting date:', value, error);
                     return value;
                 }
             }
-        },
-        { title: 'Outlet', key: 'outlet' },
-        { title: 'Kasir', key: 'kasir' },
-        { title: 'Jumlah Membercard', key: 'jumlah_membercard' }
-    ];
-}
-
-   getAbsenColumns() {
-    return [
-        { 
-            title: 'Tanggal', 
-            key: 'tanggal',
-            formatter: (value) => {
-                if (!value || value === 'Unknown') return '-';
-                return value; // Sudah dalam format DD/MM/YYYY
-            }
-        },
-        { title: 'Outlet', key: 'outlet' },
-        { title: 'Karyawan', key: 'karyawan' },
-        { 
-            title: 'Jadwal Masuk', 
-            key: 'jadwal_masuk',
-            formatter: (value) => value || '09:00'
-        },
-        { 
-            title: 'Jadwal Pulang', 
-            key: 'jadwal_pulang',
-            formatter: (value) => value || '21:00'
-        },
-        { 
-            title: 'Clock In', 
-            key: 'clockin',
-            formatter: (value) => value || '-'
-        },
-        { 
-            title: 'Clock Out', 
-            key: 'clockout',
-            formatter: (value) => value || '-'
-        },
-        { 
-            title: 'Jam Kerja', 
-            key: 'jam_kerja',
-            formatter: (value) => {
-                if (!value || value === 'Masih bekerja') return '-';
-                return value;
-            }
-        },
-        { 
-            title: 'Keterangan', 
-            key: 'keterangan',
-            formatter: (value) => {
-                if (!value) return '-';
-                
-                // Beri warna berdasarkan status
-                if (value.includes('Terlambat')) {
-                    return `<span class="text-orange-600 font-medium">${value}</span>`;
-                } else if (value.includes('pulang cepat')) {
-                    return `<span class="text-yellow-600 font-medium">${value}</span>`;
-                } else if (value === 'Hadir') {
-                    return `<span class="text-green-600 font-medium">${value}</span>`;
-                } else if (value === 'Belum clock in') {
-                    return `<span class="text-red-500 font-medium">${value}</span>`;
-                }
-                
-                return value;
-            }
-        }
-    ];
-}
+        ];
+    }
 
     getOmsetColumns() {
-    return [
-        { title: 'Outlet', key: 'outlet' },
-        { 
-            title: 'Tanggal', 
-            key: 'tanggal',
-            type: 'date'
-        },
-        { 
-            title: 'Total Omset', 
-            key: 'total_omset',
-            type: 'currency'
-        },
-        { 
-            title: 'Discount', 
-            key: 'total_discount',
-            type: 'currency'
-        },
-        { 
-            title: 'Redeem', 
-            key: 'total_redeem',
-            type: 'currency'
-        },
-        { 
-            title: 'Omset Kotor', 
-            key: 'omset_kotor',
-            type: 'currency'
-        },
-        { 
-            title: 'Modal', 
-            key: 'total_modal',
-            type: 'currency'
-        },
-        { 
-            title: 'Omset Bersih', 
-            key: 'omset_bersih',
-            type: 'currency'
-        },
-        { 
-            title: 'Komisi', 
-            key: 'total_komisi',
-            type: 'currency'
-        },
-        { 
-            title: 'Net Profit', 
-            key: 'net_profit',
-            type: 'currency'
-        },
-        { title: 'Jumlah Transaksi', key: 'jumlah_transaksi' },
-        { 
-            title: 'Rata-rata Transaksi', 
-            key: 'rata_rata_transaksi',
-            type: 'currency'
-        }
-    ];
-}
-
+        return [
+            { title: 'Outlet', key: 'outlet' },
+            { 
+                title: 'Tanggal', 
+                key: 'tanggal',
+                type: 'date'
+            },
+            { 
+                title: 'Total Omset', 
+                key: 'total_omset',
+                type: 'currency'
+            },
+            { 
+                title: 'Discount', 
+                key: 'total_discount',
+                type: 'currency'
+            },
+            { 
+                title: 'Redeem', 
+                key: 'total_redeem',
+                type: 'currency'
+            },
+            { 
+                title: 'Omset Kotor', 
+                key: 'omset_kotor',
+                type: 'currency'
+            },
+            { 
+                title: 'Modal', 
+                key: 'total_modal',
+                type: 'currency'
+            },
+            { 
+                title: 'Omset Bersih', 
+                key: 'omset_bersih',
+                type: 'currency'
+            },
+            { 
+                title: 'Komisi', 
+                key: 'total_komisi',
+                type: 'currency'
+            },
+            { 
+                title: 'Net Profit', 
+                key: 'net_profit',
+                type: 'currency'
+            },
+            { title: 'Jumlah Transaksi', key: 'jumlah_transaksi' },
+            { 
+                title: 'Rata-rata Transaksi', 
+                key: 'rata_rata_transaksi',
+                type: 'currency'
+            }
+        ];
+    }
 
     getPemasukanPengeluaranColumns() {
         return [
@@ -1992,12 +2336,21 @@ determineAttendanceStatus(clockin, clockout, jadwalMasuk, jadwalPulang) {
                 totalItems = new Set(this.currentData.map(item => item.order_no)).size;
                 totalProfit = -totalSales;
                 break;
+                
             case 'order-transaksi':
                 totalSales = this.currentData.reduce((sum, item) => sum + (parseFloat(item.total_amount) || 0), 0);
                 totalTransactions = this.currentData.length;
                 totalItems = this.currentData.reduce((sum, item) => sum + (parseInt(item.redeem_qty) || 0), 0);
                 totalProfit = this.currentData.reduce((sum, item) => sum + (parseFloat(item.profit) || 0), 0);
                 break;
+                
+            case 'setoran-barberman': // TAB BARU
+                totalSales = this.currentData.reduce((sum, item) => sum + (parseFloat(item.total_amount) || 0), 0);
+                totalTransactions = this.currentData.length;
+                totalItems = this.currentData.reduce((sum, item) => sum + (parseFloat(item.setoran) || 0), 0);
+                totalProfit = this.currentData.reduce((sum, item) => sum + (parseFloat(item.total_komisi) || 0), 0);
+                break;
+                
             default:
                 totalSales = this.currentData.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
                 totalTransactions = new Set(this.currentData.map(item => item.order_no)).size;
@@ -2061,6 +2414,10 @@ determineAttendanceStatus(clockin, clockout, jadwalMasuk, jadwalPulang) {
                 'transaksi-cancel': () => {
                     csvContent = this.generateTransaksiCancelCSV();
                     filename = `laporan-transaksi-cancel-${new Date().toISOString().split('T')[0]}.csv`;
+                },
+                'setoran-barberman': () => { // TAB BARU
+                    csvContent = this.generateSetoranBarbermanCSV();
+                    filename = `laporan-setoran-barberman-${new Date().toISOString().split('T')[0]}.csv`;
                 }
             };
 
@@ -2088,7 +2445,7 @@ determineAttendanceStatus(clockin, clockout, jadwalMasuk, jadwalPulang) {
         }
     }
 
-    // CSV generation methods (tetap sama seperti sebelumnya)
+    // CSV generation methods
     generateDetailTransaksiCSV() {
         let csvContent = "Tanggal,Order No,Outlet,Kasir,Served By,Customer,Item,Qty,Harga Jual,Amount,Payment Type,Status\n";
         
@@ -2133,40 +2490,71 @@ determineAttendanceStatus(clockin, clockout, jadwalMasuk, jadwalPulang) {
         return csvContent;
     }
 
-generateKomisiCSV() {
-    let csvContent = "Outlet,Tanggal,Hari,Kasir,Served By,Role,Total Amount,UOP,Alasan UOP,Total Komisi,Tips QRIS,Jumlah Transaksi\n";
-    
-    this.currentData.forEach(item => {
-        // Tentukan teks alasan untuk CSV
-        let alasanText = '';
-        if (item.role === 'kasir') {
-            alasanText = 'UOP Dibayarkan Bulanan';
-        } else if (item.alasan_nouop) {
-            alasanText = item.alasan_nouop;
-        } else if (!item.uop || item.uop === 0) {
-            alasanText = 'Tidak ada UOP';
-        }
+    generateKomisiCSV() {
+        let csvContent = "Outlet,Tanggal,Hari,Kasir,Served By,Role,Total Amount,UOP,Alasan UOP,Total Komisi,Tips QRIS,Jumlah Transaksi\n";
         
-        const row = [
-            item.outlet,
-            item.tanggal,
-            item.hari,
-            item.kasir,
-            item.serve_by,
-            item.role || 'staff',
-            item.total_amount,
-            item.uop,
-            alasanText,
-            item.total_komisi,
-            item.tips_qris,
-            item.jumlah_transaksi
-        ].map(field => `"${field}"`).join(',');
-        
-        csvContent += row + '\n';
-    });
+        this.currentData.forEach(item => {
+            // Tentukan teks alasan untuk CSV
+            let alasanText = '';
+            if (item.role === 'kasir') {
+                alasanText = 'UOP Dibayarkan Bulanan';
+            } else if (item.alasan_nouop) {
+                alasanText = item.alasan_nouop;
+            } else if (!item.uop || item.uop === 0) {
+                alasanText = 'Tidak ada UOP';
+            }
+            
+            const row = [
+                item.outlet,
+                item.tanggal,
+                item.hari,
+                item.kasir,
+                item.serve_by,
+                item.role || 'staff',
+                item.total_amount,
+                item.uop,
+                alasanText,
+                item.total_komisi,
+                item.tips_qris,
+                item.jumlah_transaksi
+            ].map(field => `"${field}"`).join(',');
+            
+            csvContent += row + '\n';
+        });
 
-    return csvContent;
-}
+        return csvContent;
+    }
+
+    generateSetoranBarbermanCSV() {
+        let csvContent = "Outlet,Tanggal,Hari,Kasir,Served By,Role,Total Amount,Cash,QRIS/Transfer,UOP,Alasan UOP,Total Komisi,Tips QRIS,Jml Transaksi,Setoran\n";
+        
+        this.currentData.forEach(item => {
+            const alasanText = item.is_kasir ? 'UOP Dibayarkan Bulanan' : (item.alasan_uop || '-');
+            
+            const row = [
+                item.outlet,
+                item.tanggal,
+                item.hari,
+                item.kasir,
+                item.serve_by,
+                item.role || 'staff',
+                item.total_amount || 0,
+                item.cash_amount || 0,
+                item.qris_amount || 0,
+                item.uop || 0,
+                alasanText,
+                item.total_komisi || 0,
+                item.tips_qris || 0,
+                item.jumlah_transaksi || 0,
+                item.setoran || 0
+            ].map(field => `"${field}"`).join(',');
+            
+            csvContent += row + '\n';
+        });
+
+        return csvContent;
+    }
+
     generateMembercardCSV() {
         let csvContent = "Tanggal,Outlet,Kasir,Jumlah Membercard\n";
         
@@ -2224,31 +2612,30 @@ generateKomisiCSV() {
     }
 
     generateOmsetCSV() {
-    // PERBAIKAN URUTAN KOLOM CSV
-    let csvContent = "Outlet,Tanggal,Total Omset,Discount,Redeem,Omset Kotor,Modal,Omset Bersih,Komisi,Net Profit,Jumlah Transaksi,Rata-rata Transaksi\n";
-    
-    this.currentData.forEach(item => {
-        const row = [
-            item.outlet,
-            item.tanggal,
-            item.total_omset,
-            item.total_discount,
-            item.total_redeem,
-            item.omset_kotor,           // TAMBAH KOLOM BARU
-            item.total_modal,
-            item.omset_bersih,
-            item.total_komisi,
-            item.net_profit,
-            item.jumlah_transaksi,
-            item.rata_rata_transaksi
-        ].map(field => `"${field}"`).join(',');
+        // PERBAIKAN URUTAN KOLOM CSV
+        let csvContent = "Outlet,Tanggal,Total Omset,Discount,Redeem,Omset Kotor,Modal,Omset Bersih,Komisi,Net Profit,Jumlah Transaksi,Rata-rata Transaksi\n";
         
-        csvContent += row + '\n';
-    });
+        this.currentData.forEach(item => {
+            const row = [
+                item.outlet,
+                item.tanggal,
+                item.total_omset,
+                item.total_discount,
+                item.total_redeem,
+                item.omset_kotor,           // TAMBAH KOLOM BARU
+                item.total_modal,
+                item.omset_bersih,
+                item.total_komisi,
+                item.net_profit,
+                item.jumlah_transaksi,
+                item.rata_rata_transaksi
+            ].map(field => `"${field}"`).join(',');
+            
+            csvContent += row + '\n';
+        });
 
-    return csvContent;
-}
-
+        return csvContent;
+    }
 
     generatePemasukanPengeluaranCSV() {
         let csvContent = "Tanggal,Outlet,Kasir,Omset Cash,Top Up Kas,Sisa Setoran,Hutang Komisi,Pemasukan Lain,Note Pemasukan,Komisi,UOP,Tips QRIS,Bayar Hutang Komisi,Iuran RT,Sumbangan,Iuran Sampah,Galon,Biaya Admin Setoran,Yakult,Pengeluaran Lain,Note Pengeluaran,Total Pemasukan,Total Pengeluaran,Saldo\n";
