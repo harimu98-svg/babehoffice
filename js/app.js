@@ -571,116 +571,116 @@ loadStockManagement() {
         `;
     }
 
-    // Load reports module
-    loadReports() {
-        const outletOptions = this.outlets.map(outlet => 
-            `<option value="${outlet.outlet}">${outlet.outlet}</option>`
-        ).join('');
+   // Load reports module
+loadReports() {
+    const outletOptions = this.outlets.map(outlet => 
+        `<option value="${outlet.outlet}">${outlet.outlet}</option>`
+    ).join('');
 
-        console.log('Loading reports module');
-        return `
-            <div class="space-y-6">
-                <!-- Summary Cards -->
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <div class="bg-white rounded-lg shadow p-6">
-                        <div class="flex items-center">
-                            <div class="p-3 rounded-full bg-green-100 text-green-600">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"/>
-                                </svg>
-                            </div>
-                            <div class="ml-4">
-                                <h3 class="text-sm font-medium text-gray-500">Total Penjualan</h3>
-                                <p class="text-2xl font-semibold text-gray-900" id="total-sales">Rp 0</p>
-                            </div>
+    console.log('Loading reports module');
+    return `
+        <div class="space-y-6">
+            <!-- Summary Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-green-100 text-green-600">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"/>
+                            </svg>
                         </div>
-                    </div>
-
-                    <div class="bg-white rounded-lg shadow p-6">
-                        <div class="flex items-center">
-                            <div class="p-3 rounded-full bg-blue-100 text-blue-600">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-                                </svg>
-                            </div>
-                            <div class="ml-4">
-                                <h3 class="text-sm font-medium text-gray-500">Total Transaksi</h3>
-                                <p class="text-2xl font-semibold text-gray-900" id="total-transactions">0</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="bg-white rounded-lg shadow p-6">
-                        <div class="flex items-center">
-                            <div class="p-3 rounded-full bg-purple-100 text-purple-600">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
-                                </svg>
-                            </div>
-                            <div class="ml-4">
-                                <h3 class="text-sm font-medium text-gray-500">Total Item Terjual</h3>
-                                <p class="text-2xl font-semibold text-gray-900" id="total-items">0</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="bg-white rounded-lg shadow p-6">
-                        <div class="flex items-center">
-                            <div class="p-3 rounded-full bg-yellow-100 text-yellow-600">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"/>
-                                </svg>
-                            </div>
-                            <div class="ml-4">
-                                <h3 class="text-sm font-medium text-gray-500">Total Profit</h3>
-                                <p class="text-2xl font-semibold text-gray-900" id="total-profit">Rp 0</p>
-                            </div>
+                        <div class="ml-4">
+                            <h3 class="text-sm font-medium text-gray-500">Total Penjualan</h3>
+                            <p class="text-2xl font-semibold text-gray-900" id="total-sales">Rp 0</p>
                         </div>
                     </div>
                 </div>
 
-                <!-- Filters -->
-                <div class="bg-white rounded-lg shadow">
-                    <div class="px-6 py-4 border-b border-gray-200">
-                        <h3 class="text-lg font-semibold text-gray-800">Filter Laporan</h3>
-                    </div>
-                    <div class="p-6">
-                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Tanggal Mulai</label>
-                                <input type="date" id="start-date" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Tanggal Akhir</label>
-                                <input type="date" id="end-date" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Outlet</label>
-                                <select id="outlet-filter" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                                    <option value="">Semua Outlet</option>
-                                    ${outletOptions}
-                                </select>
-                            </div>
-                            <div class="flex items-end">
-                                <button id="apply-filters" class="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
-                                    Terapkan Filter
-                                </button>
-                            </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-blue-100 text-blue-600">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                            </svg>
+                        </div>
+                        <div class="ml-4">
+                            <h3 class="text-sm font-medium text-gray-500">Total Transaksi</h3>
+                            <p class="text-2xl font-semibold text-gray-900" id="total-transactions">0</p>
                         </div>
                     </div>
                 </div>
 
-                <!-- Export Button -->
-                <div class="flex justify-end">
-                    <button id="export-report" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors flex items-center">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                        </svg>
-                        Export CSV
-                    </button>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-purple-100 text-purple-600">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
+                            </svg>
+                        </div>
+                        <div class="ml-4">
+                            <h3 class="text-sm font-medium text-gray-500">Total Item Terjual</h3>
+                            <p class="text-2xl font-semibold text-gray-900" id="total-items">0</p>
+                        </div>
+                    </div>
                 </div>
 
-   <!-- TAB STRUCTURE - FLEX WRAP -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-yellow-100 text-yellow-600">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"/>
+                            </svg>
+                        </div>
+                        <div class="ml-4">
+                            <h3 class="text-sm font-medium text-gray-500">Total Profit</h3>
+                            <p class="text-2xl font-semibold text-gray-900" id="total-profit">Rp 0</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filters -->
+            <div class="bg-white rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h3 class="text-lg font-semibold text-gray-800">Filter Laporan</h3>
+                </div>
+                <div class="p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Tanggal Mulai</label>
+                            <input type="date" id="start-date" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Tanggal Akhir</label>
+                            <input type="date" id="end-date" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Outlet</label>
+                            <select id="outlet-filter" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <option value="">Semua Outlet</option>
+                                ${outletOptions}
+                            </select>
+                        </div>
+                        <div class="flex items-end">
+                            <button id="apply-filters" class="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
+                                Terapkan Filter
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Export Button -->
+            <div class="flex justify-end">
+                <button id="export-report" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors flex items-center">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    Export CSV
+                </button>
+            </div>
+
+            <!-- TAB STRUCTURE - FLEX WRAP -->
             <div class="bg-white rounded-lg shadow">
                 <div class="border-b border-gray-200">
                     <nav class="flex flex-wrap gap-2 px-4 py-3" aria-label="Tabs">
@@ -705,38 +705,33 @@ loadStockManagement() {
                         <button class="report-tab whitespace-nowrap px-4 py-2 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50 rounded-t" data-tab="pemasukan-pengeluaran">
                             💸 Pemasukan & Pengeluaran
                         </button>
-						<button class="report-tab whitespace-nowrap px-4 py-2 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50 rounded-t" data-tab="order-transaksi">
- 					   📋 Order Transaksi
-						</button>
+                        <button class="report-tab whitespace-nowrap px-4 py-2 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50 rounded-t" data-tab="order-transaksi">
+                            📋 Order Transaksi
+                        </button>
                         <button class="report-tab whitespace-nowrap px-4 py-2 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50 rounded-t" data-tab="transaksi-cancel">
                             ❌ Transaksi Cancel
                         </button>
+                        <!-- TAB BARU: SETORAN BARBERMAN -->
+                        <button class="report-tab whitespace-nowrap px-4 py-2 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50 rounded-t" data-tab="setoran-barberman">
+                            💇 Setoran Barberman
+                        </button>
                     </nav>
                 </div>
-                   <!-- Report Title Section - DIBAWAH TAB -->
+                
+                <!-- Report Title Section - DIBAWAH TAB -->
                 <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
                     <h3 class="text-lg font-semibold text-gray-800" id="report-title">Detail Transaksi</h3>
                     <p class="text-sm text-gray-600 mt-1" id="report-subtitle">Ringkasan lengkap semua transaksi</p>
                 </div>
+                
                 <!-- Single Table Container -->
                 <div class="p-6">
                     <div id="reports-table"></div>
                 </div>
             </div>
         </div>
-            <!-- END TAB STRUCTURE -->
-
-      <!-- Reports Table -->
-                <div class="bg-white rounded-lg shadow">
-                    
-                    <div class="p-6">
-                        <div id="reports-table"></div>
-                    </div>
-                </div>
-            </div>
-       `;
-    }
-
+    `;
+}
     // Load dashboard module
     async loadDashboard() {
         console.log('Loading dashboard content');
