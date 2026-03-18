@@ -104,53 +104,53 @@ async loadData() {
 }
 
     // Initialize table
-    initTable() {
-        console.log('Initializing group products table...');
-        
-        const columns = [
-            { 
-                title: 'Outlet', 
-                key: 'outlet',
-                formatter: (value) => `<span class="font-medium">${value || '-'}</span>`
-            },
-            { 
-                title: 'Group Produk', 
-                key: 'group',
-                formatter: (value) => `<span class="text-gray-900">${value || '-'}</span>`
-            },
-            { 
-                title: 'Jumlah Produk', 
-                key: 'id',
-                formatter: async (id, row) => {
-                    // Hitung jumlah produk aktif dalam group ini
-                    const count = await this.countActiveProducts(row.group, row.outlet);
-                    return `<span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">${count} Produk</span>`;
-                }
-            },
-            { 
-                title: 'Status', 
-                key: 'status',
-                formatter: (value) => {
-                    const isActive = value === 'active';
-                    return `
-                        <span class="px-3 py-1 text-xs font-medium rounded-full ${
-                            isActive 
-                                ? 'bg-green-100 text-green-800 border border-green-200' 
-                                : 'bg-red-100 text-red-800 border border-red-200'
-                        }">
-                            ${isActive ? '🟢 Aktif' : '🔴 Nonaktif'}
-                        </span>
-                    `;
-                },
-                width: '120px'
-            },
-            {
-                title: 'Aksi',
-                key: 'id',
-                formatter: (id, row) => this.getActionButtons(id, row),
-                width: '120px'
+initTable() {
+    console.log('Initializing group products table...');
+    
+    const columns = [
+        { 
+            title: 'Outlet', 
+            key: 'outlet',
+            formatter: (value) => `<span class="font-medium">${value || '-'}</span>`
+        },
+        { 
+            title: 'Group Produk', 
+            key: 'group',
+            formatter: (value) => `<span class="text-gray-900">${value || '-'}</span>`
+        },
+        { 
+            title: 'Jumlah Produk', 
+            key: 'product_count', // Langsung pakai field yang sudah dihitung
+            formatter: (value) => {
+                const count = value || 0;
+                const bgColor = count > 0 ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600';
+                return `<span class="px-2 py-1 text-xs rounded-full ${bgColor}">${count} Produk</span>`;
             }
-        ];
+        },
+        { 
+            title: 'Status', 
+            key: 'status',
+            formatter: (value) => {
+                const isActive = value === 'active';
+                return `
+                    <span class="px-3 py-1 text-xs font-medium rounded-full ${
+                        isActive 
+                            ? 'bg-green-100 text-green-800 border border-green-200' 
+                            : 'bg-red-100 text-red-800 border border-red-200'
+                    }">
+                        ${isActive ? '🟢 Aktif' : '🔴 Nonaktif'}
+                    </span>
+                `;
+            },
+            width: '120px'
+        },
+        {
+            title: 'Aksi',
+            key: 'id',
+            formatter: (id, row) => this.getActionButtons(id, row),
+            width: '120px'
+        }
+    ];
 
         // Cek jika DataTable class tersedia
         if (typeof DataTable === 'undefined') {
