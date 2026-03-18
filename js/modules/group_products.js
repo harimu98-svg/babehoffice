@@ -52,35 +52,56 @@ class GroupProducts {
         }
     }
 
-    // Load data from Supabase
-    async loadData() {
-        try {
-            Helpers.showLoading();
-            console.log('Loading group products data...');
-            
-            const { data, error } = await supabase
-                .from('group_produk')
-                .select('*')
-                .order('group', { ascending: true });
+  // Load data from Supabase
+async loadData() {
+    try {
+        Helpers.showLoading();
+        console.log('Loading group products data...');
+        
+        // Ambil data group
+        const { data: groupData, error } = await supabase
+            .from('group_produk')
+            .select('*')
+            .order('group', { ascending: true });
 
-            if (error) throw error;
+        if (error) throw error;
 
-            this.currentData = data || [];
-            console.log('Loaded group products:', this.currentData);
-            
-            if (this.table) {
-                this.table.updateData(this.currentData);
+        // Untuk setiap group, hitung jumlah produk aktif
+        const enrichedData = [];
+        for (const group of groupData) {
+            const { count, error: countError } = await supabase
+                .from('produk')
+                .select('*', { count: 'exact', head: true })
+                .eq('group_produk', group.group)
+                .eq('outlet', group.outlet)
+                .eq('status', 'active');
+
+            if (countError) {
+                console.error('Error counting products:', countError);
             }
 
-            Helpers.hideLoading();
-            return this.currentData;
-        } catch (error) {
-            Helpers.hideLoading();
-            console.error('Error loading group products data:', error);
-            Notifications.error('Gagal memuat data group produk: ' + error.message);
-            return [];
+            enrichedData.push({
+                ...group,
+                product_count: count || 0
+            });
         }
+
+        this.currentData = enrichedData || [];
+        console.log('Loaded group products with counts:', this.currentData);
+        
+        if (this.table) {
+            this.table.updateData(this.currentData);
+        }
+
+        Helpers.hideLoading();
+        return this.currentData;
+    } catch (error) {
+        Helpers.hideLoading();
+        console.error('Error loading group products data:', error);
+        Notifications.error('Gagal memuat data group produk: ' + error.message);
+        return [];
     }
+}
 
     // Initialize table
     initTable() {
