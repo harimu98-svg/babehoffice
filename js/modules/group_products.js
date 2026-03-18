@@ -1,11 +1,12 @@
-// Group Products Module - WITH AUTO-UPDATE PRODUCTS
+// Group Products Module - COMPLETE FIXED & OPTIMIZED VERSION
 class GroupProducts {
     constructor() {
         this.currentData = [];
         this.table = null;
         this.outlets = [];
         this.isInitialized = false;
-        console.log('GroupProducts class initialized');
+        this.isLoading = false;
+        console.log('✅ GroupProducts class initialized');
     }
 
     // Initialize module
@@ -15,7 +16,7 @@ class GroupProducts {
             return;
         }
 
-        console.log('Initializing GroupProducts module...');
+        console.log('🔄 Initializing GroupProducts module...');
         try {
             await this.loadOutlets();
             await this.loadData();
@@ -35,7 +36,6 @@ class GroupProducts {
                 this.outlets = window.app.getOutlets();
                 console.log('Loaded outlets from app:', this.outlets);
             } else {
-                // Fallback: load outlets directly
                 const { data, error } = await supabase
                     .from('outlet')
                     .select('outlet')
@@ -52,107 +52,146 @@ class GroupProducts {
         }
     }
 
-  // Load data from Supabase
-async loadData() {
-    try {
-        Helpers.showLoading();
-        console.log('Loading group products data...');
-        
-        // Ambil data group
-        const { data: groupData, error } = await supabase
-            .from('group_produk')
-            .select('*')
-            .order('group', { ascending: true });
+    // Load data from Supabase dengan hitung jumlah produk (OPTIMIZED)
+    async loadData() {
+        if (this.isLoading) {
+            console.log('Already loading data...');
+            return;
+        }
 
-        if (error) throw error;
+        try {
+            this.isLoading = true;
+            Helpers.showLoading();
+            console.log('Loading group products data...');
+            
+            // Ambil data group (Query 1)
+            const { data: groupData, error } = await supabase
+                .from('group_produk')
+                .select('*')
+                .order('group', { ascending: true });
 
-        // Untuk setiap group, hitung jumlah produk aktif
-        const enrichedData = [];
-        for (const group of groupData) {
-            const { count, error: countError } = await supabase
+            if (error) throw error;
+
+            if (!groupData || groupData.length === 0) {
+                this.currentData = [];
+                if (this.table) this.table.updateData([]);
+                Helpers.hideLoading();
+                this.isLoading = false;
+                return [];
+            }
+
+            // Ambil semua produk aktif sekaligus (Query 2 - optimasi)
+            const { data: productsData, error: productsError } = await supabase
                 .from('produk')
-                .select('*', { count: 'exact', head: true })
-                .eq('group_produk', group.group)
-                .eq('outlet', group.outlet)
+                .select('group_produk, outlet, status')
                 .eq('status', 'active');
 
-            if (countError) {
-                console.error('Error counting products:', countError);
+            if (productsError) {
+                console.error('Error loading products:', productsError);
             }
 
-            enrichedData.push({
-                ...group,
-                product_count: count || 0
+            // Hitung jumlah produk per group menggunakan Map (O(1) lookup)
+            const productCountMap = new Map();
+            if (productsData) {
+                productsData.forEach(product => {
+                    const key = `${product.outlet}|${product.group_produk}`;
+                    productCountMap.set(key, (productCountMap.get(key) || 0) + 1);
+                });
+            }
+
+            // Gabungkan data group dengan jumlah produk
+            const enrichedData = groupData.map(group => {
+                const key = `${group.outlet}|${group.group}`;
+                const count = productCountMap.get(key) || 0;
+                return {
+                    ...group,
+                    product_count: count,
+                    // Tambahkan flag untuk mengetahui apakah group memiliki produk aktif
+                    has_active_products: count > 0
+                };
             });
-        }
 
-        this.currentData = enrichedData || [];
-        console.log('Loaded group products with counts:', this.currentData);
-        
-        if (this.table) {
-            this.table.updateData(this.currentData);
-        }
+            this.currentData = enrichedData || [];
+            console.log(`✅ Loaded ${this.currentData.length} groups with product counts`);
+            
+            if (this.table) {
+                this.table.updateData(this.currentData);
+            }
 
-        Helpers.hideLoading();
-        return this.currentData;
-    } catch (error) {
-        Helpers.hideLoading();
-        console.error('Error loading group products data:', error);
-        Notifications.error('Gagal memuat data group produk: ' + error.message);
-        return [];
+            Helpers.hideLoading();
+            this.isLoading = false;
+            return this.currentData;
+        } catch (error) {
+            Helpers.hideLoading();
+            this.isLoading = false;
+            console.error('❌ Error loading group products data:', error);
+            Notifications.error('Gagal memuat data group produk: ' + error.message);
+            return [];
+        }
     }
-}
 
     // Initialize table
-initTable() {
-    console.log('Initializing group products table...');
-    
-    const columns = [
-        { 
-            title: 'Outlet', 
-            key: 'outlet',
-            formatter: (value) => `<span class="font-medium">${value || '-'}</span>`
-        },
-        { 
-            title: 'Group Produk', 
-            key: 'group',
-            formatter: (value) => `<span class="text-gray-900">${value || '-'}</span>`
-        },
-        { 
-            title: 'Jumlah Produk', 
-            key: 'product_count', // Langsung pakai field yang sudah dihitung
-            formatter: (value) => {
-                const count = value || 0;
-                const bgColor = count > 0 ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600';
-                return `<span class="px-2 py-1 text-xs rounded-full ${bgColor}">${count} Produk</span>`;
-            }
-        },
-        { 
-            title: 'Status', 
-            key: 'status',
-            formatter: (value) => {
-                const isActive = value === 'active';
-                return `
-                    <span class="px-3 py-1 text-xs font-medium rounded-full ${
-                        isActive 
-                            ? 'bg-green-100 text-green-800 border border-green-200' 
-                            : 'bg-red-100 text-red-800 border border-red-200'
-                    }">
-                        ${isActive ? '🟢 Aktif' : '🔴 Nonaktif'}
-                    </span>
-                `;
+    initTable() {
+        console.log('Initializing group products table...');
+        
+        const columns = [
+            { 
+                title: 'Outlet', 
+                key: 'outlet',
+                formatter: (value) => `<span class="font-medium">${value || '-'}</span>`
             },
-            width: '120px'
-        },
-        {
-            title: 'Aksi',
-            key: 'id',
-            formatter: (id, row) => this.getActionButtons(id, row),
-            width: '120px'
-        }
-    ];
+            { 
+                title: 'Group Produk', 
+                key: 'group',
+                formatter: (value) => `<span class="text-gray-900">${value || '-'}</span>`
+            },
+            { 
+                title: 'Jumlah Produk', 
+                key: 'product_count',
+                formatter: (value, row) => {
+                    const count = value || 0;
+                    const bgColor = count > 0 
+                        ? 'bg-blue-100 text-blue-800 border border-blue-200' 
+                        : 'bg-gray-100 text-gray-600 border border-gray-200';
+                    return `
+                        <span class="px-3 py-1 text-xs font-medium rounded-full ${bgColor}">
+                            ${count} Produk ${count > 0 ? '📦' : '⚪'}
+                        </span>
+                    `;
+                }
+            },
+            { 
+                title: 'Status', 
+                key: 'status',
+                formatter: (value, row) => {
+                    const isActive = value === 'active';
+                    const hasProducts = row.has_active_products;
+                    
+                    // Tampilkan warning jika group nonaktif tapi masih ada produk aktif
+                    const warningIcon = (!isActive && hasProducts) 
+                        ? '<span class="ml-1 text-yellow-500" title="Masih ada produk aktif dalam group ini">⚠️</span>' 
+                        : '';
+                    
+                    return `
+                        <span class="px-3 py-1 text-xs font-medium rounded-full inline-flex items-center ${
+                            isActive 
+                                ? 'bg-green-100 text-green-800 border border-green-200' 
+                                : 'bg-red-100 text-red-800 border border-red-200'
+                        }">
+                            ${isActive ? '🟢 Aktif' : '🔴 Nonaktif'} ${warningIcon}
+                        </span>
+                    `;
+                },
+                width: '140px'
+            },
+            {
+                title: 'Aksi',
+                key: 'id',
+                formatter: (id, row) => this.getActionButtons(id, row),
+                width: '120px'
+            }
+        ];
 
-        // Cek jika DataTable class tersedia
         if (typeof DataTable === 'undefined') {
             console.error('DataTable class not found!');
             this.renderFallbackTable();
@@ -170,25 +209,7 @@ initTable() {
 
         this.table.init();
         this.table.updateData(this.currentData);
-        console.log('Group products table initialized');
-    }
-
-    // Hitung jumlah produk aktif dalam group
-    async countActiveProducts(groupName, outlet) {
-        try {
-            const { count, error } = await supabase
-                .from('produk')
-                .select('*', { count: 'exact', head: true })
-                .eq('group_produk', groupName)
-                .eq('outlet', outlet)
-                .eq('status', 'active');
-
-            if (error) throw error;
-            return count || 0;
-        } catch (error) {
-            console.error('Error counting products:', error);
-            return 0;
-        }
+        console.log('✅ Group products table initialized');
     }
 
     // Fallback table jika DataTable tidak tersedia
@@ -198,14 +219,17 @@ initTable() {
 
         if (this.currentData.length === 0) {
             container.innerHTML = `
-                <div class="text-center py-8">
-                    <div class="text-gray-400 mb-2">
-                        <svg class="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="text-center py-12">
+                    <div class="text-gray-400 mb-3">
+                        <svg class="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
                         </svg>
                     </div>
-                    <p class="text-gray-500">Tidak ada data group produk</p>
-                    <button onclick="groupProducts.showForm()" class="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
+                    <p class="text-gray-500 text-lg mb-4">Belum ada group produk</p>
+                    <button onclick="window.groupProducts.showForm()" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                        </svg>
                         Tambah Group Pertama
                     </button>
                 </div>
@@ -213,9 +237,8 @@ initTable() {
             return;
         }
 
-        // Render fallback table secara synchronous dulu, count akan diupdate via async terpisah
         let tableHTML = `
-            <div class="overflow-x-auto">
+            <div class="overflow-x-auto shadow-sm rounded-lg border border-gray-200">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
@@ -226,24 +249,28 @@ initTable() {
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
                         </tr>
                     </thead>
-                    <tbody class="bg-white divide-y divide-gray-200" id="group-products-tbody">
+                    <tbody class="bg-white divide-y divide-gray-200">
         `;
 
         this.currentData.forEach(item => {
+            const count = item.product_count || 0;
+            const countBgColor = count > 0 ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600';
+            const isActive = item.status === 'active';
+            const statusBgColor = isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+            const warningIcon = (!isActive && count > 0) ? '⚠️' : '';
+
             tableHTML += `
-                <tr id="group-row-${item.id}">
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${item.outlet || '-'}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${item.group || '-'}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm" id="product-count-${item.id}">
-                        <span class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">Loading...</span>
+                <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${this.escapeHtml(item.outlet) || '-'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${this.escapeHtml(item.group) || '-'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-3 py-1 text-xs font-medium rounded-full ${countBgColor}">
+                            ${count} Produk
+                        </span>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
-                        <span class="px-3 py-1 text-xs font-medium rounded-full ${
-                            item.status === 'active' 
-                                ? 'bg-green-100 text-green-800' 
-                                : 'bg-red-100 text-red-800'
-                        }">
-                            ${item.status === 'active' ? 'Aktif' : 'Nonaktif'}
+                        <span class="px-3 py-1 text-xs font-medium rounded-full ${statusBgColor}">
+                            ${isActive ? 'Aktif' : 'Nonaktif'} ${warningIcon}
                         </span>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -260,15 +287,6 @@ initTable() {
         `;
 
         container.innerHTML = tableHTML;
-
-        // Update count secara async
-        this.currentData.forEach(async (item) => {
-            const count = await this.countActiveProducts(item.group, item.outlet);
-            const countCell = document.getElementById(`product-count-${item.id}`);
-            if (countCell) {
-                countCell.innerHTML = `<span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">${count} Produk</span>`;
-            }
-        });
     }
 
     // Get action buttons HTML
@@ -303,20 +321,17 @@ initTable() {
     bindEvents() {
         console.log('Binding group products events...');
         
-        // Add button event
         const addBtn = document.getElementById('add-group-product');
         if (addBtn) {
-            // Remove existing event listeners first
             addBtn.replaceWith(addBtn.cloneNode(true));
             const newAddBtn = document.getElementById('add-group-product');
-            
             newAddBtn.addEventListener('click', () => {
                 console.log('Add group product button clicked');
                 this.showForm();
             });
-            console.log('Add button event bound');
+            console.log('✅ Add button event bound');
         } else {
-            console.error('Add button not found!');
+            console.error('❌ Add button not found!');
         }
     }
 
@@ -337,8 +352,6 @@ initTable() {
         const isEdit = !!item;
         const title = isEdit ? 'Edit Group Produk' : 'Tambah Group Produk';
         
-        console.log('Showing form for:', isEdit ? 'edit' : 'add', item);
-
         // Generate outlet options
         const outletOptions = this.outlets.map(outlet => 
             `<option value="${this.escapeHtml(outlet.outlet)}" ${item && item.outlet === outlet.outlet ? 'selected' : ''}>
@@ -350,11 +363,34 @@ initTable() {
         const currentGroup = item ? item.group : '';
         const currentStatus = item ? item.status : 'active';
 
+        // Tampilkan warning jika edit group yang memiliki produk aktif
+        const hasActiveProducts = item?.has_active_products;
+        const warningMessage = (isEdit && hasActiveProducts && currentStatus === 'active') ? `
+            <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm text-yellow-700">
+                            <strong>Perhatian:</strong> Group ini memiliki <strong>${item.product_count} produk aktif</strong>. 
+                            Jika status diubah menjadi nonaktif, semua produk tersebut akan otomatis dinonaktifkan.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        ` : '';
+
         const content = `
             <div class="space-y-4">
+                ${warningMessage}
                 <form id="group-product-form" class="space-y-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Outlet *</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            Outlet <span class="text-red-500">*</span>
+                        </label>
                         <select 
                             name="outlet" 
                             class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
@@ -363,11 +399,12 @@ initTable() {
                             <option value="">Pilih Outlet</option>
                             ${outletOptions}
                         </select>
-                        <p class="text-xs text-gray-500 mt-1">Pilih outlet untuk group produk ini</p>
                     </div>
                     
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Nama Group Produk *</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            Nama Group Produk <span class="text-red-500">*</span>
+                        </label>
                         <input 
                             type="text" 
                             name="group" 
@@ -377,7 +414,6 @@ initTable() {
                             required
                             maxlength="100"
                         >
-                        <p class="text-xs text-gray-500 mt-1">Masukkan nama group produk (maks. 100 karakter)</p>
                     </div>
                     
                     <div>
@@ -389,7 +425,6 @@ initTable() {
                             <option value="active" ${currentStatus === 'active' ? 'selected' : ''}>🟢 Aktif</option>
                             <option value="inactive" ${currentStatus === 'inactive' ? 'selected' : ''}>🔴 Nonaktif</option>
                         </select>
-                        <p class="text-xs text-gray-500 mt-1">Status aktif/nonaktif group produk</p>
                     </div>
                 </form>
                 
@@ -404,7 +439,6 @@ initTable() {
                             <h3 class="text-sm font-medium text-blue-800">Informasi</h3>
                             <div class="mt-1 text-sm text-blue-700">
                                 <p>Group produk digunakan untuk mengkategorikan produk-produk yang serupa.</p>
-                                <p class="mt-1 font-medium">Jika group dinonaktifkan, semua produk aktif dalam group ini akan otomatis dinonaktifkan.</p>
                             </div>
                         </div>
                     </div>
@@ -415,16 +449,12 @@ initTable() {
         const buttons = [
             {
                 text: 'Batal',
-                onclick: () => {
-                    console.log('Cancel button clicked');
-                    modal.close();
-                },
+                onclick: () => modal.close(),
                 primary: false
             },
             {
                 text: isEdit ? 'Update Data' : 'Simpan Data',
                 onclick: () => {
-                    console.log('Save button clicked');
                     if (isEdit) {
                         this.update(item.id);
                     } else {
@@ -435,13 +465,11 @@ initTable() {
             }
         ];
 
-        // Create modal
         modal.createModal(title, content, buttons, { 
             size: 'max-w-md',
             customClass: 'group-product-modal'
         });
 
-        // Auto-focus pada input pertama
         setTimeout(() => {
             const firstInput = document.querySelector('#group-product-form input, #group-product-form select');
             if (firstInput) firstInput.focus();
@@ -459,25 +487,22 @@ initTable() {
     // Save new group product
     async save() {
         try {
-            console.log('Saving new group product...');
-            
             const form = document.getElementById('group-product-form');
-            if (!form) {
-                throw new Error('Form tidak ditemukan');
-            }
+            if (!form) throw new Error('Form tidak ditemukan');
 
             const formData = new FormData(form);
-            const data = Object.fromEntries(formData);
+            const data = {
+                outlet: formData.get('outlet')?.trim(),
+                group: formData.get('group')?.trim(),
+                status: formData.get('status') || 'active'
+            };
 
-            console.log('Form data:', data);
-
-            // Validasi data
+            // Validasi
             if (!data.outlet || !data.group) {
                 Notifications.error('Outlet dan Group Produk harus diisi');
                 return;
             }
 
-            // Validasi length
             if (data.group.length > 100) {
                 Notifications.error('Nama group produk maksimal 100 karakter');
                 return;
@@ -486,7 +511,7 @@ initTable() {
             // Cek duplikasi
             const isDuplicate = this.currentData.some(item => 
                 item.outlet === data.outlet && 
-                item.group.toLowerCase() === data.group.trim().toLowerCase()
+                item.group.toLowerCase() === data.group.toLowerCase()
             );
 
             if (isDuplicate) {
@@ -496,299 +521,189 @@ initTable() {
 
             Helpers.showLoading();
 
-            const { data: result, error } = await supabase
+            const { error } = await supabase
                 .from('group_produk')
-                .insert([{
-                    outlet: data.outlet.trim(),
-                    group: data.group.trim(),
-                    status: data.status || 'active'
-                }])
-                .select();
+                .insert([data]);
 
             if (error) {
-                console.error('Supabase error:', error);
-                
-                // Handle duplicate error
                 if (error.code === '23505') {
-                    Notifications.error('Group produk dengan nama tersebut sudah ada di outlet ini');
-                } else {
-                    throw error;
+                    throw new Error('Group produk sudah ada');
                 }
-                return;
+                throw error;
             }
-
-            console.log('Save successful:', result);
 
             modal.close();
             await this.loadData();
-            Notifications.success('Group produk berhasil ditambahkan!');
+            Notifications.success('✅ Group produk berhasil ditambahkan!');
 
         } catch (error) {
             Helpers.hideLoading();
-            console.error('Error saving group product:', error);
-            Notifications.error('Gagal menambah group produk: ' + error.message);
+            console.error('Error saving:', error);
+            Notifications.error('Gagal menambah: ' + error.message);
         }
     }
 
     // Edit group product
     edit(id) {
-        console.log('Editing group product:', id);
         const item = this.currentData.find(d => d.id === id);
         if (item) {
-            console.log('Found item for editing:', item);
             this.showForm(item);
         } else {
-            console.error('Item not found for editing:', id);
-            console.log('Current data:', this.currentData);
-            Notifications.error('Data tidak ditemukan untuk diedit');
+            Notifications.error('Data tidak ditemukan');
         }
     }
 
-    // Update group product - WITH AUTO-UPDATE PRODUCTS
+    // Update group product - WITH AUTO-UPDATE PRODUCTS (FIXED)
     async update(id) {
         try {
-            console.log('Updating group product:', id);
-            
             const form = document.getElementById('group-product-form');
-            if (!form) {
-                throw new Error('Form tidak ditemukan');
-            }
+            if (!form) throw new Error('Form tidak ditemukan');
 
             const formData = new FormData(form);
-            const data = Object.fromEntries(formData);
+            const newData = {
+                outlet: formData.get('outlet')?.trim(),
+                group: formData.get('group')?.trim(),
+                status: formData.get('status') || 'active'
+            };
 
-            console.log('Update data:', data);
-
-            // Validasi data
-            if (!data.outlet || !data.group) {
+            // Validasi
+            if (!newData.outlet || !newData.group) {
                 Notifications.error('Outlet dan Group Produk harus diisi');
                 return;
             }
 
-            // Validasi length
-            if (data.group.length > 100) {
+            if (newData.group.length > 100) {
                 Notifications.error('Nama group produk maksimal 100 karakter');
                 return;
             }
 
-            // Dapatkan data group sebelum update untuk perbandingan
-            const oldGroupData = this.currentData.find(d => d.id === id);
-            if (!oldGroupData) {
-                Notifications.error('Data group tidak ditemukan');
+            // Dapatkan data lama
+            const oldData = this.currentData.find(d => d.id === id);
+            if (!oldData) {
+                Notifications.error('Data tidak ditemukan');
                 return;
             }
 
-            // Cek duplikasi jika nama group berubah
-            if (oldGroupData.group !== data.group.trim() || oldGroupData.outlet !== data.outlet) {
+            // Cek duplikasi jika ada perubahan
+            if (oldData.group !== newData.group || oldData.outlet !== newData.outlet) {
                 const isDuplicate = this.currentData.some(item => 
-                    item.id !== id && // exclude current item
-                    item.outlet === data.outlet && 
-                    item.group.toLowerCase() === data.group.trim().toLowerCase()
+                    item.id !== id && 
+                    item.outlet === newData.outlet && 
+                    item.group.toLowerCase() === newData.group.toLowerCase()
                 );
 
                 if (isDuplicate) {
-                    Notifications.error('Group produk dengan nama tersebut sudah ada di outlet ini');
+                    Notifications.error('Group produk sudah ada di outlet ini');
                     return;
-                }
-            }
-
-            // HITUNG JUMLAH PRODUK YANG AKAN TERDAMPAK (jika status berubah)
-            let affectedProductsCount = 0;
-            if (oldGroupData.status === 'active' && data.status === 'inactive') {
-                const { count, error: countError } = await supabase
-                    .from('produk')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('group_produk', oldGroupData.group)
-                    .eq('outlet', oldGroupData.outlet)
-                    .eq('status', 'active');
-
-                if (!countError) {
-                    affectedProductsCount = count || 0;
-                }
-
-                // Jika ada produk yang terdampak, tampilkan konfirmasi
-                if (affectedProductsCount > 0) {
-                    const confirmMessage = `
-                        <div class="text-center">
-                            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100 mb-4">
-                                <svg class="h-6 w-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z"/>
-                                </svg>
-                            </div>
-                            <h3 class="text-lg font-medium text-gray-900 mb-2">Konfirmasi Perubahan Status</h3>
-                            <p class="text-sm text-gray-600 mb-3">
-                                Group produk <strong>"${oldGroupData.group}"</strong> akan dinonaktifkan.
-                            </p>
-                            <p class="text-sm text-gray-600 mb-3">
-                                Terdapat <strong class="text-red-600">${affectedProductsCount} produk</strong> dengan status Aktif yang menggunakan group ini.
-                            </p>
-                            <p class="text-sm font-medium text-gray-700 mb-4">
-                                Produk-produk tersebut akan otomatis dinonaktifkan. Lanjutkan?
-                            </p>
-                        </div>
-                    `;
-
-                    // Tampilkan konfirmasi menggunakan Promise
-                    const userConfirmed = await new Promise((resolve) => {
-                        modal.showConfirm(
-                            confirmMessage,
-                            () => resolve(true), // User setuju
-                            () => resolve(false), // User batal
-                            'Ya, Nonaktifkan',
-                            'Batal'
-                        );
-                    });
-
-                    if (!userConfirmed) {
-                        console.log('User cancelled update due to affected products');
-                        return;
-                    }
                 }
             }
 
             Helpers.showLoading();
 
-            // START TRANSACTION (simulasi dengan sequential updates)
+            // START TRANSACTION
             try {
                 // 1. Update group produk
-                const { data: result, error } = await supabase
+                const { error: groupError } = await supabase
                     .from('group_produk')
                     .update({
-                        outlet: data.outlet.trim(),
-                        group: data.group.trim(),
-                        status: data.status || 'active'
+                        outlet: newData.outlet,
+                        group: newData.group,
+                        status: newData.status
                     })
-                    .eq('id', id)
-                    .select();
+                    .eq('id', id);
 
-                if (error) throw error;
+                if (groupError) throw groupError;
 
-                console.log('Group update successful:', result);
-
-                // 2. Jika status berubah dari active menjadi inactive, update semua produk terkait
-                if (oldGroupData.status === 'active' && data.status === 'inactive') {
-                    console.log('⚠️ Group status changed to inactive, updating related products...');
-                    
-                    if (affectedProductsCount > 0) {
-                        const { error: productsError, data: updatedProducts } = await supabase
-                            .from('produk')
-                            .update({ 
-                                status: 'inactive',
-                                updated_at: new Date().toISOString()
-                            })
-                            .eq('group_produk', oldGroupData.group)
-                            .eq('outlet', oldGroupData.outlet)
-                            .eq('status', 'active')
-                            .select();
-
-                        if (productsError) {
-                            console.error('❌ Error updating related products:', productsError);
-                            Notifications.warning('Group berhasil diupdate, tetapi gagal mengupdate produk terkait');
-                        } else {
-                            console.log(`✅ Successfully updated ${updatedProducts?.length || 0} related products to inactive`);
-                            console.log('Updated products:', updatedProducts);
-                        }
-                    }
-                }
-
-                // 3. Jika nama group berubah, update semua produk yang menggunakan group lama
-                if (oldGroupData.group !== data.group.trim() || oldGroupData.outlet !== data.outlet) {
-                    console.log('⚠️ Group name/outlet changed, updating related products...');
+                // 2. Jika status berubah ACTIVE → INACTIVE, nonaktifkan semua produk terkait
+                if (oldData.status === 'active' && newData.status === 'inactive') {
+                    console.log('⚠️ Menonaktifkan semua produk dalam group:', oldData.group);
                     
                     const { error: productsError, data: updatedProducts } = await supabase
                         .from('produk')
                         .update({ 
-                            group_produk: data.group.trim(),
-                            outlet: data.outlet.trim(),
+                            status: 'inactive',
                             updated_at: new Date().toISOString()
                         })
-                        .eq('group_produk', oldGroupData.group)
-                        .eq('outlet', oldGroupData.outlet);
+                        .eq('group_produk', oldData.group)
+                        .eq('outlet', oldData.outlet)
+                        .eq('status', 'active')
+                        .select();
 
                     if (productsError) {
-                        console.error('❌ Error updating products with new group name:', productsError);
-                        Notifications.warning('Group berhasil diupdate, tetapi gagal mengupdate nama group di produk terkait');
+                        console.error('❌ Gagal mengupdate produk:', productsError);
+                        Notifications.warning('Group berhasil diupdate, tapi gagal mengupdate produk');
                     } else {
-                        console.log(`✅ Successfully updated products with new group name/outlet`);
+                        console.log(`✅ ${updatedProducts?.length || 0} produk berhasil dinonaktifkan`);
                     }
                 }
 
-                // 4. Tutup modal dan refresh data
+                // 3. Jika nama/outlet group berubah, update referensi di produk
+                if (oldData.group !== newData.group || oldData.outlet !== newData.outlet) {
+                    console.log('⚠️ Mengupdate referensi group di produk...');
+                    
+                    const { error: updateRefError } = await supabase
+                        .from('produk')
+                        .update({ 
+                            group_produk: newData.group,
+                            outlet: newData.outlet,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('group_produk', oldData.group)
+                        .eq('outlet', oldData.outlet);
+
+                    if (updateRefError) {
+                        console.error('❌ Gagal mengupdate referensi produk:', updateRefError);
+                        Notifications.warning('Group berhasil diupdate, tapi gagal mengupdate referensi produk');
+                    } else {
+                        console.log('✅ Referensi produk berhasil diupdate');
+                    }
+                }
+
+                // 4. Tutup modal
                 modal.close();
                 
                 // 5. Refresh data group
                 await this.loadData();
                 
-                // 6. Refresh products module jika ada
+                // 6. Refresh produk module jika ada
                 if (window.products && typeof window.products.refresh === 'function') {
-                    console.log('Refreshing products module...');
                     await window.products.refresh();
                 }
 
-                // 7. Tampilkan notifikasi sukses
-                if (oldGroupData.status === 'active' && data.status === 'inactive' && affectedProductsCount > 0) {
-                    Notifications.success(`Group berhasil dinonaktifkan. ${affectedProductsCount} produk turut dinonaktifkan.`);
+                // 7. Notifikasi sukses
+                if (oldData.status === 'active' && newData.status === 'inactive' && oldData.has_active_products) {
+                    Notifications.success(`✅ Group dinonaktifkan. ${oldData.product_count} produk turut dinonaktifkan.`);
                 } else {
-                    Notifications.success('Group produk berhasil diupdate!');
+                    Notifications.success('✅ Group produk berhasil diupdate!');
                 }
 
             } catch (error) {
                 Helpers.hideLoading();
-                console.error('Error in update transaction:', error);
-                Notifications.error('Gagal mengupdate data: ' + error.message);
+                console.error('Error in transaction:', error);
+                Notifications.error('Gagal mengupdate: ' + error.message);
             }
 
         } catch (error) {
             Helpers.hideLoading();
-            console.error('Error updating group product:', error);
-            Notifications.error('Gagal mengupdate group produk: ' + error.message);
+            console.error('Error updating:', error);
+            Notifications.error('Gagal mengupdate: ' + error.message);
         }
     }
 
     // Delete group product
     async delete(id) {
-        console.log('Delete button clicked for ID:', id);
-        
         const item = this.currentData.find(d => d.id === id);
         if (!item) {
-            console.error('Item not found for deletion:', id);
             Notifications.error('Data tidak ditemukan');
             return;
         }
 
-        console.log('Showing confirmation for:', item);
-        
         // Cek apakah masih ada produk yang menggunakan group ini
-        const { count, error: countError } = await supabase
-            .from('produk')
-            .select('*', { count: 'exact', head: true })
-            .eq('group_produk', item.group)
-            .eq('outlet', item.outlet);
-
-        if (countError) {
-            console.error('Error checking products count:', countError);
+        if (item.product_count > 0) {
+            Notifications.error(`Tidak dapat menghapus: masih ada ${item.product_count} produk dalam group ini`);
+            return;
         }
 
-        let warningMessage = '';
-        if (count > 0) {
-            warningMessage = `
-                <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
-                    <div class="flex">
-                        <div class="flex-shrink-0">
-                            <svg class="h-5 w-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z"/>
-                            </svg>
-                        </div>
-                        <div class="ml-3">
-                            <p class="text-sm text-yellow-700">
-                                <strong class="font-medium">Peringatan:</strong> Masih ada ${count} produk yang menggunakan group ini. Group tidak dapat dihapus jika masih digunakan.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-        
         const confirmMessage = `
             <div class="text-center">
                 <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
@@ -797,17 +712,12 @@ initTable() {
                     </svg>
                 </div>
                 <h3 class="text-lg font-medium text-gray-900 mb-2">Hapus Group Produk?</h3>
-                ${warningMessage}
                 <p class="text-sm text-gray-500 mb-4">
-                    Anda akan menghapus group produk <strong>"${this.escapeHtml(item.group)}"</strong> dari outlet <strong>"${this.escapeHtml(item.outlet)}"</strong>. Tindakan ini tidak dapat dibatalkan.
+                    Anda akan menghapus group <strong>"${this.escapeHtml(item.group)}"</strong>.<br>
+                    Tindakan ini tidak dapat dibatalkan.
                 </p>
             </div>
         `;
-
-        if (count > 0) {
-            Notifications.error('Tidak dapat menghapus group yang masih memiliki produk');
-            return;
-        }
 
         modal.showConfirm(
             confirmMessage,
@@ -818,7 +728,6 @@ initTable() {
 
     async confirmDelete(id) {
         try {
-            console.log('Confirming delete for:', id);
             Helpers.showLoading();
 
             const { error } = await supabase
@@ -828,18 +737,17 @@ initTable() {
 
             if (error) throw error;
 
-            console.log('Delete successful');
             await this.loadData();
-            Notifications.success('Group produk berhasil dihapus!');
+            Notifications.success('✅ Group produk berhasil dihapus!');
 
         } catch (error) {
             Helpers.hideLoading();
-            console.error('Error deleting group product:', error);
+            console.error('Error deleting:', error);
             
             if (error.code === '23503') {
-                Notifications.error('Tidak dapat menghapus group produk karena masih digunakan oleh produk lain');
+                Notifications.error('Tidak dapat menghapus: group masih digunakan');
             } else {
-                Notifications.error('Gagal menghapus group produk: ' + error.message);
+                Notifications.error('Gagal menghapus: ' + error.message);
             }
         }
     }
@@ -855,6 +763,7 @@ initTable() {
         console.log('Cleaning up group products module...');
         this.isInitialized = false;
         this.table = null;
+        this.currentData = [];
     }
 }
 
@@ -864,13 +773,11 @@ let groupProducts = null;
 document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM loaded, checking for group products module...');
     
-    // Hanya inisialisasi jika di halaman yang memiliki group products
     if (document.getElementById('group-products-table')) {
-        console.log('Initializing group products module...');
+        console.log('🔄 Initializing group products module...');
         groupProducts = new GroupProducts();
         window.groupProducts = groupProducts;
         
-        // Tunggu sedikit untuk memastikan app sudah terload
         setTimeout(() => {
             groupProducts.init();
         }, 100);
