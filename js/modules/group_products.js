@@ -1,4 +1,4 @@
-// Group Products Module - COMPLETE FIXED & OPTIMIZED VERSION
+// Group Products Module - COMPLETE FIXED WITH BIDIRECTIONAL AUTO-UPDATE
 class GroupProducts {
     constructor() {
         this.currentData = [];
@@ -83,31 +83,40 @@ class GroupProducts {
             // Ambil semua produk aktif sekaligus (Query 2 - optimasi)
             const { data: productsData, error: productsError } = await supabase
                 .from('produk')
-                .select('group_produk, outlet, status')
-                .eq('status', 'active');
+                .select('group_produk, outlet, status');
 
             if (productsError) {
                 console.error('Error loading products:', productsError);
             }
 
-            // Hitung jumlah produk per group menggunakan Map (O(1) lookup)
+            // Hitung jumlah produk per group
             const productCountMap = new Map();
+            const activeProductCountMap = new Map();
+            
             if (productsData) {
                 productsData.forEach(product => {
                     const key = `${product.outlet}|${product.group_produk}`;
+                    // Total produk
                     productCountMap.set(key, (productCountMap.get(key) || 0) + 1);
+                    
+                    // Hanya produk active
+                    if (product.status === 'active') {
+                        activeProductCountMap.set(key, (activeProductCountMap.get(key) || 0) + 1);
+                    }
                 });
             }
 
             // Gabungkan data group dengan jumlah produk
             const enrichedData = groupData.map(group => {
                 const key = `${group.outlet}|${group.group}`;
-                const count = productCountMap.get(key) || 0;
+                const totalProducts = productCountMap.get(key) || 0;
+                const activeProducts = activeProductCountMap.get(key) || 0;
+                
                 return {
                     ...group,
-                    product_count: count,
-                    // Tambahkan flag untuk mengetahui apakah group memiliki produk aktif
-                    has_active_products: count > 0
+                    product_count: totalProducts,
+                    active_product_count: activeProducts,
+                    has_active_products: activeProducts > 0
                 };
             });
 
@@ -149,13 +158,28 @@ class GroupProducts {
                 title: 'Jumlah Produk', 
                 key: 'product_count',
                 formatter: (value, row) => {
-                    const count = value || 0;
-                    const bgColor = count > 0 
-                        ? 'bg-blue-100 text-blue-800 border border-blue-200' 
-                        : 'bg-gray-100 text-gray-600 border border-gray-200';
+                    const total = value || 0;
+                    const active = row.active_product_count || 0;
+                    
+                    let bgColor = 'bg-gray-100 text-gray-600';
+                    let icon = '⚪';
+                    
+                    if (total > 0) {
+                        if (active === total) {
+                            bgColor = 'bg-green-100 text-green-800 border border-green-200';
+                            icon = '✅';
+                        } else if (active > 0) {
+                            bgColor = 'bg-yellow-100 text-yellow-800 border border-yellow-200';
+                            icon = '⚠️';
+                        } else {
+                            bgColor = 'bg-gray-100 text-gray-600 border border-gray-200';
+                            icon = '📦';
+                        }
+                    }
+                    
                     return `
-                        <span class="px-3 py-1 text-xs font-medium rounded-full ${bgColor}">
-                            ${count} Produk ${count > 0 ? '📦' : '⚪'}
+                        <span class="px-3 py-1 text-xs font-medium rounded-full ${bgColor}" title="${active} aktif dari ${total} total">
+                            ${icon} ${total} Produk (${active} aktif)
                         </span>
                     `;
                 }
@@ -165,12 +189,16 @@ class GroupProducts {
                 key: 'status',
                 formatter: (value, row) => {
                     const isActive = value === 'active';
-                    const hasProducts = row.has_active_products;
+                    const hasProducts = row.product_count > 0;
+                    const hasActiveProducts = row.active_product_count > 0;
                     
-                    // Tampilkan warning jika group nonaktif tapi masih ada produk aktif
-                    const warningIcon = (!isActive && hasProducts) 
-                        ? '<span class="ml-1 text-yellow-500" title="Masih ada produk aktif dalam group ini">⚠️</span>' 
-                        : '';
+                    // Tampilkan warning jika ada inkonsistensi
+                    let warningIcon = '';
+                    if (isActive && hasProducts && !hasActiveProducts) {
+                        warningIcon = '<span class="ml-1 text-yellow-500" title="Group aktif tapi tidak ada produk aktif">⚠️</span>';
+                    } else if (!isActive && hasActiveProducts) {
+                        warningIcon = '<span class="ml-1 text-red-500" title="Group nonaktif tapi masih ada produk aktif">🔴</span>';
+                    }
                     
                     return `
                         <span class="px-3 py-1 text-xs font-medium rounded-full inline-flex items-center ${
@@ -253,24 +281,49 @@ class GroupProducts {
         `;
 
         this.currentData.forEach(item => {
-            const count = item.product_count || 0;
-            const countBgColor = count > 0 ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600';
+            const total = item.product_count || 0;
+            const active = item.active_product_count || 0;
+            
+            let countBgColor = 'bg-gray-100 text-gray-600';
+            let countIcon = '⚪';
+            
+            if (total > 0) {
+                if (active === total) {
+                    countBgColor = 'bg-green-100 text-green-800';
+                    countIcon = '✅';
+                } else if (active > 0) {
+                    countBgColor = 'bg-yellow-100 text-yellow-800';
+                    countIcon = '⚠️';
+                } else {
+                    countBgColor = 'bg-gray-100 text-gray-600';
+                    countIcon = '📦';
+                }
+            }
+            
             const isActive = item.status === 'active';
             const statusBgColor = isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
-            const warningIcon = (!isActive && count > 0) ? '⚠️' : '';
+            
+            let statusIcon = isActive ? '🟢 Aktif' : '🔴 Nonaktif';
+            let warningIcon = '';
+            
+            if (isActive && total > 0 && active === 0) {
+                warningIcon = ' ⚠️';
+            } else if (!isActive && active > 0) {
+                warningIcon = ' 🔴';
+            }
 
             tableHTML += `
                 <tr class="hover:bg-gray-50 transition-colors">
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${this.escapeHtml(item.outlet) || '-'}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${this.escapeHtml(item.group) || '-'}</td>
                     <td class="px-6 py-4 whitespace-nowrap">
-                        <span class="px-3 py-1 text-xs font-medium rounded-full ${countBgColor}">
-                            ${count} Produk
+                        <span class="px-3 py-1 text-xs font-medium rounded-full ${countBgColor}" title="${active} aktif dari ${total} total">
+                            ${countIcon} ${total} Produk (${active} aktif)
                         </span>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
                         <span class="px-3 py-1 text-xs font-medium rounded-full ${statusBgColor}">
-                            ${isActive ? 'Aktif' : 'Nonaktif'} ${warningIcon}
+                            ${statusIcon}${warningIcon}
                         </span>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -363,25 +416,50 @@ class GroupProducts {
         const currentGroup = item ? item.group : '';
         const currentStatus = item ? item.status : 'active';
 
-        // Tampilkan warning jika edit group yang memiliki produk aktif
-        const hasActiveProducts = item?.has_active_products;
-        const warningMessage = (isEdit && hasActiveProducts && currentStatus === 'active') ? `
-            <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
-                <div class="flex">
-                    <div class="flex-shrink-0">
-                        <svg class="h-5 w-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z"/>
-                        </svg>
+        // Tampilkan warning jika edit group yang memiliki produk
+        const hasProducts = item?.product_count > 0;
+        const activeProducts = item?.active_product_count || 0;
+        
+        let warningMessage = '';
+        if (isEdit && hasProducts) {
+            if (currentStatus === 'active') {
+                warningMessage = `
+                    <div class="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <svg class="h-5 w-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm text-blue-700">
+                                    <strong>Informasi:</strong> Group ini memiliki <strong>${item.product_count} produk</strong> 
+                                    (${activeProducts} aktif). Perubahan status akan mempengaruhi semua produk.
+                                </p>
+                            </div>
+                        </div>
                     </div>
-                    <div class="ml-3">
-                        <p class="text-sm text-yellow-700">
-                            <strong>Perhatian:</strong> Group ini memiliki <strong>${item.product_count} produk aktif</strong>. 
-                            Jika status diubah menjadi nonaktif, semua produk tersebut akan otomatis dinonaktifkan.
-                        </p>
+                `;
+            } else if (currentStatus === 'inactive' && activeProducts > 0) {
+                warningMessage = `
+                    <div class="bg-red-50 border-l-4 border-red-400 p-4 mb-4">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <svg class="h-5 w-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm text-red-700">
+                                    <strong>INKONSISTENSI:</strong> Group nonaktif tapi masih memiliki 
+                                    <strong>${activeProducts} produk aktif</strong>!
+                                </p>
+                            </div>
+                        </div>
                     </div>
-                </div>
-            </div>
-        ` : '';
+                `;
+            }
+        }
 
         const content = `
             <div class="space-y-4">
@@ -425,24 +503,11 @@ class GroupProducts {
                             <option value="active" ${currentStatus === 'active' ? 'selected' : ''}>🟢 Aktif</option>
                             <option value="inactive" ${currentStatus === 'inactive' ? 'selected' : ''}>🔴 Nonaktif</option>
                         </select>
+                        <p class="text-xs text-gray-500 mt-1">
+                            ${hasProducts ? '⚠️ Perubahan status akan mensinkronisasi semua produk dalam group ini' : ''}
+                        </p>
                     </div>
                 </form>
-                
-                <div class="bg-blue-50 border border-blue-200 rounded-md p-3">
-                    <div class="flex">
-                        <div class="flex-shrink-0">
-                            <svg class="h-5 w-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                            </svg>
-                        </div>
-                        <div class="ml-3">
-                            <h3 class="text-sm font-medium text-blue-800">Informasi</h3>
-                            <div class="mt-1 text-sm text-blue-700">
-                                <p>Group produk digunakan untuk mengkategorikan produk-produk yang serupa.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </div>
         `;
 
@@ -553,7 +618,7 @@ class GroupProducts {
         }
     }
 
-    // Update group product - WITH AUTO-UPDATE PRODUCTS (FIXED)
+    // Update group product - WITH BIDIRECTIONAL AUTO-UPDATE PRODUCTS (FIXED)
     async update(id) {
         try {
             const form = document.getElementById('group-product-form');
@@ -598,6 +663,46 @@ class GroupProducts {
                 }
             }
 
+            // Konfirmasi jika akan mempengaruhi banyak produk
+            const totalProducts = oldData.product_count || 0;
+            if (totalProducts > 0 && oldData.status !== newData.status) {
+                const action = newData.status === 'active' ? 'mengaktifkan' : 'menonaktifkan';
+                const confirmMessage = `
+                    <div class="text-center">
+                        <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100 mb-4">
+                            <svg class="h-6 w-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                            </svg>
+                        </div>
+                        <h3 class="text-lg font-medium text-gray-900 mb-2">Konfirmasi Perubahan Status</h3>
+                        <p class="text-sm text-gray-600 mb-3">
+                            Anda akan <strong>${action}</strong> group <strong>"${oldData.group}"</strong>.
+                        </p>
+                        <p class="text-sm text-gray-600 mb-4">
+                            Group ini memiliki <strong>${totalProducts} produk</strong> yang akan ikut ${action} secara otomatis.
+                        </p>
+                        <p class="text-sm font-medium text-gray-700 mb-4">
+                            Lanjutkan?
+                        </p>
+                    </div>
+                `;
+
+                const userConfirmed = await new Promise((resolve) => {
+                    modal.showConfirm(
+                        confirmMessage,
+                        () => resolve(true),
+                        () => resolve(false),
+                        'Ya, Lanjutkan',
+                        'Batal'
+                    );
+                });
+
+                if (!userConfirmed) {
+                    console.log('User cancelled update');
+                    return;
+                }
+            }
+
             Helpers.showLoading();
 
             // START TRANSACTION
@@ -614,26 +719,25 @@ class GroupProducts {
 
                 if (groupError) throw groupError;
 
-                // 2. Jika status berubah ACTIVE → INACTIVE, nonaktifkan semua produk terkait
-                if (oldData.status === 'active' && newData.status === 'inactive') {
-                    console.log('⚠️ Menonaktifkan semua produk dalam group:', oldData.group);
+                // 2. Jika status BERUBAH, sinkronkan semua produk dalam group
+                if (oldData.status !== newData.status) {
+                    console.log(`⚠️ Status group berubah: ${oldData.status} → ${newData.status}`);
+                    console.log(`Mengupdate semua produk dalam group: ${oldData.group}`);
                     
                     const { error: productsError, data: updatedProducts } = await supabase
                         .from('produk')
                         .update({ 
-                            status: 'inactive',
+                            status: newData.status, // IKUTI STATUS GROUP
                             updated_at: new Date().toISOString()
                         })
                         .eq('group_produk', oldData.group)
-                        .eq('outlet', oldData.outlet)
-                        .eq('status', 'active')
-                        .select();
+                        .eq('outlet', oldData.outlet);
 
                     if (productsError) {
                         console.error('❌ Gagal mengupdate produk:', productsError);
                         Notifications.warning('Group berhasil diupdate, tapi gagal mengupdate produk');
                     } else {
-                        console.log(`✅ ${updatedProducts?.length || 0} produk berhasil dinonaktifkan`);
+                        console.log(`✅ Semua produk dalam group berhasil diupdate ke status: ${newData.status}`);
                     }
                 }
 
@@ -671,8 +775,9 @@ class GroupProducts {
                 }
 
                 // 7. Notifikasi sukses
-                if (oldData.status === 'active' && newData.status === 'inactive' && oldData.has_active_products) {
-                    Notifications.success(`✅ Group dinonaktifkan. ${oldData.product_count} produk turut dinonaktifkan.`);
+                if (oldData.status !== newData.status && totalProducts > 0) {
+                    const action = newData.status === 'active' ? 'diaktifkan' : 'dinonaktifkan';
+                    Notifications.success(`✅ Group berhasil ${action}. ${totalProducts} produk ikut ${action}.`);
                 } else {
                     Notifications.success('✅ Group produk berhasil diupdate!');
                 }
