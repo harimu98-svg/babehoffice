@@ -1,4 +1,4 @@
-// Group Products Module - FIXED VERSION (without updated_at)
+// Group Products Module - WITH AUTO-UPDATE PRODUCTS
 class GroupProducts {
     constructor() {
         this.currentData = [];
@@ -61,7 +61,7 @@ class GroupProducts {
             const { data, error } = await supabase
                 .from('group_produk')
                 .select('*')
-                .order('group', { ascending: true }); // Urutkan berdasarkan nama group
+                .order('group', { ascending: true });
 
             if (error) throw error;
 
@@ -82,7 +82,7 @@ class GroupProducts {
         }
     }
 
-    // Initialize table - WITHOUT ID COLUMN
+    // Initialize table
     initTable() {
         console.log('Initializing group products table...');
         
@@ -96,6 +96,15 @@ class GroupProducts {
                 title: 'Group Produk', 
                 key: 'group',
                 formatter: (value) => `<span class="text-gray-900">${value || '-'}</span>`
+            },
+            { 
+                title: 'Jumlah Produk', 
+                key: 'id',
+                formatter: async (id, row) => {
+                    // Hitung jumlah produk aktif dalam group ini
+                    const count = await this.countActiveProducts(row.group, row.outlet);
+                    return `<span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">${count} Produk</span>`;
+                }
             },
             { 
                 title: 'Status', 
@@ -143,6 +152,24 @@ class GroupProducts {
         console.log('Group products table initialized');
     }
 
+    // Hitung jumlah produk aktif dalam group
+    async countActiveProducts(groupName, outlet) {
+        try {
+            const { count, error } = await supabase
+                .from('produk')
+                .select('*', { count: 'exact', head: true })
+                .eq('group_produk', groupName)
+                .eq('outlet', outlet)
+                .eq('status', 'active');
+
+            if (error) throw error;
+            return count || 0;
+        } catch (error) {
+            console.error('Error counting products:', error);
+            return 0;
+        }
+    }
+
     // Fallback table jika DataTable tidak tersedia
     renderFallbackTable() {
         const container = document.getElementById('group-products-table');
@@ -165,6 +192,7 @@ class GroupProducts {
             return;
         }
 
+        // Render fallback table secara synchronous dulu, count akan diupdate via async terpisah
         let tableHTML = `
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -172,18 +200,22 @@ class GroupProducts {
                         <tr>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Outlet</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Group Produk</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Jumlah Produk</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
                         </tr>
                     </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
+                    <tbody class="bg-white divide-y divide-gray-200" id="group-products-tbody">
         `;
 
         this.currentData.forEach(item => {
             tableHTML += `
-                <tr>
+                <tr id="group-row-${item.id}">
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${item.outlet || '-'}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${item.group || '-'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm" id="product-count-${item.id}">
+                        <span class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">Loading...</span>
+                    </td>
                     <td class="px-6 py-4 whitespace-nowrap">
                         <span class="px-3 py-1 text-xs font-medium rounded-full ${
                             item.status === 'active' 
@@ -207,6 +239,15 @@ class GroupProducts {
         `;
 
         container.innerHTML = tableHTML;
+
+        // Update count secara async
+        this.currentData.forEach(async (item) => {
+            const count = await this.countActiveProducts(item.group, item.outlet);
+            const countCell = document.getElementById(`product-count-${item.id}`);
+            if (countCell) {
+                countCell.innerHTML = `<span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">${count} Produk</span>`;
+            }
+        });
     }
 
     // Get action buttons HTML
@@ -342,6 +383,7 @@ class GroupProducts {
                             <h3 class="text-sm font-medium text-blue-800">Informasi</h3>
                             <div class="mt-1 text-sm text-blue-700">
                                 <p>Group produk digunakan untuk mengkategorikan produk-produk yang serupa.</p>
+                                <p class="mt-1 font-medium">Jika group dinonaktifkan, semua produk aktif dalam group ini akan otomatis dinonaktifkan.</p>
                             </div>
                         </div>
                     </div>
@@ -420,6 +462,17 @@ class GroupProducts {
                 return;
             }
 
+            // Cek duplikasi
+            const isDuplicate = this.currentData.some(item => 
+                item.outlet === data.outlet && 
+                item.group.toLowerCase() === data.group.trim().toLowerCase()
+            );
+
+            if (isDuplicate) {
+                Notifications.error('Group produk dengan nama tersebut sudah ada di outlet ini');
+                return;
+            }
+
             Helpers.showLoading();
 
             const { data: result, error } = await supabase
@@ -470,7 +523,7 @@ class GroupProducts {
         }
     }
 
-    // Update group product - FIXED: REMOVE updated_at
+    // Update group product - WITH AUTO-UPDATE PRODUCTS
     async update(id) {
         try {
             console.log('Updating group product:', id);
@@ -497,36 +550,172 @@ class GroupProducts {
                 return;
             }
 
-            Helpers.showLoading();
-
-            const { data: result, error } = await supabase
-                .from('group_produk')
-                .update({
-                    outlet: data.outlet.trim(),
-                    group: data.group.trim(),
-                    status: data.status || 'active'
-                    // REMOVED: updated_at: new Date().toISOString()
-                })
-                .eq('id', id)
-                .select();
-
-            if (error) {
-                console.error('Supabase error:', error);
-                
-                // Handle duplicate error
-                if (error.code === '23505') {
-                    Notifications.error('Group produk dengan nama tersebut sudah ada di outlet ini');
-                } else {
-                    throw error;
-                }
+            // Dapatkan data group sebelum update untuk perbandingan
+            const oldGroupData = this.currentData.find(d => d.id === id);
+            if (!oldGroupData) {
+                Notifications.error('Data group tidak ditemukan');
                 return;
             }
 
-            console.log('Update successful:', result);
+            // Cek duplikasi jika nama group berubah
+            if (oldGroupData.group !== data.group.trim() || oldGroupData.outlet !== data.outlet) {
+                const isDuplicate = this.currentData.some(item => 
+                    item.id !== id && // exclude current item
+                    item.outlet === data.outlet && 
+                    item.group.toLowerCase() === data.group.trim().toLowerCase()
+                );
 
-            modal.close();
-            await this.loadData();
-            Notifications.success('Group produk berhasil diupdate!');
+                if (isDuplicate) {
+                    Notifications.error('Group produk dengan nama tersebut sudah ada di outlet ini');
+                    return;
+                }
+            }
+
+            // HITUNG JUMLAH PRODUK YANG AKAN TERDAMPAK (jika status berubah)
+            let affectedProductsCount = 0;
+            if (oldGroupData.status === 'active' && data.status === 'inactive') {
+                const { count, error: countError } = await supabase
+                    .from('produk')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('group_produk', oldGroupData.group)
+                    .eq('outlet', oldGroupData.outlet)
+                    .eq('status', 'active');
+
+                if (!countError) {
+                    affectedProductsCount = count || 0;
+                }
+
+                // Jika ada produk yang terdampak, tampilkan konfirmasi
+                if (affectedProductsCount > 0) {
+                    const confirmMessage = `
+                        <div class="text-center">
+                            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100 mb-4">
+                                <svg class="h-6 w-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                                </svg>
+                            </div>
+                            <h3 class="text-lg font-medium text-gray-900 mb-2">Konfirmasi Perubahan Status</h3>
+                            <p class="text-sm text-gray-600 mb-3">
+                                Group produk <strong>"${oldGroupData.group}"</strong> akan dinonaktifkan.
+                            </p>
+                            <p class="text-sm text-gray-600 mb-3">
+                                Terdapat <strong class="text-red-600">${affectedProductsCount} produk</strong> dengan status Aktif yang menggunakan group ini.
+                            </p>
+                            <p class="text-sm font-medium text-gray-700 mb-4">
+                                Produk-produk tersebut akan otomatis dinonaktifkan. Lanjutkan?
+                            </p>
+                        </div>
+                    `;
+
+                    // Tampilkan konfirmasi menggunakan Promise
+                    const userConfirmed = await new Promise((resolve) => {
+                        modal.showConfirm(
+                            confirmMessage,
+                            () => resolve(true), // User setuju
+                            () => resolve(false), // User batal
+                            'Ya, Nonaktifkan',
+                            'Batal'
+                        );
+                    });
+
+                    if (!userConfirmed) {
+                        console.log('User cancelled update due to affected products');
+                        return;
+                    }
+                }
+            }
+
+            Helpers.showLoading();
+
+            // START TRANSACTION (simulasi dengan sequential updates)
+            try {
+                // 1. Update group produk
+                const { data: result, error } = await supabase
+                    .from('group_produk')
+                    .update({
+                        outlet: data.outlet.trim(),
+                        group: data.group.trim(),
+                        status: data.status || 'active'
+                    })
+                    .eq('id', id)
+                    .select();
+
+                if (error) throw error;
+
+                console.log('Group update successful:', result);
+
+                // 2. Jika status berubah dari active menjadi inactive, update semua produk terkait
+                if (oldGroupData.status === 'active' && data.status === 'inactive') {
+                    console.log('⚠️ Group status changed to inactive, updating related products...');
+                    
+                    if (affectedProductsCount > 0) {
+                        const { error: productsError, data: updatedProducts } = await supabase
+                            .from('produk')
+                            .update({ 
+                                status: 'inactive',
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('group_produk', oldGroupData.group)
+                            .eq('outlet', oldGroupData.outlet)
+                            .eq('status', 'active')
+                            .select();
+
+                        if (productsError) {
+                            console.error('❌ Error updating related products:', productsError);
+                            Notifications.warning('Group berhasil diupdate, tetapi gagal mengupdate produk terkait');
+                        } else {
+                            console.log(`✅ Successfully updated ${updatedProducts?.length || 0} related products to inactive`);
+                            console.log('Updated products:', updatedProducts);
+                        }
+                    }
+                }
+
+                // 3. Jika nama group berubah, update semua produk yang menggunakan group lama
+                if (oldGroupData.group !== data.group.trim() || oldGroupData.outlet !== data.outlet) {
+                    console.log('⚠️ Group name/outlet changed, updating related products...');
+                    
+                    const { error: productsError, data: updatedProducts } = await supabase
+                        .from('produk')
+                        .update({ 
+                            group_produk: data.group.trim(),
+                            outlet: data.outlet.trim(),
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('group_produk', oldGroupData.group)
+                        .eq('outlet', oldGroupData.outlet);
+
+                    if (productsError) {
+                        console.error('❌ Error updating products with new group name:', productsError);
+                        Notifications.warning('Group berhasil diupdate, tetapi gagal mengupdate nama group di produk terkait');
+                    } else {
+                        console.log(`✅ Successfully updated products with new group name/outlet`);
+                    }
+                }
+
+                // 4. Tutup modal dan refresh data
+                modal.close();
+                
+                // 5. Refresh data group
+                await this.loadData();
+                
+                // 6. Refresh products module jika ada
+                if (window.products && typeof window.products.refresh === 'function') {
+                    console.log('Refreshing products module...');
+                    await window.products.refresh();
+                }
+
+                // 7. Tampilkan notifikasi sukses
+                if (oldGroupData.status === 'active' && data.status === 'inactive' && affectedProductsCount > 0) {
+                    Notifications.success(`Group berhasil dinonaktifkan. ${affectedProductsCount} produk turut dinonaktifkan.`);
+                } else {
+                    Notifications.success('Group produk berhasil diupdate!');
+                }
+
+            } catch (error) {
+                Helpers.hideLoading();
+                console.error('Error in update transaction:', error);
+                Notifications.error('Gagal mengupdate data: ' + error.message);
+            }
 
         } catch (error) {
             Helpers.hideLoading();
@@ -536,7 +725,7 @@ class GroupProducts {
     }
 
     // Delete group product
-    delete(id) {
+    async delete(id) {
         console.log('Delete button clicked for ID:', id);
         
         const item = this.currentData.find(d => d.id === id);
@@ -548,6 +737,37 @@ class GroupProducts {
 
         console.log('Showing confirmation for:', item);
         
+        // Cek apakah masih ada produk yang menggunakan group ini
+        const { count, error: countError } = await supabase
+            .from('produk')
+            .select('*', { count: 'exact', head: true })
+            .eq('group_produk', item.group)
+            .eq('outlet', item.outlet);
+
+        if (countError) {
+            console.error('Error checking products count:', countError);
+        }
+
+        let warningMessage = '';
+        if (count > 0) {
+            warningMessage = `
+                <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm text-yellow-700">
+                                <strong class="font-medium">Peringatan:</strong> Masih ada ${count} produk yang menggunakan group ini. Group tidak dapat dihapus jika masih digunakan.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
         const confirmMessage = `
             <div class="text-center">
                 <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
@@ -556,11 +776,17 @@ class GroupProducts {
                     </svg>
                 </div>
                 <h3 class="text-lg font-medium text-gray-900 mb-2">Hapus Group Produk?</h3>
+                ${warningMessage}
                 <p class="text-sm text-gray-500 mb-4">
                     Anda akan menghapus group produk <strong>"${this.escapeHtml(item.group)}"</strong> dari outlet <strong>"${this.escapeHtml(item.outlet)}"</strong>. Tindakan ini tidak dapat dibatalkan.
                 </p>
             </div>
         `;
+
+        if (count > 0) {
+            Notifications.error('Tidak dapat menghapus group yang masih memiliki produk');
+            return;
+        }
 
         modal.showConfirm(
             confirmMessage,
