@@ -1182,28 +1182,45 @@ class Reports {
     async loadLaporanOmset() {
     console.log('Loading laporan omset dari transaksi_order');
     
-    let query = supabase
-        .from('transaksi_order')
-        .select('*')
-        .order('order_date', { ascending: false });
-
-    // PERBAIKAN: Tambahkan timestamp untuk mencakup seluruh hari
-    if (this.filters.startDate) {
-        query = query.gte('order_date', `${this.filters.startDate}T00:00:00`);
-    }
-    if (this.filters.endDate) {
-        query = query.lte('order_date', `${this.filters.endDate}T23:59:59`);
-    }
-    if (this.filters.outlet) {
-        query = query.eq('outlet', this.filters.outlet);
-    }
-
-    const { data, error } = await query;
-    if (error) throw error;
-
-    console.log(`Omset query returned ${data?.length || 0} records for date range ${this.filters.startDate} to ${this.filters.endDate}`);
+    let allData = [];
+    let page = 0;
+    const pageSize = 1000;
+    let hasMore = true;
     
-    return this.processOmsetData(data || []);
+    while (hasMore) {
+        let query = supabase
+            .from('transaksi_order')
+            .select('*')
+            .order('order_date', { ascending: false })
+            .range(page * pageSize, (page + 1) * pageSize - 1);
+        
+        // Apply filters
+        if (this.filters.startDate) {
+            query = query.gte('order_date', `${this.filters.startDate}T00:00:00`);
+        }
+        if (this.filters.endDate) {
+            query = query.lte('order_date', `${this.filters.endDate}T23:59:59`);
+        }
+        if (this.filters.outlet) {
+            query = query.eq('outlet', this.filters.outlet);
+        }
+        
+        const { data, error } = await query;
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+            allData = [...allData, ...data];
+            page++;
+        }
+        
+        if (!data || data.length < pageSize) {
+            hasMore = false;
+        }
+    }
+    
+    console.log(`Omset query returned ${allData.length} records for date range ${this.filters.startDate} to ${this.filters.endDate}`);
+    
+    return this.processOmsetData(allData);
 }
 
     processOmsetData(data) {
