@@ -402,29 +402,46 @@ class Reports {
 }
 
     async loadLaporanPembayaran() {
-        console.log('Loading laporan pembayaran');
-        
+    console.log('Loading laporan pembayaran with pagination');
+    
+    let allData = [];
+    let page = 0;
+    const pageSize = 1000;
+    let hasMore = true;
+    
+    while (hasMore) {
         let query = supabase
             .from('transaksi_order')
             .select('*')
-            .order('order_date', { ascending: false });
-
-        // Apply filters
+            .order('order_date', { ascending: false })
+            .range(page * pageSize, (page + 1) * pageSize - 1);
+        
         if (this.filters.startDate) {
-            query = query.gte('order_date', this.filters.startDate);
+            query = query.gte('order_date', `${this.filters.startDate}T00:00:00`);
         }
         if (this.filters.endDate) {
-            query = query.lte('order_date', this.filters.endDate);
+            query = query.lte('order_date', `${this.filters.endDate}T23:59:59`);
         }
-        if (this.filters.outlet) {
+        if (this.filters.outlet && this.filters.outlet !== '') {
             query = query.eq('outlet', this.filters.outlet);
         }
-
+        
         const { data, error } = await query;
         if (error) throw error;
-
-        return this.processPembayaranData(data || []);
+        
+        if (data && data.length > 0) {
+            allData = [...allData, ...data];
+            page++;
+        }
+        
+        if (!data || data.length < pageSize) {
+            hasMore = false;
+        }
     }
+    
+    console.log('Pembayaran records:', allData.length);
+    return this.processPembayaranData(allData || []);
+}
 
     processPembayaranData(data) {
         const result = {};
@@ -1378,28 +1395,46 @@ class Reports {
     }
 
     async loadOrderTransaksi() {
-        console.log('Loading laporan order transaksi');
-        
+    console.log('Loading order transaksi with pagination');
+    
+    let allData = [];
+    let page = 0;
+    const pageSize = 1000;
+    let hasMore = true;
+    
+    while (hasMore) {
         let query = supabase
             .from('transaksi_order')
             .select('*')
-            .order('order_date', { ascending: false });
-
+            .order('order_date', { ascending: false })
+            .range(page * pageSize, (page + 1) * pageSize - 1);
+        
         if (this.filters.startDate) {
-            query = query.gte('order_date', this.filters.startDate);
+            query = query.gte('order_date', `${this.filters.startDate}T00:00:00`);
         }
         if (this.filters.endDate) {
-            query = query.lte('order_date', this.filters.endDate);
+            query = query.lte('order_date', `${this.filters.endDate}T23:59:59`);
         }
-        if (this.filters.outlet) {
+        if (this.filters.outlet && this.filters.outlet !== '') {
             query = query.eq('outlet', this.filters.outlet);
         }
-
+        
         const { data, error } = await query;
         if (error) throw error;
-
-        return this.processOrderTransaksiData(data || []);
+        
+        if (data && data.length > 0) {
+            allData = [...allData, ...data];
+            page++;
+        }
+        
+        if (!data || data.length < pageSize) {
+            hasMore = false;
+        }
     }
+    
+    console.log('Order transaksi records:', allData.length);
+    return this.processOrderTransaksiData(allData || []);
+}
 
     processOrderTransaksiData(data) {
         return data.map(item => {
