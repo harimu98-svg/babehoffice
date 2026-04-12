@@ -478,15 +478,22 @@ class Reports {
     }
 
     async loadLaporanKomisi() {
-        console.log('Loading laporan komisi dari tabel komisi');
+    console.log('Loading laporan komisi dari tabel komisi WITH PAGINATION');
+    
+    try {
+        // 1. Ambil data dari tabel komisi dengan pagination
+        let allKomisiData = [];
+        let page = 0;
+        const pageSize = 1000;
+        let hasMore = true;
         
-        try {
-            // 1. Ambil data dari tabel komisi dulu
+        while (hasMore) {
             let query = supabase
                 .from('komisi')
                 .select('*')
-                .order('tanggal', { ascending: false });
-
+                .order('tanggal', { ascending: false })
+                .range(page * pageSize, (page + 1) * pageSize - 1);
+            
             // Apply filters
             if (this.filters.startDate) {
                 query = query.gte('tanggal', this.filters.startDate);
@@ -494,60 +501,66 @@ class Reports {
             if (this.filters.endDate) {
                 query = query.lte('tanggal', this.filters.endDate);
             }
-            if (this.filters.outlet) {
+            if (this.filters.outlet && this.filters.outlet !== '') {
                 query = query.eq('outlet', this.filters.outlet);
             }
-
-            const { data: komisiData, error } = await query;
-            if (error) {
-                console.error('Error loading komisi data:', error);
-                throw error;
+            
+            const { data, error } = await query;
+            if (error) throw error;
+            
+            if (data && data.length > 0) {
+                allKomisiData = [...allKomisiData, ...data];
+                page++;
             }
             
-            console.log('Data komisi ditemukan:', komisiData?.length || 0, 'records');
-            
-            if (!komisiData || komisiData.length === 0) {
-                return [];
+            if (!data || data.length < pageSize) {
+                hasMore = false;
             }
-            
-            // 2. Ambil semua serve_by unik untuk ambil role dari karyawan
-            const serveByNames = [...new Set(
-                komisiData
-                    .map(item => item.serve_by)
-                    .filter(name => name && name !== 'Unknown')
-            )];
-            
-            console.log('Unique serve_by names:', serveByNames);
-            
-            // 3. Query role dari tabel karyawan
-            let roleMap = {};
-            if (serveByNames.length > 0) {
-                const { data: karyawanData, error: karyawanError } = await supabase
-                    .from('karyawan')
-                    .select('nama_karyawan, role')
-                    .in('nama_karyawan', serveByNames);
-                
-                if (karyawanError) {
-                    console.error('Error fetching karyawan roles:', karyawanError);
-                } else if (karyawanData) {
-                    // Buat mapping nama_karyawan -> role
-                    karyawanData.forEach(k => {
-                        if (k.nama_karyawan) {
-                            roleMap[k.nama_karyawan] = k.role || 'staff';
-                        }
-                    });
-                    console.log('Role mapping created:', roleMap);
-                }
-            }
-            
-            // 4. Process data komisi dengan role
-            return this.processKomisiWithRole(komisiData, roleMap);
-            
-        } catch (error) {
-            console.error('Error load laporan komisi:', error);
-            throw error;
         }
+        
+        console.log('📊 Total komisi data (with pagination):', allKomisiData?.length || 0, 'records');
+        
+        if (!allKomisiData || allKomisiData.length === 0) {
+            return [];
+        }
+        
+        // 2. Ambil semua serve_by unik untuk ambil role dari karyawan
+        const serveByNames = [...new Set(
+            allKomisiData
+                .map(item => item.serve_by)
+                .filter(name => name && name !== 'Unknown')
+        )];
+        
+        console.log('Unique serve_by names:', serveByNames);
+        
+        // 3. Query role dari tabel karyawan
+        let roleMap = {};
+        if (serveByNames.length > 0) {
+            const { data: karyawanData, error: karyawanError } = await supabase
+                .from('karyawan')
+                .select('nama_karyawan, role')
+                .in('nama_karyawan', serveByNames);
+            
+            if (karyawanError) {
+                console.error('Error fetching karyawan roles:', karyawanError);
+            } else if (karyawanData) {
+                karyawanData.forEach(k => {
+                    if (k.nama_karyawan) {
+                        roleMap[k.nama_karyawan] = k.role || 'staff';
+                    }
+                });
+                console.log('Role mapping created:', roleMap);
+            }
+        }
+        
+        // 4. Process data komisi dengan role
+        return this.processKomisiWithRole(allKomisiData, roleMap);
+        
+    } catch (error) {
+        console.error('Error load laporan komisi:', error);
+        throw error;
     }
+}
 
     processKomisiWithRole(komisiData, roleMap) {
         console.log('Processing komisi data with role mapping');
