@@ -1,4 +1,7 @@
-// Dashboard Module
+// Dashboard Module - FULL PERBAIKAN
+// - Pagination untuk monthly sales & today sales
+// - Count menggunakan head:true untuk akurasi
+// - Limit 10 untuk recent transactions (aman)
 class Dashboard {
     constructor() {
         this.stats = {
@@ -11,6 +14,43 @@ class Dashboard {
         };
     }
 
+    // Helper method untuk fetch data dengan pagination
+    async fetchWithPagination(tableName, selectColumns, filterCallback, orderColumn = null, orderAscending = false) {
+        let allData = [];
+        let page = 0;
+        const pageSize = 1000;
+        let hasMore = true;
+        
+        while (hasMore) {
+            let query = supabase
+                .from(tableName)
+                .select(selectColumns)
+                .range(page * pageSize, (page + 1) * pageSize - 1);
+            
+            if (orderColumn) {
+                query = query.order(orderColumn, { ascending: orderAscending });
+            }
+            
+            if (filterCallback) {
+                query = filterCallback(query);
+            }
+            
+            const { data, error } = await query;
+            if (error) throw error;
+            
+            if (data && data.length > 0) {
+                allData = [...allData, ...data];
+                page++;
+            }
+            
+            if (!data || data.length < pageSize) {
+                hasMore = false;
+            }
+        }
+        
+        return allData;
+    }
+
     // Initialize module
     async init() {
         console.log('Initializing Dashboard module');
@@ -20,78 +60,100 @@ class Dashboard {
         console.log('Dashboard module initialized');
     }
 
-    // Load dashboard statistics
+    // Load dashboard statistics - FULL PERBAIKAN
     async loadStats() {
         try {
             Helpers.showLoading();
 
-            // Load total products
-            const { data: products, error: productsError } = await supabase
+            // ========== 1. TOTAL PRODUCTS ==========
+            // ✅ Menggunakan head:true untuk count akurat
+            const { count: productsCount, error: productsError } = await supabase
                 .from('produk')
-                .select('*', { count: 'exact' });
+                .select('*', { count: 'exact', head: true });
 
-            if (!productsError && products) {
-                this.stats.totalProducts = products.length;
-                document.getElementById('total-products').textContent = products.length;
+            if (!productsError) {
+                this.stats.totalProducts = productsCount || 0;
+                document.getElementById('total-products').textContent = productsCount || 0;
+                console.log(`Total Products: ${productsCount}`);
+            } else {
+                console.error('Error loading products count:', productsError);
             }
 
-            // Load total employees
-            const { data: employees, error: employeesError } = await supabase
+            // ========== 2. TOTAL EMPLOYEES ==========
+            const { count: employeesCount, error: employeesError } = await supabase
                 .from('karyawan')
-                .select('*', { count: 'exact' });
+                .select('*', { count: 'exact', head: true });
 
-            if (!employeesError && employees) {
-                this.stats.totalEmployees = employees.length;
-                document.getElementById('total-employees').textContent = employees.length;
+            if (!employeesError) {
+                this.stats.totalEmployees = employeesCount || 0;
+                document.getElementById('total-employees').textContent = employeesCount || 0;
+                console.log(`Total Employees: ${employeesCount}`);
+            } else {
+                console.error('Error loading employees count:', employeesError);
             }
 
-            // Load total members
-            const { data: members, error: membersError } = await supabase
+            // ========== 3. TOTAL MEMBERS ==========
+            const { count: membersCount, error: membersError } = await supabase
                 .from('membercard')
-                .select('*', { count: 'exact' });
+                .select('*', { count: 'exact', head: true });
 
-            if (!membersError && members) {
-                this.stats.totalMembers = members.length;
-                document.getElementById('total-members').textContent = members.length;
+            if (!membersError) {
+                this.stats.totalMembers = membersCount || 0;
+                document.getElementById('total-members').textContent = membersCount || 0;
+                console.log(`Total Members: ${membersCount}`);
+            } else {
+                console.error('Error loading members count:', membersError);
             }
 
-            // Load total outlets
-            const { data: outlets, error: outletsError } = await supabase
+            // ========== 4. TOTAL OUTLETS ==========
+            const { count: outletsCount, error: outletsError } = await supabase
                 .from('outlet')
-                .select('*', { count: 'exact' });
+                .select('*', { count: 'exact', head: true });
 
-            if (!outletsError && outlets) {
-                this.stats.totalOutlets = outlets.length;
-                document.getElementById('total-outlets').textContent = outlets.length;
+            if (!outletsError) {
+                this.stats.totalOutlets = outletsCount || 0;
+                document.getElementById('total-outlets').textContent = outletsCount || 0;
+                console.log(`Total Outlets: ${outletsCount}`);
+            } else {
+                console.error('Error loading outlets count:', outletsError);
             }
 
-            // Load today's sales
+            // ========== 5. TODAY'S SALES (dengan pagination) ==========
             const today = new Date().toISOString().split('T')[0];
-            const { data: todaySales, error: todayError } = await supabase
-                .from('transaksi_detail')
-                .select('amount')
-                .eq('order_date', today)
-                .eq('status', 'completed');
+            
+            const todaySalesData = await this.fetchWithPagination(
+                'transaksi_detail',
+                'amount',
+                (query) => query
+                    .eq('order_date', today)
+                    .eq('status', 'completed'),
+                null,
+                false
+            );
+            
+            this.stats.todaySales = todaySalesData.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+            document.getElementById('today-sales').textContent = Helpers.formatCurrency(this.stats.todaySales);
+            console.log(`Today's Sales: ${todaySalesData.length} records, total: ${this.stats.todaySales}`);
 
-            if (!todayError && todaySales) {
-                this.stats.todaySales = todaySales.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-                document.getElementById('today-sales').textContent = Helpers.formatCurrency(this.stats.todaySales);
-            }
-
-            // Load monthly sales
+            // ========== 6. MONTHLY SALES (dengan pagination) ==========
             const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
-            const { data: monthlySales, error: monthlyError } = await supabase
-                .from('transaksi_detail')
-                .select('amount')
-                .gte('order_date', startOfMonth)
-                .eq('status', 'completed');
+            
+            const monthlySalesData = await this.fetchWithPagination(
+                'transaksi_detail',
+                'amount',
+                (query) => query
+                    .gte('order_date', startOfMonth)
+                    .eq('status', 'completed'),
+                null,
+                false
+            );
+            
+            this.stats.monthlySales = monthlySalesData.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+            document.getElementById('monthly-sales').textContent = Helpers.formatCurrency(this.stats.monthlySales);
+            console.log(`Monthly Sales: ${monthlySalesData.length} records, total: ${this.stats.monthlySales}`);
 
-            if (!monthlyError && monthlySales) {
-                this.stats.monthlySales = monthlySales.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-                document.getElementById('monthly-sales').textContent = Helpers.formatCurrency(this.stats.monthlySales);
-            }
-
-            // Load recent transactions
+            // ========== 7. LOAD RECENT TRANSACTIONS ==========
+            // ✅ Aman karena limit 10
             await this.loadRecentTransactions();
 
             Helpers.hideLoading();
@@ -99,10 +161,11 @@ class Dashboard {
         } catch (error) {
             console.error('Error loading dashboard stats:', error);
             Helpers.hideLoading();
+            Notifications.error('Gagal memuat data dashboard: ' + error.message);
         }
     }
 
-    // Load recent transactions
+    // Load recent transactions - AMAN (limit 10)
     async loadRecentTransactions() {
         try {
             const { data: transactions, error } = await supabase
@@ -113,6 +176,8 @@ class Dashboard {
 
             if (!error && transactions) {
                 this.displayRecentTransactions(transactions);
+            } else if (error) {
+                console.error('Error loading recent transactions:', error);
             }
         } catch (error) {
             console.error('Error loading recent transactions:', error);
@@ -166,19 +231,41 @@ class Dashboard {
     bindEvents() {
         const refreshBtn = document.getElementById('refresh-dashboard');
         if (refreshBtn) {
-            refreshBtn.addEventListener('click', () => this.refreshDashboard());
+            // Hapus event listener lama untuk menghindari duplikasi
+            const newRefreshBtn = refreshBtn.cloneNode(true);
+            refreshBtn.parentNode.replaceChild(newRefreshBtn, refreshBtn);
+            newRefreshBtn.addEventListener('click', () => this.refreshDashboard());
         }
     }
 
     // Refresh dashboard
     async refreshDashboard() {
+        console.log('Refreshing dashboard...');
         await this.loadStats();
         Notifications.success('Dashboard diperbarui');
+    }
+
+    // Get stats (untuk digunakan modul lain jika perlu)
+    getStats() {
+        return { ...this.stats };
     }
 }
 
 // Initialize dashboard globally
 let dashboard = null;
+
 document.addEventListener('DOMContentLoaded', () => {
-    dashboard = new Dashboard();
+    if (!window.dashboardInstance) {
+        dashboard = new Dashboard();
+        window.dashboardInstance = dashboard;
+    } else {
+        dashboard = window.dashboardInstance;
+    }
+    
+    // Initialize dashboard jika container ada
+    if (document.getElementById('total-products')) {
+        setTimeout(() => {
+            dashboard.init();
+        }, 100);
+    }
 });
