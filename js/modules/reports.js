@@ -360,30 +360,46 @@ class Reports {
     // ==================== DATA LOADING METHODS ====================
 
     async loadDetailTransaksi() {
-        console.log('Loading detail transaksi');
+    console.log('Loading detail transaksi with pagination');
+    
+    let allData = [];
+    let page = 0;
+    const pageSize = 1000;
+    let hasMore = true;
+    
+    while (hasMore) {
         let query = supabase
             .from('transaksi_detail')
             .select('*')
-            .order('order_date', { ascending: false });
-
-        // Apply filters
+            .order('order_date', { ascending: false })
+            .range(page * pageSize, (page + 1) * pageSize - 1);
+        
         if (this.filters.startDate) {
             query = query.gte('order_date', this.filters.startDate);
         }
         if (this.filters.endDate) {
             query = query.lte('order_date', this.filters.endDate);
         }
-        if (this.filters.outlet) {
+        if (this.filters.outlet && this.filters.outlet !== '') {
             query = query.eq('outlet', this.filters.outlet);
         }
-
+        
         const { data, error } = await query;
-        if (error) {
-            console.error('Supabase error:', error);
-            throw error;
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+            allData = [...allData, ...data];
+            page++;
         }
-        return data || [];
+        
+        if (!data || data.length < pageSize) {
+            hasMore = false;
+        }
     }
+    
+    console.log('Detail transaksi records:', allData.length);
+    return allData || [];
+}
 
     async loadLaporanPembayaran() {
         console.log('Loading laporan pembayaran');
