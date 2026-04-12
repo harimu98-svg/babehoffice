@@ -1180,28 +1180,31 @@ class Reports {
     }
 
     async loadLaporanOmset() {
-        console.log('Loading laporan omset dari transaksi_order');
-        
-        let query = supabase
-            .from('transaksi_order')
-            .select('*')
-            .order('order_date', { ascending: false });
+    console.log('Loading laporan omset dari transaksi_order');
+    
+    let query = supabase
+        .from('transaksi_order')
+        .select('*')
+        .order('order_date', { ascending: false });
 
-        if (this.filters.startDate) {
-            query = query.gte('order_date', this.filters.startDate);
-        }
-        if (this.filters.endDate) {
-            query = query.lte('order_date', this.filters.endDate);
-        }
-        if (this.filters.outlet) {
-            query = query.eq('outlet', this.filters.outlet);
-        }
-
-        const { data, error } = await query;
-        if (error) throw error;
-
-        return this.processOmsetData(data || []);
+    // PERBAIKAN: Tambahkan timestamp untuk mencakup seluruh hari
+    if (this.filters.startDate) {
+        query = query.gte('order_date', `${this.filters.startDate}T00:00:00`);
     }
+    if (this.filters.endDate) {
+        query = query.lte('order_date', `${this.filters.endDate}T23:59:59`);
+    }
+    if (this.filters.outlet) {
+        query = query.eq('outlet', this.filters.outlet);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    console.log(`Omset query returned ${data?.length || 0} records for date range ${this.filters.startDate} to ${this.filters.endDate}`);
+    
+    return this.processOmsetData(data || []);
+}
 
     processOmsetData(data) {
         const result = {};
