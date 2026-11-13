@@ -218,7 +218,8 @@ class Reports {
             'pemasukan-pengeluaran': 'Laporan Pemasukan & Pengeluaran',
             'order-transaksi': 'Laporan Order Transaksi',
             'transaksi-cancel': 'Laporan Transaksi Cancel',
-            'setoran-barberman': 'Laporan Setoran Barberman'
+            'setoran-barberman': 'Laporan Setoran Barberman',
+            'laba-rugi': 'Laporan Laba Rugi'
         };
 
         const titleElement = document.getElementById('report-title');
@@ -323,6 +324,9 @@ class Reports {
                     break;
                 case 'setoran-barberman':
                     data = await this.loadSetoranBarberman();
+                    break;
+                case 'laba-rugi':
+                    data = await this.loadLabaRugi();
                     break;
                 default:
                     console.warn('Unknown tab, loading detail transaksi');
@@ -1511,55 +1515,74 @@ class Reports {
     // ==================== TABLE MANAGEMENT ====================
 
     initTable() {
-        console.log('Initializing table for tab:', this.currentTab);
-        
-        const tableContainer = document.getElementById('reports-table');
-        if (!tableContainer) {
-            console.error('Table container #reports-table not found');
-            setTimeout(() => this.initTable(), 100);
-            return;
-        }
+    console.log('Initializing table for tab:', this.currentTab);
+    
+    // ═══════════════════════════════════════════════════════
+    // LABA RUGI: render custom (bukan DataTable)
+    // karena bentuknya multi-row per outlet (PENDAPATAN/PENGELUARAN/RINGKASAN)
+    // ═══════════════════════════════════════════════════════
+    if (this.currentTab === 'laba-rugi') {
+        this.renderLabaRugiUI(this.currentData);
+        this.tableInitialized = true;
+        return;
+    }
+    // ═══════════════════════════════════════════════════════
+    
+    const tableContainer = document.getElementById('reports-table');
+    if (!tableContainer) {
+        console.error('Table container #reports-table not found');
+        setTimeout(() => this.initTable(), 100);
+        return;
+    }
 
-        tableContainer.innerHTML = '';
+    tableContainer.innerHTML = '';
 
+    const columns = this.getTableColumns();
+    const footerData = this.getFooterData();
+    
+    if (this.table && typeof this.table.destroy === 'function') {
+        this.table.destroy();
+    }
+    
+    this.table = new DataTable('reports-table', {
+        columns: columns,
+        searchable: true,
+        pagination: true,
+        pageSize: 15,
+        footerData: footerData
+    });
+
+    this.table.init();
+    this.table.updateData(this.currentData);
+    this.tableInitialized = true;
+    
+    console.log('Table initialized successfully with footer');
+}
+
+   updateTableForCurrentTab() {
+    console.log('Updating table for tab:', this.currentTab);
+    
+    // ═══════════════════════════════════════════════════════
+    // LABA RUGI: render custom, bukan DataTable
+    // ═══════════════════════════════════════════════════════
+    if (this.currentTab === 'laba-rugi') {
+        this.renderLabaRugiUI(this.currentData);
+        return;
+    }
+    // ═══════════════════════════════════════════════════════
+    
+    if (this.table && this.tableInitialized) {
         const columns = this.getTableColumns();
         const footerData = this.getFooterData();
         
-        if (this.table && typeof this.table.destroy === 'function') {
-            this.table.destroy();
-        }
-        
-        this.table = new DataTable('reports-table', {
-            columns: columns,
-            searchable: true,
-            pagination: true,
-            pageSize: 15,
-            footerData: footerData
-        });
-
-        this.table.init();
+        this.table.options.columns = columns;
+        this.table.options.footerData = footerData;
         this.table.updateData(this.currentData);
-        this.tableInitialized = true;
-        
-        console.log('Table initialized successfully with footer');
+        console.log('Table updated with new data and footer');
+    } else {
+        this.initTable();
     }
-
-    updateTableForCurrentTab() {
-        console.log('Updating table for tab:', this.currentTab);
-        
-        if (this.table && this.tableInitialized) {
-            const columns = this.getTableColumns();
-            const footerData = this.getFooterData();
-            
-            this.table.options.columns = columns;
-            this.table.options.footerData = footerData;
-            this.table.updateData(this.currentData);
-            console.log('Table updated with new data and footer');
-        } else {
-            this.initTable();
-        }
-    }
-
+}
     getTableColumns() {
         const columnDefinitions = {
             'detail-transaksi': this.getDetailTransaksiColumns(),
@@ -2576,6 +2599,10 @@ class Reports {
                 'setoran-barberman': () => {
                     csvContent = this.generateSetoranBarbermanCSV();
                     filename = `laporan-setoran-barberman-${new Date().toISOString().split('T')[0]}.csv`;
+                },
+                'laba-rugi': () => {
+                csvContent = this.generateLabaRugiCSV();
+                filename = `laba-rugi-${this._lrState?.periode || new Date().toISOString().split('T')[0]}.csv`;
                 }
             };
 
@@ -2887,6 +2914,414 @@ class Reports {
         return csvContent;
     }
 
+// ═══════════════════════════════════════════════════════════
+// ═══════════════════ LABA RUGI MODULE ══════════════════════
+// ═══════════════════════════════════════════════════════════
+
+_initLrState() {
+    if (!this._lrState) {
+        const now = new Date();
+        this._lrState = {
+            bulan: now.getMonth() + 1,
+            tahun: now.getFullYear(),
+            outlet: this.filters.outlet || 'all',
+            data: null,
+            periode: `${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear()}`
+        };
+    }
+}
+
+async _getOutletListForLr() {
+    try {
+        const { data, error } = await supabase.from('outlet').select('outlet').order('outlet');
+        if (error) { console.warn('Gagal load outlet list:', error); return []; }
+        return (data || []).map(o => o.outlet).filter(Boolean);
+    } catch (e) {
+        console.warn('Exception load outlet list:', e);
+        return [];
+    }
+}
+
+// Mengembalikan array of outlets (dipakai DataTable-less)
+async loadLabaRugi() {
+    this._initLrState();
+    try {
+        const result = await this._fetchLabaRugi({ preview: true });
+        this._lrState.data = result;
+        this._lrState.periode = result.periode;
+        return result.outlets || [];
+    } catch (err) {
+        console.error('loadLabaRugi error:', err);
+        if (typeof Notifications !== 'undefined' && Notifications.error) {
+            Notifications.error('Gagal memuat Laba Rugi: ' + err.message);
+        } else {
+            alert('Gagal memuat Laba Rugi: ' + err.message);
+        }
+        return [];
+    }
+}
+
+async _fetchLabaRugi({ preview }) {
+    const { bulan, tahun, outlet } = this._lrState;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('Sesi login tidak ditemukan. Silakan login ulang.');
+
+    // Deteksi supabaseUrl dari berbagai sumber
+    const supabaseUrl =
+        (typeof window !== 'undefined' && window.supabaseUrl) ||
+        (typeof supabase !== 'undefined' && supabase?.supabaseUrl) ||
+        'https://intzwjmlypmopzauxeqt.supabase.co';
+
+    const url = `${supabaseUrl}/functions/v1/compute-laba-rugi`;
+    console.log('Fetching Laba Rugi:', { url, bulan, tahun, outlet, preview });
+
+    // Tampilkan loading
+    if (typeof Helpers !== 'undefined' && Helpers.showLoading) Helpers.showLoading();
+
+    try {
+        const resp = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${session.access_token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                bulan, tahun,
+                outlet: outlet === 'all' ? 'ALL' : outlet,
+                preview
+            })
+        });
+
+        const json = await resp.json();
+        if (!resp.ok || !json.success) {
+            throw new Error(json.error || `HTTP ${resp.status}`);
+        }
+        return json;
+    } finally {
+        if (typeof Helpers !== 'undefined' && Helpers.hideLoading) Helpers.hideLoading();
+    }
+}
+
+// Render UI utama tab Laba Rugi
+renderLabaRugiUI() {
+    this._initLrState();
+    const container = document.getElementById('reports-table');
+    if (!container) { console.warn('reports-table not found'); return; }
+
+    const state = this._lrState;
+    const result = state.data;
+
+    // === Filter UI ===
+    const bulanNames = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+    const bulanOptions = bulanNames.map((n, i) =>
+        `<option value="${i+1}" ${i+1 === state.bulan ? 'selected' : ''}>${n}</option>`
+    ).join('');
+
+    const tahunNow = new Date().getFullYear();
+    const tahunOpts = [];
+    for (let y = tahunNow - 3; y <= tahunNow + 1; y++) {
+        tahunOpts.push(`<option value="${y}" ${y === state.tahun ? 'selected' : ''}>${y}</option>`);
+    }
+
+    const outletOpts = (this._lrOutlets || []).map(o =>
+        `<option value="${o}" ${state.outlet === o ? 'selected' : ''}>${o}</option>`
+    ).join('');
+
+    // === Warning dari EF ===
+    let warningHTML = '';
+    if (result?.warnings?.length) {
+        warningHTML = `
+            <div class="mb-3 p-3 bg-yellow-50 border-l-4 border-yellow-400 text-yellow-800 rounded text-sm">
+                <strong>⚠️ Perhatian:</strong><br>
+                ${result.warnings.map(w => `• ${this._escapeHtml(w)}`).join('<br>')}
+            </div>`;
+    }
+
+    // === Info Pajak ===
+    let infoPajakHTML = '';
+    if (result) {
+        const fmt = (n) => (typeof Helpers !== 'undefined' && Helpers.formatCurrency)
+            ? Helpers.formatCurrency(n || 0)
+            : 'Rp ' + (n || 0).toLocaleString('id-ID');
+        infoPajakHTML = `
+            <div class="mb-3 p-3 bg-blue-50 border-l-4 border-blue-400 text-blue-900 rounded text-xs">
+                <div class="font-semibold mb-1">ℹ️ Info Pajak (PPh Final UMKM)</div>
+                <div>Omset bulan ini (semua outlet): <strong>${fmt(result.total_omset_bulan_ini)}</strong></div>
+                <div>Omset kumulatif Jan–bulan lalu: <strong>${fmt(result.omset_kumulatif_lalu)}</strong></div>
+                <div>Total pajak semua outlet: <strong>${fmt(result.total_pajak_all_outlet)}</strong></div>
+                <div class="mt-1 italic text-gray-600">Pajak di-breakdown ke tiap outlet pakai bobot omset bulan ini.</div>
+            </div>`;
+    }
+
+    // === Render Tabel Per Outlet ===
+    let tablesHTML = '';
+    if (result) {
+        const outletsToRender = state.outlet === 'all'
+            ? (result.aggregate ? [result.aggregate, ...(result.outlets || [])] : (result.outlets || []))
+            : (result.outlets || []);
+        tablesHTML = outletsToRender.map(r => this._renderLrTableForOutlet(r)).join('');
+    } else {
+        tablesHTML = `<div class="text-center text-gray-500 py-12 bg-white rounded-lg shadow">
+            <i class="fas fa-chart-line" style="font-size:3rem;color:#ddd;"></i>
+            <p class="mt-3">Pilih periode & outlet, lalu klik <strong>Tampilkan</strong>.</p>
+        </div>`;
+    }
+
+    // === Render Full ===
+    container.innerHTML = `
+        <div class="p-4 bg-white rounded-lg shadow mb-3">
+            <div class="flex flex-wrap gap-3 items-end">
+                <div>
+                    <label class="block text-xs font-semibold mb-1 text-gray-700">Bulan</label>
+                    <select id="lr-bulan" class="border rounded px-3 py-2 text-sm">${bulanOptions}</select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold mb-1 text-gray-700">Tahun</label>
+                    <select id="lr-tahun" class="border rounded px-3 py-2 text-sm">${tahunOpts.join('')}</select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold mb-1 text-gray-700">Outlet</label>
+                    <select id="lr-outlet" class="border rounded px-3 py-2 text-sm min-w-[200px]">
+                        <option value="all" ${state.outlet === 'all' ? 'selected' : ''}>Semua Outlet</option>
+                        ${outletOpts}
+                    </select>
+                </div>
+                <button id="lr-tampilkan" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-semibold text-sm">
+                    <i class="fas fa-search"></i> Tampilkan
+                </button>
+                <button id="lr-finalize" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-semibold text-sm">
+                    <i class="fas fa-lock"></i> Finalize
+                </button>
+            </div>
+        </div>
+        ${warningHTML}
+        ${infoPajakHTML}
+        <div class="space-y-4">
+            ${tablesHTML}
+        </div>
+    `;
+
+    // === Load outlet list kalau belum ===
+    if (!this._lrOutlets) {
+        this._getOutletListForLr().then(list => {
+            this._lrOutlets = list;
+            const sel = document.getElementById('lr-outlet');
+            if (sel) {
+                sel.innerHTML = `<option value="all">Semua Outlet</option>` +
+                    list.map(o => `<option value="${o}" ${state.outlet === o ? 'selected' : ''}>${o}</option>`).join('');
+                sel.value = state.outlet;
+            }
+        });
+    }
+
+    // === Bind Events ===
+    this._bindLrEvents();
+}
+
+_bindLrEvents() {
+    const state = this._lrState;
+    const $ = id => document.getElementById(id);
+
+    $('lr-bulan')?.addEventListener('change', e => {
+        state.bulan = parseInt(e.target.value);
+        state.periode = `${state.bulan.toString().padStart(2,'0')}/${state.tahun}`;
+    });
+    $('lr-tahun')?.addEventListener('change', e => {
+        state.tahun = parseInt(e.target.value);
+        state.periode = `${state.bulan.toString().padStart(2,'0')}/${state.tahun}`;
+    });
+    $('lr-outlet')?.addEventListener('change', e => {
+        state.outlet = e.target.value;
+    });
+    $('lr-tampilkan')?.addEventListener('click', async () => {
+        await this.loadLabaRugi();
+        this.renderLabaRugiUI();
+    });
+    $('lr-finalize')?.addEventListener('click', () => this.finalizeLabaRugi());
+}
+
+// Render 1 tabel per outlet (atau ALL)
+_renderLrTableForOutlet(row) {
+    const isAgg = row.outlet === 'ALL';
+    const label = isAgg ? '🏢 TOTAL SEMUA OUTLET' : `🏪 OUTLET: ${row.outlet}`;
+    const labelClass = isAgg ? 'bg-blue-600' : 'bg-gray-700';
+
+    const fmt = (n) => (typeof Helpers !== 'undefined' && Helpers.formatCurrency)
+        ? Helpers.formatCurrency(n || 0)
+        : 'Rp ' + (n || 0).toLocaleString('id-ID');
+
+    const items = [
+        ['PENDAPATAN', 'Penjualan Jasa',          row.penjualan_jasa,       'income'],
+        ['PENDAPATAN', 'Penjualan Produk',        row.penjualan_produk,     'income'],
+        ['PENDAPATAN', 'TOTAL PENDAPATAN',        row.total_pendapatan,     'subtotal'],
+        ['PENGELUARAN', 'Gaji Kasir',             row.gaji_kasir,           'expense'],
+        ['PENGELUARAN', 'Gaji Barberman',         row.gaji_barberman,       'expense'],
+        ['PENGELUARAN', 'Biaya Sewa Toko',        row.biaya_sewa_toko,      'expense'],
+        ['PENGELUARAN', 'Biaya Listrik',          row.biaya_listrik,        'expense'],
+        ['PENGELUARAN', 'Biaya Mess',             row.biaya_mess,           'expense'],
+        ['PENGELUARAN', 'Biaya Wifi',             row.biaya_wifi,           'expense'],
+        ['PENGELUARAN', 'Biaya Aplikasi POS',     row.biaya_pos,            'expense'],
+        ['PENGELUARAN', 'Redeem Point',           row.redeem_point,         'expense'],
+        ['PENGELUARAN', 'Discount',               row.discount,             'expense'],
+        ['PENGELUARAN', 'Modal Produk',           row.modal_produk,         'expense'],
+        ['PENGELUARAN', 'Penyusutan Peralatan',   row.penyusutan_peralatan, 'expense'],
+        ['PENGELUARAN', 'Maintenance',            row.maintenance,          'expense'],
+        ['PENGELUARAN', 'Consumable',             row.consumable,           'expense'],
+        ['PENGELUARAN', 'Laundry',                row.loundry,              'expense'],
+        ['PENGELUARAN', 'Biaya Lain Lain',        row.biaya_lain_lain,      'expense'],
+        ['PENGELUARAN', 'Sampah',                 row.sampah,               'expense'],
+        ['PENGELUARAN', 'Galon',                  row.galon,                'expense'],
+        ['PENGELUARAN', 'Iuran RT',               row.iuran_rt,             'expense'],
+        ['PENGELUARAN', 'Sumbangan',              row.sumbangan,            'expense'],
+        ['PENGELUARAN', 'Biaya Admin',            row.biaya_admin,          'expense'],
+        ['PENGELUARAN', 'Yakult',                 row.yakult,               'expense'],
+        ['PENGELUARAN', 'Biaya Tak Terduga',      row.biaya_tak_terduga,    'expense'],
+        ['PENGELUARAN', 'Pajak',                  row.pajak,                'expense'],
+        ['PENGELUARAN', 'Zakat (2.5% × Laba)',    row.zakat,                'expense'],
+        ['PENGELUARAN', 'TOTAL PENGELUARAN',      row.total_pengeluaran,    'subtotal'],
+        ['RINGKASAN', 'Omset Kotor',              row.omset_kotor,          'summary'],
+        ['RINGKASAN', 'Omset Bersih',             row.omset_bersih,         'summary'],
+        ['RINGKASAN', 'LABA / RUGI',              row.laba_rugi,            'grandtotal'],
+    ];
+
+    const bodyRows = items.map(([kat, item, val, type]) => {
+        let cls = 'border-b border-gray-100';
+        if (type === 'subtotal') cls += ' bg-gray-50 font-semibold';
+        if (type === 'grandtotal') cls += ' bg-blue-50 font-bold';
+        if (type === 'summary') cls += ' bg-gray-50';
+        let vCls = 'text-right';
+        if (type === 'grandtotal') vCls += (val || 0) >= 0 ? ' text-green-600' : ' text-red-600';
+        return `<tr class="${cls}">
+            <td class="px-3 py-2 text-xs text-gray-500">${kat}</td>
+            <td class="px-3 py-2 text-sm">${this._escapeHtml(item)}</td>
+            <td class="px-3 py-2 text-sm ${vCls}">${fmt(val)}</td>
+        </tr>`;
+    }).join('');
+
+    return `
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <div class="${labelClass} text-white px-4 py-2 font-semibold flex items-center justify-between">
+                <span>${this._escapeHtml(label)}</span>
+                ${row._bobot !== undefined ? `<span class="text-xs bg-white/20 px-2 py-1 rounded">Bobot: ${((row._bobot||0)*100).toFixed(2)}%</span>` : ''}
+            </div>
+            <table class="w-full">
+                <thead class="bg-gray-100 text-gray-700">
+                    <tr>
+                        <th class="px-3 py-2 text-left text-xs w-32">KATEGORI</th>
+                        <th class="px-3 py-2 text-left text-xs">ITEM</th>
+                        <th class="px-3 py-2 text-right text-xs w-40">NILAI</th>
+                    </tr>
+                </thead>
+                <tbody>${bodyRows}</tbody>
+            </table>
+        </div>
+    `;
+}
+
+async finalizeLabaRugi() {
+    this._initLrState();
+    const { bulan, tahun, outlet } = this._lrState;
+    const outletLabel = outlet === 'all' ? 'Semua Outlet (akan simpan row ALL + row tiap outlet)' : outlet;
+
+    const konfirmasi = confirm(
+        `Finalize Laporan Laba Rugi?\n\n` +
+        `Periode : ${bulan}/${tahun}\n` +
+        `Outlet  : ${outletLabel}\n\n` +
+        `Data akan disimpan PERMANEN ke tabel laba_rugi.\n` +
+        `Data final sebelumnya (jika ada) akan DITIMPA.`
+    );
+    if (!konfirmasi) return;
+
+    try {
+        const result = await this._fetchLabaRugi({ preview: false });
+
+        if (typeof Notifications !== 'undefined' && Notifications.success) {
+            Notifications.success(`✅ Finalized ${result.saved_count} row(s) untuk periode ${result.periode}`);
+        } else {
+            alert(`Finalized ${result.saved_count} row(s).`);
+        }
+
+        // Refresh data
+        await this.loadLabaRugi();
+        this.renderLabaRugiUI();
+    } catch (err) {
+        console.error('finalizeLabaRugi error:', err);
+        if (typeof Notifications !== 'undefined' && Notifications.error) {
+            Notifications.error('Gagal finalize: ' + err.message);
+        } else {
+            alert('Gagal finalize: ' + err.message);
+        }
+    }
+}
+
+generateLabaRugiCSV() {
+    const result = this._lrState?.data;
+    if (!result) return 'Kategori,Item,Nilai\n';
+
+    const esc = (s) => `"${String(s ?? '').replace(/"/g, '""')}"`;
+    let csv = 'Outlet,Kategori,Item,Nilai\n';
+
+    const append = (row) => {
+        const o = esc(row.outlet);
+        const items = [
+            ['PENDAPATAN', 'Penjualan Jasa',          row.penjualan_jasa],
+            ['PENDAPATAN', 'Penjualan Produk',        row.penjualan_produk],
+            ['PENDAPATAN', 'TOTAL PENDAPATAN',        row.total_pendapatan],
+            ['PENGELUARAN', 'Gaji Kasir',             row.gaji_kasir],
+            ['PENGELUARAN', 'Gaji Barberman',         row.gaji_barberman],
+            ['PENGELUARAN', 'Biaya Sewa Toko',        row.biaya_sewa_toko],
+            ['PENGELUARAN', 'Biaya Listrik',          row.biaya_listrik],
+            ['PENGELUARAN', 'Biaya Mess',             row.biaya_mess],
+            ['PENGELUARAN', 'Biaya Wifi',             row.biaya_wifi],
+            ['PENGELUARAN', 'Biaya Aplikasi POS',     row.biaya_pos],
+            ['PENGELUARAN', 'Redeem Point',           row.redeem_point],
+            ['PENGELUARAN', 'Discount',               row.discount],
+            ['PENGELUARAN', 'Modal Produk',           row.modal_produk],
+            ['PENGELUARAN', 'Penyusutan Peralatan',   row.penyusutan_peralatan],
+            ['PENGELUARAN', 'Maintenance',            row.maintenance],
+            ['PENGELUARAN', 'Consumable',             row.consumable],
+            ['PENGELUARAN', 'Laundry',                row.loundry],
+            ['PENGELUARAN', 'Biaya Lain Lain',        row.biaya_lain_lain],
+            ['PENGELUARAN', 'Sampah',                 row.sampah],
+            ['PENGELUARAN', 'Galon',                  row.galon],
+            ['PENGELUARAN', 'Iuran RT',               row.iuran_rt],
+            ['PENGELUARAN', 'Sumbangan',              row.sumbangan],
+            ['PENGELUARAN', 'Biaya Admin',            row.biaya_admin],
+            ['PENGELUARAN', 'Yakult',                 row.yakult],
+            ['PENGELUARAN', 'Biaya Tak Terduga',      row.biaya_tak_terduga],
+            ['PENGELUARAN', 'Pajak',                  row.pajak],
+            ['PENGELUARAN', 'Zakat',                  row.zakat],
+            ['PENGELUARAN', 'TOTAL PENGELUARAN',      row.total_pengeluaran],
+            ['RINGKASAN', 'Omset Kotor',              row.omset_kotor],
+            ['RINGKASAN', 'Omset Bersih',             row.omset_bersih],
+            ['RINGKASAN', 'LABA / RUGI',              row.laba_rugi],
+        ];
+        items.forEach(([kat, item, val]) => {
+            csv += `${o},${esc(kat)},${esc(item)},${val || 0}\n`;
+        });
+    };
+
+    if (result.aggregate) append(result.aggregate);
+    (result.outlets || []).forEach(append);
+    return csv;
+}
+
+// Escape HTML sederhana
+_escapeHtml(s) {
+    if (s === null || s === undefined) return '';
+    return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+// ═══════════════════════════════════════════════════════════
+// ═════════════════ END LABA RUGI MODULE ════════════════════
+// ═══════════════════════════════════════════════════════════
+
+    
     // Cleanup method
     cleanup() {
         console.log('Cleaning up Reports module');
