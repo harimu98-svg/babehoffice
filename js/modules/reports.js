@@ -2946,9 +2946,37 @@ async _getOutletListForLr() {
 async loadLabaRugi() {
     this._initLrState();
     try {
-        const result = await this._fetchLabaRugi({ preview: true });
+        const { bulan, tahun } = this._lrState;
+        const periode = `${bulan.toString().padStart(2, '0')}/${tahun}`;
+
+        // 1) Cek apakah periode ini sudah ada snapshot final
+        const { data: existing, error: checkErr } = await supabase
+            .from('laba_rugi')
+            .select('outlet, finalized_at')
+            .eq('periode', periode)
+            .limit(1);
+
+        if (checkErr) {
+            console.warn('Gagal cek snapshot:', checkErr);
+        }
+
+        const isFinalized = !checkErr && existing && existing.length > 0;
+        console.log(`📊 Periode ${periode} | finalized=${isFinalized}`);
+
+        // 2) Tentukan mode
+        let result;
+        if (isFinalized) {
+            // Baca snapshot final dari DB
+            result = await this._fetchLabaRugi({ preview: true, mode: 'snapshot' });
+            this._lrState.isFinalized = true;
+        } else {
+            // Hitung ulang dari data mentah
+            result = await this._fetchLabaRugi({ preview: true, mode: 'live' });
+            this._lrState.isFinalized = false;
+        }
+
         this._lrState.data = result;
-        this._lrState.periode = result.periode;
+        this._lrState.periode = result.periode || periode;
         return result.outlets || [];
     } catch (err) {
         console.error('loadLabaRugi error:', err);
@@ -2961,21 +2989,19 @@ async loadLabaRugi() {
     }
 }
 
-async _fetchLabaRugi({ preview }) {
+async _fetchLabaRugi({ preview, mode = 'live' }) {
     const { bulan, tahun, outlet } = this._lrState;
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) throw new Error('Sesi login tidak ditemukan. Silakan login ulang.');
 
-    // Deteksi supabaseUrl dari berbagai sumber
     const supabaseUrl =
         (typeof window !== 'undefined' && window.supabaseUrl) ||
         (typeof supabase !== 'undefined' && supabase?.supabaseUrl) ||
         'https://intzwjmlypmopzauxeqt.supabase.co';
 
     const url = `${supabaseUrl}/functions/v1/compute-laba-rugi`;
-    console.log('Fetching Laba Rugi:', { url, bulan, tahun, outlet, preview });
+    console.log('Fetching Laba Rugi:', { url, bulan, tahun, outlet, preview, mode });
 
-    // Tampilkan loading
     if (typeof Helpers !== 'undefined' && Helpers.showLoading) Helpers.showLoading();
 
     try {
@@ -2988,14 +3014,30 @@ async _fetchLabaRugi({ preview }) {
             body: JSON.stringify({
                 bulan, tahun,
                 outlet: outlet === 'all' ? 'ALL' : outlet,
-                preview
+                preview,
+                mode
             })
         });
 
-        const json = await resp.json();
-        if (!resp.ok || !json.success) {
-            throw new Error(json.error || `HTTP ${resp.status}`);
+        const rawText = await resp.text();
+        console.log('🔍 Response status:', resp.status, '| raw:', rawText.substring(0, 300));
+
+        let json;
+        try {
+            json = JSON.parse(rawText);
+        } catch (e) {
+            throw new Error(`Server error (HTTP ${resp.status}): ${rawText.substring(0, 500)}`);
         }
+
+        if (!resp.ok || !json.success) {
+            let errMsg = 'Unknown error';
+            if (typeof json.error === 'string') errMsg = json.error;
+            else if (json.error) errMsg = JSON.stringify(json.error);
+            else if (json.message) errMsg = json.message;
+            else errMsg = rawText.substring(0, 500);
+            throw new Error(`HTTP ${resp.status}: ${errMsg}`);
+        }
+
         return json;
     } finally {
         if (typeof Helpers !== 'undefined' && Helpers.hideLoading) Helpers.hideLoading();
@@ -3010,6 +3052,15 @@ renderLabaRugiUI() {
 
     const state = this._lrState;
     const result = state.data;
+
+    // === Badge status ===
+    const badgeHTML = state.isFinalized
+        ? `<div class="mb-2 inline-flex items-center gap-2 px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-semibold">
+             <i class="fas fa-lock"></i> FINAL — Snapshot dari tabel laba_rugi (${this._escapeHtml(state.periode)})
+           </div>`
+        : `<div class="mb-2 inline-flex items-center gap-2 px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-semibold">
+             <i class="fas fa-sync-alt"></i> Real-time — Belum difinalize
+           </div>`;
 
     // === Filter UI ===
     const bulanNames = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
@@ -3067,8 +3118,16 @@ renderLabaRugiUI() {
         </div>`;
     }
 
+    // === Tombol "Lihat Live" (muncul kalau sudah FINAL) ===
+    const liveBtn = state.isFinalized
+        ? `<button id="lr-live" class="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded font-semibold text-sm">
+             <i class="fas fa-sync"></i> Lihat Live (Hitung Ulang)
+           </button>`
+        : '';
+
     // === Render Full ===
     container.innerHTML = `
+        ${badgeHTML}
         <div class="p-4 bg-white rounded-lg shadow mb-3">
             <div class="flex flex-wrap gap-3 items-end">
                 <div>
@@ -3092,6 +3151,7 @@ renderLabaRugiUI() {
                 <button id="lr-finalize" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-semibold text-sm">
                     <i class="fas fa-lock"></i> Finalize
                 </button>
+                ${liveBtn}
             </div>
         </div>
         ${warningHTML}
@@ -3138,6 +3198,22 @@ _bindLrEvents() {
         this.renderLabaRugiUI();
     });
     $('lr-finalize')?.addEventListener('click', () => this.finalizeLabaRugi());
+
+    // Tombol "Lihat Live" — hitung ulang tanpa baca snapshot
+    $('lr-live')?.addEventListener('click', async () => {
+        try {
+            const result = await this._fetchLabaRugi({ preview: true, mode: 'live' });
+            this._lrState.data = result;
+            this._lrState.isFinalized = false;  // switch ke badge "Real-time"
+            this.renderLabaRugiUI();
+            if (typeof Notifications !== 'undefined' && Notifications.info) {
+                Notifications.info('Menampilkan data live (bukan snapshot). Klik Finalize untuk menyimpan versi ini.');
+            }
+        } catch (err) {
+            console.error('Gagal load live:', err);
+            alert('Gagal load live: ' + err.message);
+        }
+    });
 }
 
 // Render 1 tabel per outlet (atau ALL)
@@ -3221,19 +3297,22 @@ _renderLrTableForOutlet(row) {
 async finalizeLabaRugi() {
     this._initLrState();
     const { bulan, tahun, outlet } = this._lrState;
-    const outletLabel = outlet === 'all' ? 'Semua Outlet (akan simpan row ALL + row tiap outlet)' : outlet;
+    const outletLabel = outlet === 'all'
+        ? 'Semua Outlet (akan simpan row ALL + row tiap outlet)'
+        : outlet;
 
     const konfirmasi = confirm(
         `Finalize Laporan Laba Rugi?\n\n` +
         `Periode : ${bulan}/${tahun}\n` +
         `Outlet  : ${outletLabel}\n\n` +
-        `Data akan disimpan PERMANEN ke tabel laba_rugi.\n` +
+        `Data akan dihitung ulang (fresh) dan disimpan PERMANEN ke tabel laba_rugi.\n` +
         `Data final sebelumnya (jika ada) akan DITIMPA.`
     );
     if (!konfirmasi) return;
 
     try {
-        const result = await this._fetchLabaRugi({ preview: false });
+        // Finalize = hitung ulang fresh (mode live) lalu save
+        const result = await this._fetchLabaRugi({ preview: false, mode: 'live' });
 
         if (typeof Notifications !== 'undefined' && Notifications.success) {
             Notifications.success(`✅ Finalized ${result.saved_count} row(s) untuk periode ${result.periode}`);
@@ -3241,7 +3320,8 @@ async finalizeLabaRugi() {
             alert(`Finalized ${result.saved_count} row(s).`);
         }
 
-        // Refresh data
+        // Setelah finalize, paksa load mode snapshot (baca dari tabel)
+        this._lrState.isFinalized = true;
         await this.loadLabaRugi();
         this.renderLabaRugiUI();
     } catch (err) {
